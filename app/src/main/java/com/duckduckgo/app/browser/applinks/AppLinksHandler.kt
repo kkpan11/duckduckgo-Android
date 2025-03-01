@@ -16,10 +16,8 @@
 
 package com.duckduckgo.app.browser.applinks
 
-import android.os.Build
-import com.duckduckgo.app.global.UriString
-import com.duckduckgo.app.global.extractDomain
-import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.app.browser.UriString
+import com.duckduckgo.common.utils.extractDomain
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
 import javax.inject.Inject
@@ -39,9 +37,7 @@ interface AppLinksHandler {
 }
 
 @ContributesBinding(AppScope::class)
-class DuckDuckGoAppLinksHandler @Inject constructor(
-    private val appBuildConfig: AppBuildConfig,
-) : AppLinksHandler {
+class DuckDuckGoAppLinksHandler @Inject constructor() : AppLinksHandler {
 
     var previousUrl: String? = null
     var isAUserQuery = false
@@ -55,16 +51,18 @@ class DuckDuckGoAppLinksHandler @Inject constructor(
         shouldHaltWebNavigation: Boolean,
         launchAppLink: () -> Unit,
     ): Boolean {
-        if (!appLinksEnabled || appBuildConfig.sdkInt < Build.VERSION_CODES.N || !isForMainFrame) {
+        if (!appLinksEnabled || !isForMainFrame) {
             return false
         }
 
         previousUrl?.let {
             if (isSameOrSubdomain(it, urlString)) {
-                if (isAUserQuery || !hasTriggeredForDomain || alwaysTriggerList.contains(urlString.extractDomain())) {
+                val shouldTrigger = alwaysTriggerList.contains(urlString.extractDomain())
+                if (isAUserQuery || !hasTriggeredForDomain || shouldTrigger) {
                     previousUrl = urlString
                     launchAppLink()
                     hasTriggeredForDomain = true
+                    if (shouldTrigger) return true
                 }
                 return false
             }

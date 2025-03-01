@@ -18,14 +18,14 @@ package com.duckduckgo.networkprotection.impl.cohort
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.duckduckgo.data.store.api.SharedPreferencesProvider
 import com.duckduckgo.di.scopes.AppScope
-import com.duckduckgo.mobile.android.vpn.prefs.VpnSharedPreferencesProvider
 import com.duckduckgo.networkprotection.impl.state.NetPFeatureRemover
 import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.anvil.annotations.ContributesMultibinding
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
-import org.threeten.bp.LocalDate
-import org.threeten.bp.format.DateTimeFormatter
 
 interface NetpCohortStore {
     var cohortLocalDate: LocalDate?
@@ -40,7 +40,7 @@ interface NetpCohortStore {
     boundType = NetPFeatureRemover.NetPStoreRemovalPlugin::class,
 )
 class RealNetpCohortStore @Inject constructor(
-    private val sharedPreferencesProvider: VpnSharedPreferencesProvider,
+    private val sharedPreferencesProvider: SharedPreferencesProvider,
 ) : NetpCohortStore, NetPFeatureRemover.NetPStoreRemovalPlugin {
     private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -57,7 +57,7 @@ class RealNetpCohortStore @Inject constructor(
             LocalDate.parse(it)
         }
         set(localDate) {
-            preferences.edit { putString(KEY_COHORT_LOCAL_DATE, formatter.format(localDate)) }
+            preferences.edit(commit = true) { putString(KEY_COHORT_LOCAL_DATE, formatter.format(localDate)) }
         }
 
     companion object {

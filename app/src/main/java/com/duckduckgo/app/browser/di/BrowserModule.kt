@@ -19,11 +19,16 @@ package com.duckduckgo.app.browser.di
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.room.Room
 import androidx.work.WorkManager
 import com.duckduckgo.adclick.api.AdClickManager
 import com.duckduckgo.app.browser.*
 import com.duckduckgo.app.browser.addtohome.AddToHomeCapabilityDetector
 import com.duckduckgo.app.browser.addtohome.AddToHomeSystemCapabilityDetector
+import com.duckduckgo.app.browser.applinks.ExternalAppIntentFlagsFeature
 import com.duckduckgo.app.browser.certificates.rootstore.TrustedCertificateStore
 import com.duckduckgo.app.browser.cookies.AppThirdPartyCookieManager
 import com.duckduckgo.app.browser.cookies.ThirdPartyCookieManager
@@ -35,6 +40,12 @@ import com.duckduckgo.app.browser.favicon.FaviconPersister
 import com.duckduckgo.app.browser.favicon.FileBasedFaviconPersister
 import com.duckduckgo.app.browser.httpauth.WebViewHttpAuthStore
 import com.duckduckgo.app.browser.logindetection.*
+import com.duckduckgo.app.browser.mediaplayback.store.ALL_MIGRATIONS
+import com.duckduckgo.app.browser.mediaplayback.store.MediaPlaybackDao
+import com.duckduckgo.app.browser.mediaplayback.store.MediaPlaybackDatabase
+import com.duckduckgo.app.browser.pageloadpixel.PageLoadedPixelDao
+import com.duckduckgo.app.browser.pageloadpixel.firstpaint.PagePaintedPixelDao
+import com.duckduckgo.app.browser.refreshpixels.RefreshDao
 import com.duckduckgo.app.browser.session.WebViewSessionInMemoryStorage
 import com.duckduckgo.app.browser.session.WebViewSessionStorage
 import com.duckduckgo.app.browser.tabpreview.FileBasedWebViewPreviewGenerator
@@ -44,10 +55,11 @@ import com.duckduckgo.app.browser.tabpreview.WebViewPreviewPersister
 import com.duckduckgo.app.browser.urlextraction.DOMUrlExtractor
 import com.duckduckgo.app.browser.urlextraction.JsUrlExtractor
 import com.duckduckgo.app.browser.urlextraction.UrlExtractingWebViewClient
+import com.duckduckgo.app.browser.webview.MaliciousSiteBlockerWebViewIntegration
 import com.duckduckgo.app.di.AppCoroutineScope
 import com.duckduckgo.app.fire.*
 import com.duckduckgo.app.fire.fireproofwebsite.data.FireproofWebsiteRepository
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.app.global.db.AppDatabase
 import com.duckduckgo.app.global.events.db.UserEventsStore
 import com.duckduckgo.app.global.file.FileDeleter
 import com.duckduckgo.app.global.install.AppInstallStore
@@ -55,32 +67,37 @@ import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
 import com.duckduckgo.app.privacy.db.PrivacyProtectionCountDao
 import com.duckduckgo.app.referral.AppReferrerDataStore
 import com.duckduckgo.app.settings.db.SettingsDataStore
-import com.duckduckgo.app.statistics.VariantManager
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.app.statistics.store.StatisticsDataStore
 import com.duckduckgo.app.surrogates.ResourceSurrogates
 import com.duckduckgo.app.tabs.ui.GridViewColumnCalculator
 import com.duckduckgo.app.trackerdetection.CloakedCnameDetector
 import com.duckduckgo.app.trackerdetection.TrackerDetector
-import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.cookies.api.CookieManagerProvider
-import com.duckduckgo.cookies.api.DuckDuckGoCookieManager
+import com.duckduckgo.cookies.api.ThirdPartyCookieNames
+import com.duckduckgo.customtabs.api.CustomTabDetector
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.downloads.api.FileDownloader
 import com.duckduckgo.downloads.impl.AndroidFileDownloader
 import com.duckduckgo.downloads.impl.DataUriDownloader
 import com.duckduckgo.downloads.impl.FileDownloadCallback
+import com.duckduckgo.duckchat.api.DuckChat
+import com.duckduckgo.duckplayer.api.DuckPlayer
+import com.duckduckgo.experiments.api.VariantManager
 import com.duckduckgo.httpsupgrade.api.HttpsUpgrader
 import com.duckduckgo.privacy.config.api.AmpLinks
 import com.duckduckgo.privacy.config.api.Gpc
 import com.duckduckgo.privacy.config.api.TrackingParameters
 import com.duckduckgo.request.filterer.api.RequestFilterer
+import com.duckduckgo.subscriptions.api.Subscriptions
 import com.duckduckgo.user.agent.api.UserAgentProvider
 import dagger.Module
 import dagger.Provides
 import dagger.SingleInstanceIn
 import dagger.multibindings.IntoSet
 import javax.inject.Named
+import javax.inject.Qualifier
 import kotlinx.coroutines.CoroutineScope
 
 @Module
@@ -123,8 +140,9 @@ class BrowserModule {
     fun webViewLongPressHandler(
         context: Context,
         pixel: Pixel,
+        customTabDetector: CustomTabDetector,
     ): LongPressHandler {
-        return WebViewLongPressHandler(context, pixel)
+        return WebViewLongPressHandler(context, pixel, customTabDetector)
     }
 
     @Provides
@@ -142,17 +160,6 @@ class BrowserModule {
     @Provides
     fun webViewSessionStorage(): WebViewSessionStorage = WebViewSessionInMemoryStorage()
 
-    @SingleInstanceIn(AppScope::class)
-    @Provides
-    fun webDataManager(
-        context: Context,
-        webViewSessionStorage: WebViewSessionStorage,
-        cookieManager: DuckDuckGoCookieManager,
-        fileDeleter: FileDeleter,
-        webViewHttpAuthStore: WebViewHttpAuthStore,
-    ): WebDataManager =
-        WebViewDataManager(context, webViewSessionStorage, cookieManager, fileDeleter, webViewHttpAuthStore)
-
     @Provides
     fun clipboardManager(context: Context): ClipboardManager {
         return context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -168,8 +175,19 @@ class BrowserModule {
         packageManager: PackageManager,
         ampLinks: AmpLinks,
         trackingParameters: TrackingParameters,
-        appBuildConfig: AppBuildConfig,
-    ): SpecialUrlDetector = SpecialUrlDetectorImpl(packageManager, ampLinks, trackingParameters, appBuildConfig)
+        subscriptions: Subscriptions,
+        externalAppIntentFlagsFeature: ExternalAppIntentFlagsFeature,
+        duckPlayer: DuckPlayer,
+        duckChat: DuckChat,
+    ): SpecialUrlDetector = SpecialUrlDetectorImpl(
+        packageManager,
+        ampLinks,
+        trackingParameters,
+        subscriptions,
+        externalAppIntentFlagsFeature,
+        duckPlayer,
+        duckChat,
+    )
 
     @Provides
     fun webViewRequestInterceptor(
@@ -182,6 +200,8 @@ class BrowserModule {
         adClickManager: AdClickManager,
         cloakedCnameDetector: CloakedCnameDetector,
         requestFilterer: RequestFilterer,
+        duckPlayer: DuckPlayer,
+        maliciousSiteBlockerWebViewIntegration: MaliciousSiteBlockerWebViewIntegration,
     ): RequestInterceptor =
         WebViewRequestInterceptor(
             resourceSurrogates,
@@ -193,6 +213,8 @@ class BrowserModule {
             adClickManager,
             cloakedCnameDetector,
             requestFilterer,
+            duckPlayer,
+            maliciousSiteBlockerWebViewIntegration,
         )
 
     @Provides
@@ -265,10 +287,10 @@ class BrowserModule {
         dataUriDownloader: DataUriDownloader,
         callback: FileDownloadCallback,
         workManager: WorkManager,
-        @AppCoroutineScope coroutineScope: CoroutineScope,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
         dispatcherProvider: DispatcherProvider,
     ): FileDownloader {
-        return AndroidFileDownloader(dataUriDownloader, callback, workManager, coroutineScope, dispatcherProvider)
+        return AndroidFileDownloader(dataUriDownloader, callback, workManager, appCoroutineScope, dispatcherProvider)
     }
 
     @Provides
@@ -293,7 +315,56 @@ class BrowserModule {
     fun thirdPartyCookieManager(
         cookieManagerProvider: CookieManagerProvider,
         authCookiesAllowedDomainsRepository: AuthCookiesAllowedDomainsRepository,
+        thirdPartyCookieNames: ThirdPartyCookieNames,
     ): ThirdPartyCookieManager {
-        return AppThirdPartyCookieManager(cookieManagerProvider, authCookiesAllowedDomainsRepository)
+        return AppThirdPartyCookieManager(cookieManagerProvider, authCookiesAllowedDomainsRepository, thirdPartyCookieNames)
+    }
+
+    @Provides
+    @SingleInstanceIn(AppScope::class)
+    fun providePageLoadedPixelDao(appDatabase: AppDatabase): PageLoadedPixelDao {
+        return appDatabase.pageLoadedPixelDao()
+    }
+
+    @Provides
+    @SingleInstanceIn(AppScope::class)
+    fun providePagePaintedPixelDao(appDatabase: AppDatabase): PagePaintedPixelDao {
+        return appDatabase.pagePaintedPixelDao()
+    }
+
+    @Provides
+    @SingleInstanceIn(AppScope::class)
+    fun provideMediaPlaybackDatabase(context: Context): MediaPlaybackDatabase {
+        return Room.databaseBuilder(context, MediaPlaybackDatabase::class.java, "media_playback.db")
+            .enableMultiInstanceInvalidation()
+            .fallbackToDestructiveMigration()
+            .addMigrations(*ALL_MIGRATIONS)
+            .build()
+    }
+
+    @Provides
+    @SingleInstanceIn(AppScope::class)
+    fun providesMediaPlaybackDao(mediaPlaybackDatabase: MediaPlaybackDatabase): MediaPlaybackDao {
+        return mediaPlaybackDatabase.mediaPlaybackDao()
+    }
+
+    private val Context.indonesiaNewTabSectionDataStore: DataStore<Preferences> by preferencesDataStore(
+        name = "indonesia_new_tab_section_store",
+    )
+
+    @Provides
+    @SingleInstanceIn(AppScope::class)
+    @IndonesiaNewTabSection
+    fun provideIndonesiaNewTabSectionDataStore(context: Context): DataStore<Preferences> {
+        return context.indonesiaNewTabSectionDataStore
+    }
+
+    @Provides
+    @SingleInstanceIn(AppScope::class)
+    fun provideRefreshDao(appDatabase: AppDatabase): RefreshDao {
+        return appDatabase.refreshDao()
     }
 }
+
+@Qualifier
+annotation class IndonesiaNewTabSection

@@ -17,10 +17,11 @@
 package com.duckduckgo.mobile.android.app.tracking
 
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.mobile.android.vpn.AppTpVpnFeature
 import com.duckduckgo.mobile.android.vpn.VpnFeaturesRegistry
+import com.duckduckgo.mobile.android.vpn.apps.TrackingProtectionAppsRepository
 import com.duckduckgo.mobile.android.vpn.ui.onboarding.VpnStore
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
@@ -36,6 +37,7 @@ class RealAppTrackingProtection @Inject constructor(
     private val vpnFeaturesRegistry: VpnFeaturesRegistry,
     @AppCoroutineScope private val coroutineScope: CoroutineScope,
     private val dispatcherProvider: DispatcherProvider,
+    private val trackingProtectionAppsRepository: TrackingProtectionAppsRepository,
 ) : AppTrackingProtection {
     override suspend fun isOnboarded(): Boolean = withContext(dispatcherProvider.io()) {
         return@withContext vpnStore.didShowOnboarding()
@@ -50,7 +52,7 @@ class RealAppTrackingProtection @Inject constructor(
     }
 
     override fun restart() {
-        coroutineScope.launch {
+        coroutineScope.launch(dispatcherProvider.io()) {
             vpnFeaturesRegistry.refreshFeature(AppTpVpnFeature.APPTP_VPN)
         }
     }
@@ -59,5 +61,9 @@ class RealAppTrackingProtection @Inject constructor(
         coroutineScope.launch {
             vpnFeaturesRegistry.unregisterFeature(AppTpVpnFeature.APPTP_VPN)
         }
+    }
+
+    override suspend fun getExcludedApps(): List<String> = withContext(dispatcherProvider.io()) {
+        trackingProtectionAppsRepository.getExclusionAppsList()
     }
 }

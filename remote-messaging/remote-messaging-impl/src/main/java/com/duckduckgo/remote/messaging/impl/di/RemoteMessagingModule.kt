@@ -18,30 +18,30 @@ package com.duckduckgo.remote.messaging.impl.di
 
 import android.content.Context
 import androidx.room.Room
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.app.statistics.VariantManager
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.browser.api.AppProperties
 import com.duckduckgo.browser.api.UserBrowserProperties
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.DaggerSet
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.remote.messaging.api.AttributeMatcherPlugin
+import com.duckduckgo.remote.messaging.api.JsonToMatchingAttributeMapper
 import com.duckduckgo.remote.messaging.api.MessageActionMapperPlugin
 import com.duckduckgo.remote.messaging.api.RemoteMessagingRepository
 import com.duckduckgo.remote.messaging.impl.*
-import com.duckduckgo.remote.messaging.impl.RealRemoteMessagingConfigDownloader
-import com.duckduckgo.remote.messaging.impl.RemoteMessagingConfigDownloader
 import com.duckduckgo.remote.messaging.impl.mappers.MessageMapper
 import com.duckduckgo.remote.messaging.impl.mappers.RemoteMessagingConfigJsonMapper
 import com.duckduckgo.remote.messaging.impl.matchers.AndroidAppAttributeMatcher
 import com.duckduckgo.remote.messaging.impl.matchers.DeviceAttributeMatcher
 import com.duckduckgo.remote.messaging.impl.matchers.UserAttributeMatcher
 import com.duckduckgo.remote.messaging.impl.network.RemoteMessagingService
-import com.duckduckgo.remote.messaging.store.ALL_MIGRATIONS
 import com.duckduckgo.remote.messaging.store.LocalRemoteMessagingConfigRepository
 import com.duckduckgo.remote.messaging.store.RemoteMessagesDao
+import com.duckduckgo.remote.messaging.store.RemoteMessagingCohortStore
+import com.duckduckgo.remote.messaging.store.RemoteMessagingCohortStoreImpl
 import com.duckduckgo.remote.messaging.store.RemoteMessagingConfigRepository
 import com.duckduckgo.remote.messaging.store.RemoteMessagingDatabase
+import com.duckduckgo.remote.messaging.store.RemoteMessagingDatabase.Companion.ALL_MIGRATIONS
 import com.squareup.anvil.annotations.ContributesTo
 import dagger.Module
 import dagger.Provides
@@ -87,16 +87,12 @@ object DataSourceModule {
         remoteMessagesDao: RemoteMessagesDao,
         dispatchers: DispatcherProvider,
         messageMapper: MessageMapper,
-        userBrowserProperties: UserBrowserProperties,
-        variantManager: VariantManager,
     ): RemoteMessagingRepository {
         return AppRemoteMessagingRepository(
             remoteMessagingConfigRepository,
             remoteMessagesDao,
             dispatchers,
             messageMapper,
-            userBrowserProperties,
-            variantManager,
         )
     }
 
@@ -111,10 +107,11 @@ object DataSourceModule {
     @Provides
     @SingleInstanceIn(AppScope::class)
     fun providesRemoteMessagingConfigJsonMapper(
+        matchingAttributeMappers: DaggerSet<JsonToMatchingAttributeMapper>,
         actionMappers: DaggerSet<MessageActionMapperPlugin>,
         appBuildConfig: AppBuildConfig,
     ): RemoteMessagingConfigJsonMapper {
-        return RemoteMessagingConfigJsonMapper(appBuildConfig, actionMappers)
+        return RemoteMessagingConfigJsonMapper(appBuildConfig, matchingAttributeMappers, actionMappers)
     }
 
     @Provides
@@ -122,8 +119,9 @@ object DataSourceModule {
     fun providesRemoteMessagingConfigMatcher(
         matchers: DaggerSet<AttributeMatcherPlugin>,
         remoteMessagingRepository: RemoteMessagingRepository,
+        remoteMessagingCohortStore: RemoteMessagingCohortStore,
     ): RemoteMessagingConfigMatcher {
-        return RemoteMessagingConfigMatcher(matchers, remoteMessagingRepository)
+        return RemoteMessagingConfigMatcher(matchers, remoteMessagingRepository, remoteMessagingCohortStore)
     }
 
     @Provides
@@ -164,5 +162,11 @@ object DataSourceModule {
             .fallbackToDestructiveMigration()
             .addMigrations(*ALL_MIGRATIONS)
             .build()
+    }
+
+    @Provides
+    @SingleInstanceIn(AppScope::class)
+    fun providesRemoteMessagingUserDataStore(database: RemoteMessagingDatabase, dispatchers: DispatcherProvider): RemoteMessagingCohortStore {
+        return RemoteMessagingCohortStoreImpl(database, dispatchers)
     }
 }

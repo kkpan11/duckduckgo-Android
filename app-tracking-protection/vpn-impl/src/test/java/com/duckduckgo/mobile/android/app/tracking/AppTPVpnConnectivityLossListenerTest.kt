@@ -3,14 +3,13 @@ package com.duckduckgo.mobile.android.app.tracking
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.duckduckgo.app.CoroutineTestRule
-import com.duckduckgo.app.global.api.InMemorySharedPreferences
-import com.duckduckgo.mobile.android.vpn.feature.AppTpFeatureConfig
-import com.duckduckgo.mobile.android.vpn.feature.AppTpSetting
-import com.duckduckgo.mobile.android.vpn.feature.FakeAppTpFeatureConfig
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.common.test.api.InMemorySharedPreferences
+import com.duckduckgo.feature.toggles.api.FakeFeatureToggleFactory
+import com.duckduckgo.feature.toggles.api.Toggle
+import com.duckduckgo.mobile.android.vpn.feature.AppTpRemoteFeatures
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -21,7 +20,6 @@ import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.kotlin.*
 
-@ExperimentalCoroutinesApi
 @RunWith(AndroidJUnit4::class)
 class AppTPVpnConnectivityLossListenerTest {
 
@@ -31,21 +29,20 @@ class AppTPVpnConnectivityLossListenerTest {
     private val networkProtectionState: NetworkProtectionState = mock()
     private val appTrackingProtection: AppTrackingProtection = mock()
     private val context: Context = mock()
-    private lateinit var appTpFeatureConfig: AppTpFeatureConfig
     private lateinit var listener: AppTPVpnConnectivityLossListener
     private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var appTpRemoteFeatures: AppTpRemoteFeatures
 
     @Before
     fun setup() {
-        appTpFeatureConfig = FakeAppTpFeatureConfig()
-        appTpFeatureConfig.edit().setEnabled(AppTpSetting.RestartOnConnectivityLoss, true)
         sharedPreferences = InMemorySharedPreferences()
+        appTpRemoteFeatures = FakeFeatureToggleFactory.create(AppTpRemoteFeatures::class.java)
         whenever(context.getSharedPreferences(anyString(), anyInt())).thenReturn(sharedPreferences)
 
         listener = AppTPVpnConnectivityLossListener(
             networkProtectionState,
             appTrackingProtection,
-            appTpFeatureConfig,
+            appTpRemoteFeatures,
             coroutinesTestRule.testDispatcherProvider,
             context,
         )
@@ -89,7 +86,7 @@ class AppTPVpnConnectivityLossListenerTest {
     fun whenRestartOnConnectivityLossIsDisabledThenNoop() = runTest {
         whenever(networkProtectionState.isEnabled()).thenReturn(false)
         whenever(appTrackingProtection.isEnabled()).thenReturn(true)
-        appTpFeatureConfig.edit().setEnabled(AppTpSetting.RestartOnConnectivityLoss, false)
+        appTpRemoteFeatures.restartOnConnectivityLoss().setRawStoredState(Toggle.State(enable = false))
 
         listener.onVpnConnectivityLoss(coroutinesTestRule.testScope)
         listener.onVpnConnectivityLoss(coroutinesTestRule.testScope)
@@ -207,7 +204,7 @@ class AppTPVpnConnectivityLossListenerTest {
 
         listener.onVpnConnectivityLoss(coroutinesTestRule.testScope)
         listener.onVpnConnectivityLoss(coroutinesTestRule.testScope)
-        listener.onVpnStopped(coroutinesTestRule.testScope, VpnStateMonitor.VpnStopReason.SELF_STOP)
+        listener.onVpnStopped(coroutinesTestRule.testScope, VpnStateMonitor.VpnStopReason.SELF_STOP())
         listener.onVpnConnectivityLoss(coroutinesTestRule.testScope)
 
         verify(appTrackingProtection, never()).restart()

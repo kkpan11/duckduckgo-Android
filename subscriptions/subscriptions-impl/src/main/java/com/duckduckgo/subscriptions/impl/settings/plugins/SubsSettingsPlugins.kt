@@ -18,21 +18,23 @@ package com.duckduckgo.subscriptions.impl.settings.plugins
 
 import android.content.Context
 import android.view.View
+import com.duckduckgo.anvil.annotations.PriorityKey
+import com.duckduckgo.common.ui.view.listitem.SectionHeaderListItem
 import com.duckduckgo.di.scopes.ActivityScope
-import com.duckduckgo.mobile.android.ui.view.listitem.SectionHeaderListItem
 import com.duckduckgo.settings.api.ProSettingsPlugin
+import com.duckduckgo.settings.api.SettingsPageFeature
 import com.duckduckgo.subscriptions.impl.R
-import com.duckduckgo.subscriptions.impl.settings.views.ProSettingBuyView
+import com.duckduckgo.subscriptions.impl.settings.views.ItrSettingView
+import com.duckduckgo.subscriptions.impl.settings.views.LegacyItrSettingView
+import com.duckduckgo.subscriptions.impl.settings.views.LegacyPirSettingView
+import com.duckduckgo.subscriptions.impl.settings.views.LegacyProSettingView
+import com.duckduckgo.subscriptions.impl.settings.views.PirSettingView
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingView
 import com.squareup.anvil.annotations.ContributesMultibinding
-import dagger.MapKey
 import javax.inject.Inject
 
-@MapKey
-annotation class PositionKey(val pos: Int)
-
 @ContributesMultibinding(ActivityScope::class)
-@PositionKey(100)
+@PriorityKey(100)
 class ProSettingsTitle @Inject constructor() : ProSettingsPlugin {
     override fun getView(context: Context): View {
         return SectionHeaderListItem(context).apply {
@@ -42,17 +44,37 @@ class ProSettingsTitle @Inject constructor() : ProSettingsPlugin {
 }
 
 @ContributesMultibinding(scope = ActivityScope::class)
-@PositionKey(200)
-class ProSettingBuy @Inject constructor() : ProSettingsPlugin {
+@PriorityKey(500)
+class ProSettings @Inject constructor(private val settingsPageFeature: SettingsPageFeature) : ProSettingsPlugin {
     override fun getView(context: Context): View {
-        return ProSettingBuyView(context)
+        return if (settingsPageFeature.newPrivacyProSection().isEnabled()) {
+            ProSettingView(context)
+        } else {
+            LegacyProSettingView(context)
+        }
     }
 }
 
 @ContributesMultibinding(scope = ActivityScope::class)
-@PositionKey(300)
-class ProSettings @Inject constructor() : ProSettingsPlugin {
+@PriorityKey(300)
+class PIRSettings @Inject constructor(private val settingsPageFeature: SettingsPageFeature) : ProSettingsPlugin {
     override fun getView(context: Context): View {
-        return ProSettingView(context)
+        return if (settingsPageFeature.newPrivacyProSection().isEnabled()) {
+            PirSettingView(context)
+        } else {
+            LegacyPirSettingView(context)
+        }
+    }
+}
+
+@ContributesMultibinding(scope = ActivityScope::class)
+@PriorityKey(400)
+class ITRSettings @Inject constructor(private val settingsPageFeature: SettingsPageFeature) : ProSettingsPlugin {
+    override fun getView(context: Context): View {
+        return if (settingsPageFeature.newPrivacyProSection().isEnabled()) {
+            ItrSettingView(context)
+        } else {
+            LegacyItrSettingView(context)
+        }
     }
 }

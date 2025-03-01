@@ -18,24 +18,18 @@ package com.duckduckgo.networkprotection.impl.settings.geoswitching
 
 import androidx.lifecycle.LifecycleOwner
 import app.cash.turbine.test
-import com.duckduckgo.app.CoroutineTestRule
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
 import com.duckduckgo.networkprotection.impl.configuration.WgServerDebugProvider
 import com.duckduckgo.networkprotection.impl.pixels.NetworkProtectionPixels
-import com.duckduckgo.networkprotection.impl.settings.geoswitching.GeoswitchingListItem.CountryItem
-import com.duckduckgo.networkprotection.impl.settings.geoswitching.GeoswitchingListItem.DividerItem
-import com.duckduckgo.networkprotection.impl.settings.geoswitching.GeoswitchingListItem.HeaderItem
-import com.duckduckgo.networkprotection.impl.settings.geoswitching.GeoswitchingListItem.RecommendedItem
+import com.duckduckgo.networkprotection.impl.settings.geoswitching.NetpGeoSwitchingViewModel.CountryItem
 import com.duckduckgo.networkprotection.store.NetPGeoswitchingRepository
 import com.duckduckgo.networkprotection.store.NetPGeoswitchingRepository.UserPreferredLocation
 import com.duckduckgo.networkprotection.store.db.NetPGeoswitchingLocation
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -47,7 +41,6 @@ import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.verifyNoMoreInteractions
 import org.mockito.kotlin.whenever
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class NetpGeoSwitchingViewModelTest {
 
     @get:Rule
@@ -83,32 +76,28 @@ class NetpGeoSwitchingViewModelTest {
 
     @Test
     fun whenViewModelIsInitializedThenViewStateShouldEmitParsedList() = runTest {
+        fakeRepository.setUserPreferredLocation(UserPreferredLocation())
+
         testee.onStart(mockLifecycleOwner)
         testee.viewState().test {
             expectMostRecentItem().also {
-                assertEquals(6, it.items.size)
-                assertTrue(it.items[0] is HeaderItem)
-                assertTrue(it.items[1] is RecommendedItem)
-                assertTrue(it.items[2] is DividerItem)
-                assertTrue(it.items[3] is HeaderItem)
-                assertTrue(it.items[4] is CountryItem)
+                assertEquals(2, it.items.size)
                 assertEquals(
-                    it.items[4],
+                    it.items[0],
                     CountryItem(
-                        countryCode = "uk",
+                        countryCode = "gb",
                         countryEmoji = "🇬🇧",
                         countryName = "UK",
                         cities = emptyList(),
                     ),
                 )
-                assertTrue(it.items[5] is CountryItem)
                 assertEquals(
-                    it.items[5],
+                    it.items[1],
                     CountryItem(
                         countryCode = "us",
                         countryEmoji = "🇺🇸",
                         countryName = "United States",
-                        cities = listOf("Chicago", "El Segundo", "Newark", "Atlanta"),
+                        cities = listOf("Atlanta", "Chicago", "El Segundo", "Newark"),
                     ),
                 )
             }
@@ -117,6 +106,8 @@ class NetpGeoSwitchingViewModelTest {
 
     @Test
     fun whenProviderHasNoDownloadedDataThenViewStateShouldOnlyContainNearestAvailable() = runTest {
+        fakeRepository.setUserPreferredLocation(UserPreferredLocation())
+
         val mockProvider = mock(NetpEgressServersProvider::class.java)
         testee = NetpGeoSwitchingViewModel(
             mockProvider,
@@ -126,14 +117,13 @@ class NetpGeoSwitchingViewModelTest {
             networkProtectionState,
             networkProtectionPixels,
         )
+
         whenever(mockProvider.getServerLocations()).thenReturn(emptyList())
 
-        testee.onStart(mockLifecycleOwner)
+        testee.onCreate(mockLifecycleOwner)
         testee.viewState().test {
             expectMostRecentItem().also {
-                assertEquals(2, it.items.size)
-                assertTrue(it.items[0] is HeaderItem)
-                assertTrue(it.items[1] is RecommendedItem)
+                assertEquals(0, it.items.size)
             }
         }
     }
@@ -209,7 +199,7 @@ class NetpGeoSwitchingViewModelTest {
         testee.onCountrySelected("us")
         testee.onStop(mockLifecycleOwner)
 
-        verify(networkProtectionState).restart()
+        verify(networkProtectionState).clearVPNConfigurationAndRestart()
     }
 
     @Test
@@ -221,7 +211,7 @@ class NetpGeoSwitchingViewModelTest {
         fakeRepository.setUserPreferredLocation(UserPreferredLocation(countryCode = "us", cityName = "Newark"))
         testee.onStop(mockLifecycleOwner)
 
-        verify(networkProtectionState).restart()
+        verify(networkProtectionState).clearVPNConfigurationAndRestart()
     }
 
     @Test
@@ -323,6 +313,8 @@ class NetpGeoSwitchingViewModelTest {
 class FakeNetPGeoswitchingRepository : NetPGeoswitchingRepository {
     private var _userPreferredCountry: String? = null
     private var _userPreferredCity: String? = null
+    private var locations: List<NetPGeoswitchingLocation> = emptyList()
+
     override suspend fun getUserPreferredLocation(): UserPreferredLocation = UserPreferredLocation(_userPreferredCountry, _userPreferredCity)
 
     override suspend fun setUserPreferredLocation(userPreferredLocation: UserPreferredLocation) {
@@ -330,9 +322,11 @@ class FakeNetPGeoswitchingRepository : NetPGeoswitchingRepository {
         _userPreferredCity = userPreferredLocation.cityName
     }
 
-    override fun getLocations(): List<NetPGeoswitchingLocation> = emptyList()
+    override fun getLocations(): List<NetPGeoswitchingLocation> = locations
 
-    override fun getLocationsFlow(): Flow<List<NetPGeoswitchingLocation>> = emptyFlow()
+    override fun getLocationsFlow(): Flow<List<NetPGeoswitchingLocation>> = TODO()
 
-    override fun replaceLocations(locations: List<NetPGeoswitchingLocation>) {}
+    override fun replaceLocations(locations: List<NetPGeoswitchingLocation>) {
+        this.locations = locations
+    }
 }

@@ -18,11 +18,12 @@ package com.duckduckgo.app.notification
 
 import android.content.Context
 import androidx.core.app.NotificationManagerCompat
-import com.duckduckgo.app.global.plugins.PluginPoint
 import com.duckduckgo.app.notification.db.NotificationDao
 import com.duckduckgo.app.notification.model.Notification
 import com.duckduckgo.app.notification.model.SchedulableNotification
 import com.duckduckgo.app.notification.model.SchedulableNotificationPlugin
+import com.duckduckgo.common.utils.notification.checkPermissionAndNotify
+import com.duckduckgo.common.utils.plugins.PluginPoint
 import timber.log.Timber
 
 class AppNotificationSender(
@@ -54,7 +55,7 @@ class AppNotificationSender(
         val cancelIntent = NotificationHandlerService.pendingCancelNotificationHandlerIntent(context, notification.javaClass)
         val systemNotification = factory.createNotification(specification, launchIntent, cancelIntent)
         notificationDao.insert(Notification(notification.id))
-        manager.notify(specification.systemId, systemNotification)
+        manager.checkPermissionAndNotify(context, specification.systemId, systemNotification)
 
         notificationPlugin.onNotificationShown()
     }

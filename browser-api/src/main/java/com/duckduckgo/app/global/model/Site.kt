@@ -19,13 +19,14 @@ package com.duckduckgo.app.global.model
 import android.net.Uri
 import android.net.http.SslCertificate
 import androidx.core.net.toUri
-import com.duckduckgo.app.global.baseHost
-import com.duckduckgo.app.global.domain
 import com.duckduckgo.app.privacy.model.HttpsStatus
 import com.duckduckgo.app.surrogates.SurrogateResponse
 import com.duckduckgo.app.trackerdetection.model.Entity
 import com.duckduckgo.app.trackerdetection.model.TrackerStatus
 import com.duckduckgo.app.trackerdetection.model.TrackingEvent
+import com.duckduckgo.browser.api.brokensite.BrokenSiteContext
+import com.duckduckgo.common.utils.baseHost
+import com.duckduckgo.common.utils.domain
 
 interface Site {
 
@@ -46,6 +47,8 @@ interface Site {
     var hasHttpResources: Boolean
     var upgradedHttps: Boolean
     var userAllowList: Boolean
+    var sslError: Boolean
+    var isExternalLaunch: Boolean
 
     val entity: Entity?
     var certificate: SslCertificate?
@@ -61,6 +64,7 @@ interface Site {
     fun trackerDetected(event: TrackingEvent)
     fun onHttpErrorDetected(errorCode: Int)
     fun onErrorDetected(error: String)
+    fun resetErrors()
     fun updatePrivacyData(sitePrivacyData: SitePrivacyData)
     fun surrogateDetected(surrogate: SurrogateResponse)
 
@@ -72,6 +76,15 @@ interface Site {
     var consentSelfTestFailed: Boolean
     var consentCosmeticHide: Boolean?
     var isDesktopMode: Boolean
+    var nextUrl: String
+
+    val realBrokenSiteContext: BrokenSiteContext
+
+    var maliciousSiteStatus: MaliciousSiteStatus?
+}
+
+enum class MaliciousSiteStatus {
+    PHISHING, MALWARE
 }
 
 fun Site.orderedTrackerBlockedEntities(): List<Entity> = trackingEvents
@@ -82,6 +95,11 @@ fun Site.orderedTrackerBlockedEntities(): List<Entity> = trackingEvents
 
 fun Site.domainMatchesUrl(matchingUrl: String): Boolean {
     return uri?.baseHost == matchingUrl.toUri().baseHost
+}
+
+fun Site.domainMatchesUrl(matchingUrl: Uri): Boolean {
+    // TODO (cbarreiro) can we get rid of baseHost for the Uri as well?
+    return uri?.baseHost == matchingUrl.host
 }
 
 val Site.domain get() = uri?.domain()

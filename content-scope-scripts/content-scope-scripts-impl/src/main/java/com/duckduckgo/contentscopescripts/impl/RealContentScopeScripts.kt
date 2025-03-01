@@ -16,9 +16,10 @@
 
 package com.duckduckgo.contentscopescripts.impl
 
-import com.duckduckgo.app.global.plugins.PluginPoint
+import com.duckduckgo.app.global.model.Site
 import com.duckduckgo.app.privacy.db.UserAllowListRepository
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.contentscopescripts.api.ContentScopeConfigPlugin
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.feature.toggles.api.FeatureExceptions.FeatureException
@@ -29,12 +30,17 @@ import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi.Builder
 import com.squareup.moshi.Types
 import dagger.SingleInstanceIn
+import java.util.*
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 
 interface CoreContentScopeScripts {
-    fun getScript(): String
+    fun getScript(site: Site?): String
     fun isEnabled(): Boolean
+
+    val secret: String
+    val javascriptInterface: String
+    val callbackName: String
 }
 
 @SingleInstanceIn(AppScope::class)
@@ -61,7 +67,11 @@ class RealContentScopeScripts @Inject constructor(
 
     private lateinit var cachedContentScopeJS: String
 
-    override fun getScript(): String {
+    override val secret: String = getSecret()
+    override val javascriptInterface: String = getSecret()
+    override val callbackName: String = getSecret()
+
+    override fun getScript(site: Site?): String {
         var updateJS = false
 
         val pluginParameters = getPluginParameters()
@@ -82,7 +92,7 @@ class RealContentScopeScripts @Inject constructor(
             updateJS = true
         }
 
-        val userPreferencesJson = getUserPreferencesJson(pluginParameters.preferences)
+        val userPreferencesJson = getUserPreferencesJson(pluginParameters.preferences, site)
         if (cachedUserPreferencesJson != userPreferencesJson) {
             cachedUserPreferencesJson = userPreferencesJson
             updateJS = true
@@ -97,6 +107,10 @@ class RealContentScopeScripts @Inject constructor(
     override fun isEnabled(): Boolean {
         return contentScopeScriptsFeature.self().isEnabled()
     }
+
+    private fun getSecretKeyValuePair() = "\"messageSecret\":\"$secret\""
+    private fun getCallbackKeyValuePair() = "\"messageCallback\":\"$callbackName\""
+    private fun getInterfaceKeyValuePair() = "\"javascriptInterface\":\"$javascriptInterface\""
 
     private fun getPluginParameters(): PluginParameters {
         var config = ""
@@ -145,6 +159,7 @@ class RealContentScopeScripts @Inject constructor(
             .replace(contentScope, cachedContentScopeJson)
             .replace(userUnprotectedDomains, cachedUserUnprotectedDomainsJson)
             .replace(userPreferences, cachedUserPreferencesJson)
+            .replace(messagingParameters, "${getSecretKeyValuePair()},${getCallbackKeyValuePair()},${getInterfaceKeyValuePair()}")
     }
 
     private fun getUserUnprotectedDomainsJson(userUnprotectedDomains: List<String>): String {
@@ -161,8 +176,10 @@ class RealContentScopeScripts @Inject constructor(
         return jsonAdapter.toJson(unprotectedTemporaryExceptions)
     }
 
-    private fun getUserPreferencesJson(userPreferences: String): String {
-        val defaultParameters = "${getVersionNumberKeyValuePair()},${getPlatformKeyValuePair()},${getSessionKeyValuePair()},$messagingParameters"
+    private fun getUserPreferencesJson(userPreferences: String, site: Site?): String {
+        val isDesktopMode = site?.isDesktopMode ?: false
+        val defaultParameters = "${getVersionNumberKeyValuePair()},${getPlatformKeyValuePair()},${getLanguageKeyValuePair()}," +
+            "${getSessionKeyValuePair()},${getDesktopModeKeyValuePair(isDesktopMode)},$messagingParameters"
         if (userPreferences.isEmpty()) {
             return "{$defaultParameters}"
         }
@@ -171,6 +188,8 @@ class RealContentScopeScripts @Inject constructor(
 
     private fun getVersionNumberKeyValuePair() = "\"versionNumber\":${appBuildConfig.versionCode}"
     private fun getPlatformKeyValuePair() = "\"platform\":{\"name\":\"android\"}"
+    private fun getLanguageKeyValuePair() = "\"locale\":\"${Locale.getDefault().language}\""
+    private fun getDesktopModeKeyValuePair(isDesktopMode: Boolean) = "\"desktopModeEnabled\":$isDesktopMode"
     private fun getSessionKeyValuePair() = "\"sessionKey\":\"${fingerprintProtectionManager.getSeed()}\""
 
     private fun getContentScopeJson(config: String, unprotectedTemporaryExceptions: List<FeatureException>): String = (
@@ -184,6 +203,10 @@ class RealContentScopeScripts @Inject constructor(
         const val userUnprotectedDomains = "\$USER_UNPROTECTED_DOMAINS$"
         const val userPreferences = "\$USER_PREFERENCES$"
         const val messagingParameters = "\$ANDROID_MESSAGING_PARAMETERS$"
+
+        private fun getSecret(): String {
+            return UUID.randomUUID().toString().replace("-", "")
+        }
     }
 }
 

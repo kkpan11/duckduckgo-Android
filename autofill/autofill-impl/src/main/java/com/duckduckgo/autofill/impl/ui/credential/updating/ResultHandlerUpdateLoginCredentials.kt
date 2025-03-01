@@ -18,12 +18,10 @@ package com.duckduckgo.autofill.impl.ui.credential.updating
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import androidx.fragment.app.Fragment
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.DispatcherProvider
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.autofill.api.AutofillEventListener
 import com.duckduckgo.autofill.api.AutofillFragmentResultsPlugin
@@ -32,8 +30,9 @@ import com.duckduckgo.autofill.api.CredentialUpdateExistingCredentialsDialog.Com
 import com.duckduckgo.autofill.api.CredentialUpdateExistingCredentialsDialog.Companion.KEY_CREDENTIAL_UPDATE_TYPE
 import com.duckduckgo.autofill.api.CredentialUpdateExistingCredentialsDialog.CredentialUpdateType
 import com.duckduckgo.autofill.api.domain.app.LoginCredentials
-import com.duckduckgo.autofill.api.store.AutofillStore
 import com.duckduckgo.autofill.impl.AutofillFireproofDialogSuppressor
+import com.duckduckgo.autofill.impl.store.InternalAutofillStore
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
 import javax.inject.Inject
@@ -46,7 +45,7 @@ import timber.log.Timber
 class ResultHandlerUpdateLoginCredentials @Inject constructor(
     private val autofillFireproofDialogSuppressor: AutofillFireproofDialogSuppressor,
     private val dispatchers: DispatcherProvider,
-    private val autofillStore: AutofillStore,
+    private val autofillStore: InternalAutofillStore,
     private val appBuildConfig: AppBuildConfig,
     @AppCoroutineScope private val appCoroutineScope: CoroutineScope,
 ) : AutofillFragmentResultsPlugin {
@@ -78,7 +77,7 @@ class ResultHandlerUpdateLoginCredentials @Inject constructor(
     @Suppress("DEPRECATION")
     @SuppressLint("NewApi")
     private inline fun <reified T : Parcelable> Bundle.safeGetParcelable(key: String) =
-        if (appBuildConfig.sdkInt >= Build.VERSION_CODES.TIRAMISU) {
+        if (appBuildConfig.sdkInt >= 33) {
             getParcelable(key, T::class.java)
         } else {
             getParcelable(key)

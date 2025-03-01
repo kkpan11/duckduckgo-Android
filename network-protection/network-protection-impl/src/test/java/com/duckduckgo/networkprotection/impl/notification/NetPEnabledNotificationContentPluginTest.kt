@@ -20,11 +20,10 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.cash.turbine.test
-import com.duckduckgo.app.CoroutineTestRule
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.mobile.android.app.tracking.AppTrackingProtection
 import com.duckduckgo.mobile.android.vpn.service.VpnEnabledNotificationContentPlugin
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.*
 import org.junit.Assert.*
@@ -34,7 +33,6 @@ import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.whenever
 
 @RunWith(AndroidJUnit4::class)
-@OptIn(ExperimentalCoroutinesApi::class)
 class NetPEnabledNotificationContentPluginTest {
 
     @get:Rule
@@ -61,11 +59,9 @@ class NetPEnabledNotificationContentPluginTest {
     fun setup() {
         MockitoAnnotations.openMocks(this)
         plugin = NetPEnabledNotificationContentPlugin(
-            context,
             context.resources,
             networkProtectionState,
             appTrackingProtection,
-            notificationActions,
         ) { null }
     }
 
@@ -85,7 +81,7 @@ class NetPEnabledNotificationContentPluginTest {
         val content = plugin.getInitialContent()
 
         assertNotNull(content)
-        content!!.assertTitleEquals("Network Protection is enabled and routing traffic through the VPN.")
+        content!!.assertTitleEquals("VPN is connected.")
     }
 
     @Test
@@ -108,7 +104,7 @@ class NetPEnabledNotificationContentPluginTest {
             val item = awaitItem()
 
             assertNotNull(item)
-            item!!.assertTitleEquals("Network Protection is enabled and routing traffic through the VPN.")
+            item!!.assertTitleEquals("VPN is connected.")
 
             cancelAndIgnoreRemainingEvents()
         }
@@ -123,7 +119,7 @@ class NetPEnabledNotificationContentPluginTest {
             val item = awaitItem()
 
             assertNotNull(item)
-            item!!.assertTitleEquals("Network Protection is enabled and routing device traffic through Stockholm, SE.")
+            item!!.assertTitleEquals("VPN is connected and routing device traffic through Stockholm, SE.")
 
             cancelAndIgnoreRemainingEvents()
         }
@@ -157,5 +153,5 @@ class NetPEnabledNotificationContentPluginTest {
 }
 
 private fun VpnEnabledNotificationContentPlugin.VpnEnabledNotificationContent.assertTitleEquals(expected: String) {
-    Assert.assertEquals(expected, this.title.toString())
+    Assert.assertEquals(expected, this.text.toString())
 }

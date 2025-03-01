@@ -20,26 +20,29 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <com.duckduckgo.mobile.android.ui.view.listitem.SectionHeaderListItem
+    <com.duckduckgo.common.ui.view.listitem.SectionHeaderListItem
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:primaryText="@string/netpManagementManageHeader" />
 
-    <com.duckduckgo.mobile.android.ui.view.listitem.OneLineListItem
+    <com.duckduckgo.common.ui.view.listitem.OneLineListItem
         android:id="@+id/settings_vpn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        app:leadingIcon="@drawable/ic_settings"
+        app:leadingIconBackground="circular"
         app:primaryText="@string/netpManagementVpnSettings" />
 
-    <com.duckduckgo.mobile.android.ui.view.listitem.OneLineListItem
-        android:id="@+id/settings_vpn_notifications"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:primaryText="@string/netpManagementVpnNotificationSettings" />
-
-    <com.duckduckgo.mobile.android.ui.view.listitem.OneLineListItem
+    <com.duckduckgo.common.ui.view.listitem.TwoLineListItem
         android:id="@+id/settings_exclusion"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:primaryText="@string/netpManagementManageItemExclusion" />
+        app:leadingIcon="@drawable/ic_exclusion"
+        app:leadingIconBackground="circular"
+        app:primaryText="@string/netpManagementManageItemExclusion"
+        app:secondaryText="@string/netpManagementManageItemExclusionSubtitleEmpty" />
+
+    <com.duckduckgo.common.ui.view.divider.HorizontalDivider
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent" />
 </LinearLayout>

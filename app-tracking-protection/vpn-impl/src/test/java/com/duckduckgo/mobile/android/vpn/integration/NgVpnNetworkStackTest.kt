@@ -17,18 +17,18 @@
 package com.duckduckgo.mobile.android.vpn.integration
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.duckduckgo.app.CoroutineTestRule
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.mobile.android.app.tracking.AppTrackerDetector
 import com.duckduckgo.mobile.android.vpn.apps.TrackingProtectionAppsRepository
 import com.duckduckgo.mobile.android.vpn.feature.AppTpLocalFeature
+import com.duckduckgo.mobile.android.vpn.network.FakeDnsProvider
 import com.duckduckgo.mobile.android.vpn.pixels.DeviceShieldPixels
 import com.duckduckgo.vpn.network.api.*
 import com.duckduckgo.vpn.network.api.AddressRR
 import com.duckduckgo.vpn.network.api.DnsRR
 import com.duckduckgo.vpn.network.api.VpnNetwork
 import java.net.InetAddress
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert
 import org.junit.Assert.*
@@ -41,7 +41,6 @@ import org.mockito.kotlin.*
 private const val TRACKER_HOSTNAME = "api2.branch.com"
 
 @RunWith(AndroidJUnit4::class)
-@OptIn(ExperimentalCoroutinesApi::class)
 class NgVpnNetworkStackTest {
 
     @get:Rule
@@ -56,12 +55,14 @@ class NgVpnNetworkStackTest {
     private val appTpLocalFeature: AppTpLocalFeature = mock()
     private val deviceShieldPixels: DeviceShieldPixels = mock()
 
+    private lateinit var fakeDnsProvider: FakeDnsProvider
     private lateinit var ngVpnNetworkStack: NgVpnNetworkStack
 
     @Before
     fun setup() {
         whenever(vpnNetwork.create()).thenReturn(111)
         whenever(vpnNetwork.mtu()).thenReturn(1500)
+        fakeDnsProvider = FakeDnsProvider()
 
         ngVpnNetworkStack = NgVpnNetworkStack(
             appBuildConfig,
@@ -73,6 +74,7 @@ class NgVpnNetworkStackTest {
             deviceShieldPixels,
             coroutineRule.testScope,
             coroutineRule.testDispatcherProvider,
+            fakeDnsProvider,
         )
     }
 
@@ -107,6 +109,7 @@ class NgVpnNetworkStackTest {
 
     @Test
     fun whenOnPrepareVpnThenReturnCorrectVpnTunnelConfig() = runTest {
+        whenever(appBuildConfig.model).thenReturn("")
         whenever(trackingProtectionAppsRepository.getExclusionAppsList()).thenReturn(listOf())
 
         val configResult = ngVpnNetworkStack.onPrepareVpn()
@@ -116,6 +119,165 @@ class NgVpnNetworkStackTest {
         assertEquals(1500, config.mtu)
         assertTrue(config.routes.isEmpty())
         assertTrue(config.dns.isEmpty())
+        assertEquals(
+            mapOf(
+                InetAddress.getByName("10.0.0.2") to 32,
+                InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
+            ),
+            config.addresses,
+        )
+    }
+
+    @Test
+    fun whenMotoGPlayThenConfigureSystemDns() = runTest {
+        whenever(appBuildConfig.model).thenReturn("moto g play - 2023")
+        fakeDnsProvider.mutableSystemDns.add(InetAddress.getLocalHost())
+        whenever(trackingProtectionAppsRepository.getExclusionAppsList()).thenReturn(listOf())
+
+        val configResult = ngVpnNetworkStack.onPrepareVpn()
+        assertTrue(configResult.isSuccess)
+
+        val config = configResult.getOrThrow()
+        assertEquals(1500, config.mtu)
+        assertTrue(config.routes.isEmpty())
+        assertEquals(fakeDnsProvider.getSystemDns().toSet(), config.dns)
+        assertEquals(
+            mapOf(
+                InetAddress.getByName("10.0.0.2") to 32,
+                InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
+            ),
+            config.addresses,
+        )
+    }
+
+    @Test
+    fun whenMotoGPowerThenConfigureSystemDns() = runTest {
+        whenever(appBuildConfig.model).thenReturn("moto g stylus 5G")
+        fakeDnsProvider.mutableSystemDns.add(InetAddress.getLocalHost())
+        whenever(trackingProtectionAppsRepository.getExclusionAppsList()).thenReturn(listOf())
+
+        val configResult = ngVpnNetworkStack.onPrepareVpn()
+        assertTrue(configResult.isSuccess)
+
+        val config = configResult.getOrThrow()
+        assertEquals(1500, config.mtu)
+        assertTrue(config.routes.isEmpty())
+        assertEquals(fakeDnsProvider.getSystemDns().toSet(), config.dns)
+        assertEquals(
+            mapOf(
+                InetAddress.getByName("10.0.0.2") to 32,
+                InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
+            ),
+            config.addresses,
+        )
+    }
+
+    @Test
+    fun whenPrivateDnsSetAndDeviceModelMatchesThenConfigureEmptyDns() = runTest {
+        whenever(appBuildConfig.model).thenReturn("moto g stylus 5G")
+        fakeDnsProvider.mutablePrivateDns.add(InetAddress.getLocalHost())
+        fakeDnsProvider.mutableSystemDns.add(InetAddress.getLocalHost())
+        whenever(trackingProtectionAppsRepository.getExclusionAppsList()).thenReturn(listOf())
+
+        val configResult = ngVpnNetworkStack.onPrepareVpn()
+        assertTrue(configResult.isSuccess)
+
+        val config = configResult.getOrThrow()
+        assertEquals(1500, config.mtu)
+        assertTrue(config.routes.isEmpty())
+        assertTrue(config.dns.isEmpty())
+        assertEquals(
+            mapOf(
+                InetAddress.getByName("10.0.0.2") to 32,
+                InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
+            ),
+            config.addresses,
+        )
+    }
+
+    @Test
+    fun whenDeviceModelNotMatchedThenConfigureEmptyDns() = runTest {
+        whenever(appBuildConfig.model).thenReturn("wrong device")
+        fakeDnsProvider.mutableSystemDns.add(InetAddress.getLocalHost())
+        whenever(trackingProtectionAppsRepository.getExclusionAppsList()).thenReturn(listOf())
+
+        val configResult = ngVpnNetworkStack.onPrepareVpn()
+        assertTrue(configResult.isSuccess)
+
+        val config = configResult.getOrThrow()
+        assertEquals(1500, config.mtu)
+        assertTrue(config.routes.isEmpty())
+        assertTrue(config.dns.isEmpty())
+        assertEquals(
+            mapOf(
+                InetAddress.getByName("10.0.0.2") to 32,
+                InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
+            ),
+            config.addresses,
+        )
+    }
+
+    @Test
+    fun whenMotoGAndPrivateDnsSetThenReturnNoDns() = runTest {
+        whenever(appBuildConfig.model).thenReturn("moto g play")
+        fakeDnsProvider.mutableSystemDns.add(InetAddress.getLocalHost())
+        fakeDnsProvider.mutablePrivateDns.add(InetAddress.getLocalHost())
+        whenever(trackingProtectionAppsRepository.getExclusionAppsList()).thenReturn(listOf())
+
+        val configResult = ngVpnNetworkStack.onPrepareVpn()
+        assertTrue(configResult.isSuccess)
+
+        val config = configResult.getOrThrow()
+        assertEquals(1500, config.mtu)
+        assertTrue(config.routes.isEmpty())
+        assertTrue(config.dns.isEmpty())
+        assertEquals(
+            mapOf(
+                InetAddress.getByName("10.0.0.2") to 32,
+                InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
+            ),
+            config.addresses,
+        )
+    }
+
+    @Test
+    fun whenShortListedDeviceThenReturnSearchDomains() = runTest {
+        whenever(appBuildConfig.model).thenReturn("moto g play")
+        fakeDnsProvider.searchDomain = "internal.com"
+        whenever(trackingProtectionAppsRepository.getExclusionAppsList()).thenReturn(listOf())
+
+        val configResult = ngVpnNetworkStack.onPrepareVpn()
+        assertTrue(configResult.isSuccess)
+
+        val config = configResult.getOrThrow()
+        assertEquals(1500, config.mtu)
+        assertTrue(config.routes.isEmpty())
+        assertTrue(config.dns.isEmpty())
+        assertEquals("internal.com", config.searchDomains)
+        assertEquals(
+            mapOf(
+                InetAddress.getByName("10.0.0.2") to 32,
+                InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
+            ),
+            config.addresses,
+        )
+    }
+
+    @Test
+    fun whenNotShortListedDeviceThenReturnSearchDomains() = runTest {
+        whenever(appBuildConfig.model).thenReturn("wrong device")
+        fakeDnsProvider.mutableSystemDns.add(InetAddress.getLocalHost())
+        fakeDnsProvider.searchDomain = "internal.com"
+        whenever(trackingProtectionAppsRepository.getExclusionAppsList()).thenReturn(listOf())
+
+        val configResult = ngVpnNetworkStack.onPrepareVpn()
+        assertTrue(configResult.isSuccess)
+
+        val config = configResult.getOrThrow()
+        assertEquals(1500, config.mtu)
+        assertTrue(config.routes.isEmpty())
+        assertTrue(config.dns.isEmpty())
+        assertEquals("internal.com", config.searchDomains)
         assertEquals(
             mapOf(
                 InetAddress.getByName("10.0.0.2") to 32,

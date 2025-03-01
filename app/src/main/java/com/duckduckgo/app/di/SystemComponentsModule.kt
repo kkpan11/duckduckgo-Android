@@ -18,9 +18,9 @@ package com.duckduckgo.app.di
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import com.duckduckgo.app.fire.FireAnimationLoader
 import com.duckduckgo.app.fire.LottieFireAnimationLoader
-import com.duckduckgo.app.global.DispatcherProvider
 import com.duckduckgo.app.global.shortcut.AppShortcutCreator
 import com.duckduckgo.app.icon.api.AppIconModifier
 import com.duckduckgo.app.icon.api.IconModifier
@@ -31,6 +31,7 @@ import com.duckduckgo.app.systemsearch.DeviceAppLookup
 import com.duckduckgo.app.systemsearch.InstalledDeviceAppListProvider
 import com.duckduckgo.app.systemsearch.InstalledDeviceAppLookup
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesTo
 import dagger.Binds
@@ -46,6 +47,10 @@ object SystemComponentsModule {
     @SingleInstanceIn(AppScope::class)
     @Provides
     fun packageManager(context: Context): PackageManager = context.packageManager
+
+    @SingleInstanceIn(AppScope::class)
+    @Provides
+    fun locationManager(context: Context): LocationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
     @SingleInstanceIn(AppScope::class)
     @Provides

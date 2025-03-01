@@ -21,6 +21,8 @@ import androidx.room.*
 import androidx.test.ext.junit.runners.*
 import androidx.test.platform.app.*
 import com.duckduckgo.app.*
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.common.test.FileUtilities
 import com.duckduckgo.sync.api.engine.*
 import com.duckduckgo.sync.api.engine.SyncMergeResult.Success
 import com.duckduckgo.sync.api.engine.SyncableDataPersister.SyncConflictResolution.DEDUPLICATION
@@ -32,7 +34,6 @@ import org.junit.Assert.assertTrue
 import org.junit.runner.*
 import org.mockito.Mockito.*
 
-@ExperimentalCoroutinesApi
 @RunWith(AndroidJUnit4::class)
 class SettingsSyncDataPersisterTest {
 
@@ -67,7 +68,7 @@ class SettingsSyncDataPersisterTest {
 
     @Test
     fun whenPersistChangesDeduplicationWithdValueThenCallDeduplicateWithValue() {
-        val result = testee.persist(
+        val result = testee.onSuccess(
             changes = SyncChangesResponse(
                 type = SyncableType.SETTINGS,
                 jsonString = responseWithValuesObject,
@@ -81,7 +82,7 @@ class SettingsSyncDataPersisterTest {
 
     @Test
     fun whenPersistChangesDeduplicationWithDeletedValueThenCallDeduplicateWithNull() {
-        val result = testee.persist(
+        val result = testee.onSuccess(
             changes = SyncChangesResponse(
                 type = SyncableType.SETTINGS,
                 jsonString = responseWithDeletedObject,
@@ -96,7 +97,7 @@ class SettingsSyncDataPersisterTest {
     @Test
     fun whenPersistChangesTimestampAndNoRecentChangeThenCallMergeWithValue() {
         settingSyncStore.startTimeStamp = "2023-08-31T10:06:16.022Z"
-        val result = testee.persist(
+        val result = testee.onSuccess(
             changes = SyncChangesResponse(
                 type = SyncableType.SETTINGS,
                 jsonString = responseWithValuesObject,
@@ -110,7 +111,7 @@ class SettingsSyncDataPersisterTest {
 
     @Test
     fun whenPersistChangesTimestampWithDeletedValueThenCallSaveWithNull() {
-        val result = testee.persist(
+        val result = testee.onSuccess(
             changes = SyncChangesResponse(
                 type = SyncableType.SETTINGS,
                 jsonString = responseWithDeletedObject,
@@ -133,7 +134,7 @@ class SettingsSyncDataPersisterTest {
             ),
         )
 
-        val result = testee.persist(
+        val result = testee.onSuccess(
             changes = SyncChangesResponse(
                 type = SyncableType.SETTINGS,
                 jsonString = responseWithValuesObject,
@@ -149,7 +150,7 @@ class SettingsSyncDataPersisterTest {
     fun whenPersistChangesSucceedsThenUpdateServerAndClientTimestamps() {
         settingSyncStore.startTimeStamp = "2023-08-31T10:06:16.022Z"
 
-        val result = testee.persist(
+        val result = testee.onSuccess(
             changes = SyncChangesResponse(
                 type = SyncableType.SETTINGS,
                 jsonString = responseWithValuesObject,

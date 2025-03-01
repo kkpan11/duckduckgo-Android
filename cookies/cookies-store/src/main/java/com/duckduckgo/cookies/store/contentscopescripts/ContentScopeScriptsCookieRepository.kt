@@ -16,7 +16,7 @@
 
 package com.duckduckgo.cookies.store.contentscopescripts
 
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.cookies.store.CookieEntity
 import com.duckduckgo.cookies.store.CookiesDatabase
 import kotlinx.coroutines.CoroutineScope
@@ -30,9 +30,10 @@ interface ContentScopeScriptsCookieRepository {
 }
 
 class RealContentScopeScriptsCookieRepository constructor(
-    private val database: CookiesDatabase,
+    database: CookiesDatabase,
     coroutineScope: CoroutineScope,
-    private val dispatcherProvider: DispatcherProvider,
+    dispatcherProvider: DispatcherProvider,
+    isMainProcess: Boolean,
 ) : ContentScopeScriptsCookieRepository {
 
     private val contentScopeScriptsCookieDao: ContentScopeScriptsCookieDao = database.contentScopeScriptsCookieDao()
@@ -40,7 +41,9 @@ class RealContentScopeScriptsCookieRepository constructor(
 
     init {
         coroutineScope.launch(dispatcherProvider.io()) {
-            loadToMemory()
+            if (isMainProcess) {
+                loadToMemory()
+            }
         }
     }
 

@@ -21,8 +21,9 @@ import android.animation.AnimatorListenerAdapter
 import android.content.Context
 import android.util.AttributeSet
 import android.widget.FrameLayout
+import androidx.annotation.DrawableRes
 import com.duckduckgo.app.browser.databinding.ViewTabSwitcherButtonBinding
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
+import com.duckduckgo.common.ui.viewbinding.viewBinding
 
 class TabSwitcherButton @JvmOverloads constructor(
     context: Context,
@@ -53,6 +54,10 @@ class TabSwitcherButton @JvmOverloads constructor(
         fadeOutCount {
             fadeInCount()
         }
+    }
+
+    fun setIcon(@DrawableRes icon: Int) {
+        binding.tabCount.setBackgroundResource(icon)
     }
 
     private fun fadeOutCount(callback: () -> Unit) {

@@ -23,9 +23,9 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.ViewHolder
-import com.duckduckgo.mobile.android.ui.menu.PopupMenu
-import com.duckduckgo.mobile.android.ui.view.gone
-import com.duckduckgo.mobile.android.ui.view.show
+import com.duckduckgo.common.ui.menu.PopupMenu
+import com.duckduckgo.common.ui.view.gone
+import com.duckduckgo.common.ui.view.show
 import com.duckduckgo.sync.impl.ConnectedDevice
 import com.duckduckgo.sync.impl.R
 import com.duckduckgo.sync.impl.R.layout
@@ -49,6 +49,7 @@ class SyncedDevicesAdapter constructor(private val listener: ConnectedDeviceClic
                 ItemSyncDeviceBinding.inflate(inflater, parent, false),
                 listener,
             )
+
             LOADING_ITEM -> LoadingViewHolder(ItemSyncDeviceLoadingBinding.inflate(inflater, parent, false))
             else -> throw IllegalArgumentException("Unknown view type")
         }
@@ -63,6 +64,7 @@ class SyncedDevicesAdapter constructor(private val listener: ConnectedDeviceClic
                     CONNECTED_DEVICE
                 }
             }
+
             is SyncDeviceListItem.LoadingItem -> LOADING_ITEM
         }
     }
@@ -159,7 +161,10 @@ class SyncedDeviceViewHolder(
         anchor: View,
         syncDevice: SyncedDevice,
     ) {
-        val popupMenu = PopupMenu(layoutInflater, layout.popup_windows_edit_device_menu)
+        val popupMenu = PopupMenu(
+            layoutInflater,
+            layout.popup_windows_edit_device_menu,
+        )
         val view = popupMenu.contentView
         popupMenu.apply {
             onMenuItemClicked(view.findViewById(R.id.edit)) { listener.onEditDeviceClicked(syncDevice.device) }
@@ -187,7 +192,11 @@ class LoadingViewHolder(val binding: ItemSyncDeviceLoadingBinding) : ViewHolder(
 }
 
 sealed class SyncDeviceListItem {
-    data class SyncedDevice(val device: ConnectedDevice, val loading: Boolean = false) : SyncDeviceListItem()
+    data class SyncedDevice(
+        val device: ConnectedDevice,
+        val loading: Boolean = false,
+    ) : SyncDeviceListItem()
+
     object LoadingItem : SyncDeviceListItem()
 }
 

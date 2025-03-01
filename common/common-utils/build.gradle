@@ -17,7 +17,7 @@
 plugins {
     id 'com.android.library'
     id 'kotlin-android'
-    id 'com.google.devtools.ksp' version "$ksp_version"
+    id 'com.google.devtools.ksp'
     id 'com.squareup.anvil'
 }
 
@@ -32,6 +32,10 @@ android {
             includeAndroidResources = true
         }
     }
+    namespace 'com.duckduckgo.common.utils'
+    compileOptions {
+        coreLibraryDesugaringEnabled = true
+    }
 }
 
 dependencies {
@@ -39,7 +43,6 @@ dependencies {
     implementation project(path: ':anvil-annotations')
     implementation project(path: ':di')
 
-    implementation Kotlin.stdlib.jdk7
     implementation KotlinX.coroutines.core
     implementation KotlinX.coroutines.android
 
@@ -64,14 +67,12 @@ dependencies {
     implementation AndroidX.room.rxJava2
     ksp AndroidX.room.compiler
 
-    // ThreeTenABP
-    implementation "com.jakewharton.threetenabp:threetenabp:_"
-    testImplementation "org.threeten:threetenbp:_"
-
     // Testing dependencies
     testImplementation Testing.junit4
     testImplementation AndroidX.test.ext.junit
     testImplementation "androidx.test:runner:_"
     testImplementation Testing.robolectric
     testImplementation project(path: ':common-test')
+
+    coreLibraryDesugaring Android.tools.desugarJdkLibs
 }

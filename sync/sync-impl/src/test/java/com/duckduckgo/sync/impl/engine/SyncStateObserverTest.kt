@@ -1,6 +1,7 @@
 package com.duckduckgo.sync.impl.engine
 
 import com.duckduckgo.app.*
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.sync.api.engine.*
 import com.duckduckgo.sync.store.*
 import kotlinx.coroutines.*
@@ -9,7 +10,6 @@ import kotlinx.coroutines.test.*
 import org.junit.*
 import org.mockito.kotlin.*
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class SyncStateObserverTest {
 
     @get:Rule

@@ -60,6 +60,16 @@ data class SyncChangesResponse(
     }
 }
 
+data class SyncErrorResponse(
+    val type: SyncableType,
+    val featureSyncError: FeatureSyncError,
+)
+
+enum class FeatureSyncError {
+    COLLECTION_LIMIT_REACHED,
+    INVALID_REQUEST,
+}
+
 enum class SyncableType(val field: String) {
     BOOKMARKS("bookmarks"),
     CREDENTIALS("credentials"),
@@ -71,6 +81,7 @@ sealed class SyncMergeResult {
 
     data class Success(
         val orphans: Boolean = false,
+        val timestampConflict: Boolean = false,
     ) : SyncMergeResult()
 
     data class Error(

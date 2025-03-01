@@ -1,15 +1,13 @@
 package com.duckduckgo.networkprotection.impl.connectionclass
 
-import com.duckduckgo.app.CoroutineTestRule
-import com.duckduckgo.mobile.android.vpn.prefs.FakeVpnSharedPreferencesProvider
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.data.store.api.FakeSharedPreferencesProvider
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class ConnectionQualityStoreTest {
     @get:Rule
     var coroutineRule = CoroutineTestRule()
@@ -18,7 +16,7 @@ class ConnectionQualityStoreTest {
 
     @Before
     fun setup() {
-        connectionQualityStore = ConnectionQualityStore(FakeVpnSharedPreferencesProvider(), coroutineRule.testDispatcherProvider)
+        connectionQualityStore = ConnectionQualityStore(FakeSharedPreferencesProvider(), coroutineRule.testDispatcherProvider)
     }
 
     @Test

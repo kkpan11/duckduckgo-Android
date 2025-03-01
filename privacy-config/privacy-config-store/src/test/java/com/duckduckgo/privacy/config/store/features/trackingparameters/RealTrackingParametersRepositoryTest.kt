@@ -16,10 +16,9 @@
 
 package com.duckduckgo.privacy.config.store.features.trackingparameters
 
-import com.duckduckgo.app.CoroutineTestRule
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.privacy.config.store.*
 import junit.framework.TestCase.assertEquals
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -31,7 +30,6 @@ import org.mockito.kotlin.reset
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
-@ExperimentalCoroutinesApi
 class RealTrackingParametersRepositoryTest {
 
     @get:Rule
@@ -49,6 +47,7 @@ class RealTrackingParametersRepositoryTest {
             mockDatabase,
             TestScope(),
             coroutineRule.testDispatcherProvider,
+            isMainProcess = true,
         )
     }
 
@@ -60,6 +59,7 @@ class RealTrackingParametersRepositoryTest {
             mockDatabase,
             TestScope(),
             coroutineRule.testDispatcherProvider,
+            isMainProcess = true,
         )
 
         assertEquals(trackingParameterExceptionEntity.toFeatureException(), testee.exceptions.first())
@@ -72,6 +72,7 @@ class RealTrackingParametersRepositoryTest {
             mockDatabase,
             TestScope(),
             coroutineRule.testDispatcherProvider,
+            isMainProcess = true,
         )
 
         testee.updateAll(listOf(), listOf())
@@ -87,6 +88,7 @@ class RealTrackingParametersRepositoryTest {
             mockDatabase,
             TestScope(),
             coroutineRule.testDispatcherProvider,
+            isMainProcess = true,
         )
         assertEquals(1, testee.exceptions.size)
         assertEquals(1, testee.parameters.size)

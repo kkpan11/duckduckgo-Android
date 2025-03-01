@@ -17,8 +17,8 @@
 package com.duckduckgo.mobile.android.vpn.pixels
 
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.app.statistics.api.RefreshRetentionAtbPlugin
+import com.duckduckgo.app.statistics.api.AtbLifecyclePlugin
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.mobile.android.vpn.AppTpVpnFeature
 import com.duckduckgo.mobile.android.vpn.VpnFeaturesRegistry
@@ -33,9 +33,9 @@ class DeviceShieldRetentionPixelSender @Inject constructor(
     private val vpnFeaturesRegistry: VpnFeaturesRegistry,
     @AppCoroutineScope private val coroutineScope: CoroutineScope,
     private val dispatcherProvider: DispatcherProvider,
-) : RefreshRetentionAtbPlugin {
+) : AtbLifecyclePlugin {
 
-    override fun onSearchRetentionAtbRefreshed() {
+    override fun onSearchRetentionAtbRefreshed(oldAtb: String, newAtb: String) {
         coroutineScope.launch(dispatcherProvider.io()) {
             if (vpnFeaturesRegistry.isFeatureRunning(AppTpVpnFeature.APPTP_VPN)) {
                 deviceShieldPixels.deviceShieldEnabledOnSearch()
@@ -45,7 +45,7 @@ class DeviceShieldRetentionPixelSender @Inject constructor(
         }
     }
 
-    override fun onAppRetentionAtbRefreshed() {
+    override fun onAppRetentionAtbRefreshed(oldAtb: String, newAtb: String) {
         coroutineScope.launch(dispatcherProvider.io()) {
             if (vpnFeaturesRegistry.isFeatureRunning(AppTpVpnFeature.APPTP_VPN)) {
                 deviceShieldPixels.deviceShieldEnabledOnAppLaunch()

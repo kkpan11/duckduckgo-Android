@@ -16,7 +16,7 @@
 
 package com.duckduckgo.browser.api
 
-import com.duckduckgo.mobile.android.ui.DuckDuckGoTheme
+import com.duckduckgo.common.ui.DuckDuckGoTheme
 import java.util.*
 
 interface UserBrowserProperties {
@@ -29,7 +29,4 @@ interface UserBrowserProperties {
     fun emailEnabled(): Boolean
     fun searchCount(): Long
     fun widgetAdded(): Boolean
-    suspend fun appTpOnboarded(): Boolean
-
-    suspend fun networkProtectionOnboarded(): Boolean
 }

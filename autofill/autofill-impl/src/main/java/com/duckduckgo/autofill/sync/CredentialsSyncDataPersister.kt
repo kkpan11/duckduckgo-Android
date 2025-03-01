@@ -16,15 +16,16 @@
 
 package com.duckduckgo.autofill.sync
 
-import com.duckduckgo.app.utils.checkMainThread
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.appbuildconfig.api.isInternalBuild
 import com.duckduckgo.autofill.store.CredentialsSyncMetadataEntity
 import com.duckduckgo.autofill.sync.CredentialsSyncDataPersister.Adapters.Companion.updatesAdapter
 import com.duckduckgo.autofill.sync.persister.CredentialsMergeStrategy
+import com.duckduckgo.common.utils.checkMainThread
 import com.duckduckgo.di.DaggerMap
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.sync.api.engine.SyncChangesResponse
+import com.duckduckgo.sync.api.engine.SyncErrorResponse
 import com.duckduckgo.sync.api.engine.SyncMergeResult
 import com.duckduckgo.sync.api.engine.SyncMergeResult.Success
 import com.duckduckgo.sync.api.engine.SyncableDataPersister
@@ -43,8 +44,15 @@ class CredentialsSyncDataPersister @Inject constructor(
     private val credentialsSyncStore: CredentialsSyncStore,
     private val strategies: DaggerMap<SyncConflictResolution, CredentialsMergeStrategy>,
     private val appBuildConfig: AppBuildConfig,
+    private val credentialsSyncFeatureListener: CredentialsSyncFeatureListener,
 ) : SyncableDataPersister {
-    override fun persist(
+    override fun onSyncEnabled() {
+        if (isLocalDataDirty()) {
+            onSyncDisabled()
+        }
+    }
+
+    override fun onSuccess(
         changes: SyncChangesResponse,
         conflictResolution: SyncConflictResolution,
     ): SyncMergeResult {
@@ -53,11 +61,18 @@ class CredentialsSyncDataPersister @Inject constructor(
         return if (changes.type == CREDENTIALS) {
             Timber.d("Sync-autofill-Persist: received remote changes ${changes.jsonString}")
             Timber.d("Sync-autofill-Persist: received remote changes, merging with resolution $conflictResolution")
+            credentialsSyncFeatureListener.onSuccess(changes)
             val result = process(changes, conflictResolution)
             Timber.d("Sync-autofill-Persist: merging credentials finished with $result")
             return result
         } else {
             Success(false)
+        }
+    }
+
+    override fun onError(error: SyncErrorResponse) {
+        if (error.type == CREDENTIALS) {
+            credentialsSyncFeatureListener.onError(error.featureSyncError)
         }
     }
 
@@ -107,7 +122,10 @@ class CredentialsSyncDataPersister @Inject constructor(
             Timber.d("Sync-autofill-Persist: merging completed, no entries to merge")
             Success(false)
         } else {
-            strategies[conflictResolution]?.processEntries(credentials, credentialsSyncStore.clientModifiedSince)
+            strategies[conflictResolution]?.processEntries(
+                credentials,
+                credentialsSyncStore.clientModifiedSince,
+            )
                 ?: SyncMergeResult.Error(
                     reason = "Merge Strategy not found",
                 )
@@ -122,6 +140,11 @@ class CredentialsSyncDataPersister @Inject constructor(
         credentialsSyncStore.serverModifiedSince = "0"
         credentialsSyncStore.startTimeStamp = "0"
         credentialsSyncStore.clientModifiedSince = "0"
+        credentialsSyncFeatureListener.onSyncDisabled()
+    }
+
+    private fun isLocalDataDirty(): Boolean {
+        return credentialsSyncStore.serverModifiedSince != "0"
     }
 
     private class Adapters {

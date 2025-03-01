@@ -20,12 +20,13 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.cash.turbine.test
-import com.duckduckgo.app.CoroutineTestRule
 import com.duckduckgo.app.bookmarks.BookmarkTestUtils.givenFolderWithContent
 import com.duckduckgo.app.bookmarks.BookmarkTestUtils.givenSomeBookmarks
 import com.duckduckgo.app.bookmarks.BookmarkTestUtils.givenSomeFolders
 import com.duckduckgo.app.global.db.AppDatabase
-import com.duckduckgo.app.global.formatters.time.DatabaseDateFormatter
+import com.duckduckgo.app.sync.FakeDisplayModeSettingsRepository
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.common.utils.formatters.time.DatabaseDateFormatter
 import com.duckduckgo.savedsites.api.SavedSitesRepository
 import com.duckduckgo.savedsites.api.models.BookmarkFolder
 import com.duckduckgo.savedsites.api.models.BookmarkFolderItem
@@ -33,17 +34,20 @@ import com.duckduckgo.savedsites.api.models.FolderBranch
 import com.duckduckgo.savedsites.api.models.SavedSite.Bookmark
 import com.duckduckgo.savedsites.api.models.SavedSite.Favorite
 import com.duckduckgo.savedsites.api.models.SavedSitesNames
+import com.duckduckgo.savedsites.impl.MissingEntitiesRelationReconciler
+import com.duckduckgo.savedsites.impl.RealFavoritesDelegate
 import com.duckduckgo.savedsites.impl.RealSavedSitesRepository
 import com.duckduckgo.savedsites.store.Entity
 import com.duckduckgo.savedsites.store.EntityType.BOOKMARK
 import com.duckduckgo.savedsites.store.Relation
 import com.duckduckgo.savedsites.store.SavedSitesEntitiesDao
 import com.duckduckgo.savedsites.store.SavedSitesRelationsDao
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import junit.framework.TestCase.assertEquals
 import junit.framework.TestCase.assertNotNull
 import junit.framework.TestCase.assertNull
 import junit.framework.TestCase.assertTrue
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -52,11 +56,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.threeten.bp.OffsetDateTime
-import org.threeten.bp.ZoneOffset
 
 @RunWith(AndroidJUnit4::class)
-@OptIn(ExperimentalCoroutinesApi::class)
 class SavedSitesRepositoryTest {
 
     @get:Rule
@@ -68,9 +69,6 @@ class SavedSitesRepositoryTest {
     private lateinit var db: AppDatabase
     private lateinit var repository: SavedSitesRepository
 
-    private val twoHoursAgo = OffsetDateTime.now(ZoneOffset.UTC).minusHours(2)
-    private val oneHourAgo = OffsetDateTime.now(ZoneOffset.UTC).minusHours(1)
-
     @Before
     fun setup() {
         db = Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext, AppDatabase::class.java)
@@ -78,8 +76,22 @@ class SavedSitesRepositoryTest {
             .build()
         savedSitesEntitiesDao = db.syncEntitiesDao()
         savedSitesRelationsDao = db.syncRelationsDao()
-
-        repository = RealSavedSitesRepository(savedSitesEntitiesDao, savedSitesRelationsDao)
+        val favoritesDisplayModeSettings = FakeDisplayModeSettingsRepository()
+        val favoritesDelegate = RealFavoritesDelegate(
+            savedSitesEntitiesDao,
+            savedSitesRelationsDao,
+            favoritesDisplayModeSettings,
+            MissingEntitiesRelationReconciler(savedSitesEntitiesDao),
+            coroutineRule.testDispatcherProvider,
+        )
+        val relationsReconciler = MissingEntitiesRelationReconciler(savedSitesEntitiesDao)
+        repository = RealSavedSitesRepository(
+            savedSitesEntitiesDao,
+            savedSitesRelationsDao,
+            favoritesDelegate,
+            relationsReconciler,
+            coroutineRule.testDispatcherProvider,
+        )
     }
 
     @After
@@ -89,12 +101,7 @@ class SavedSitesRepositoryTest {
 
     @Test
     fun whenNoDataThenFolderContentisEmpty() = runTest {
-        repository.getFolderContent(SavedSitesNames.BOOKMARKS_ROOT).test {
-            val result = awaitItem()
-            assert(result.first.isEmpty())
-            assert(result.second.isEmpty())
-            cancelAndConsumeRemainingEvents()
-        }
+        assert(repository.getFolderTreeItems(SavedSitesNames.BOOKMARKS_ROOT).isEmpty())
     }
 
     @Test
@@ -106,12 +113,7 @@ class SavedSitesRepositoryTest {
         val relation = givenFolderWithContent(SavedSitesNames.BOOKMARKS_ROOT, entities)
         savedSitesRelationsDao.insertList(relation)
 
-        repository.getFolderContent(SavedSitesNames.BOOKMARKS_ROOT).test {
-            val result = awaitItem()
-            assert(result.first.size == totalBookmarks)
-            assert(result.second.isEmpty())
-            cancelAndConsumeRemainingEvents()
-        }
+        assert(repository.getFolderTreeItems(SavedSitesNames.BOOKMARKS_ROOT).size == totalBookmarks)
     }
 
     @Test
@@ -128,11 +130,10 @@ class SavedSitesRepositoryTest {
         val relation = givenFolderWithContent(SavedSitesNames.BOOKMARKS_ROOT, entities.plus(folders))
         savedSitesRelationsDao.insertList(relation)
 
-        repository.getFolderContent(SavedSitesNames.BOOKMARKS_ROOT).test {
-            val result = awaitItem()
-            assert(result.first.size == totalBookmarks)
-            assert(result.second.size == totalFolders)
-            cancelAndConsumeRemainingEvents()
+        repository.getFolderTreeItems(SavedSitesNames.BOOKMARKS_ROOT).let { result ->
+            assert(result.size == totalBookmarks + totalFolders)
+            assert(result.filter { it.url != null }.size == totalBookmarks)
+            assert(result.filter { it.url == null }.size == totalFolders)
         }
     }
 
@@ -150,12 +151,7 @@ class SavedSitesRepositoryTest {
         val relation = givenFolderWithContent(SavedSitesNames.BOOKMARKS_ROOT, entities.plus(folders))
         savedSitesRelationsDao.insertList(relation)
 
-        repository.getFolderContent("12").test {
-            val result = awaitItem()
-            assert(result.first.isEmpty())
-            assert(result.second.isEmpty())
-            cancelAndConsumeRemainingEvents()
-        }
+        assert(repository.getFolderTreeItems("12").isEmpty())
     }
 
     @Test
@@ -190,6 +186,20 @@ class SavedSitesRepositoryTest {
 
         assert(repository.getFavorite("https://favorite.com") == null)
         assert(repository.getBookmark("https://favorite.com") != null)
+    }
+
+    @Test
+    fun whenFavoriteIsAddedAndThenRemovedAndDeleteBookmarkIsTrueThenNothingIsRetrieved() {
+        givenEmptyDBState()
+
+        val favorite = repository.insertFavorite("favourite1", "https://favorite.com", "favorite", "timestamp")
+
+        assert(repository.getFavorite("https://favorite.com") != null)
+
+        repository.delete(favorite, true)
+
+        assert(repository.getFavorite("https://favorite.com") == null)
+        assert(repository.getBookmark("https://favorite.com") == null)
     }
 
     @Test
@@ -235,21 +245,6 @@ class SavedSitesRepositoryTest {
         Assert.assertEquals("Favorite", savedSite.title)
         Assert.assertEquals("http://favexample.com", savedSite.url)
         Assert.assertEquals(2, savedSite.position)
-    }
-
-    @Test
-    fun whenDataSourceChangesThenNewListReceived() {
-        givenNoFavoritesStored()
-
-        repository.insertFavorite(title = "Favorite", url = "http://favexample.com", lastModified = "timestamp")
-
-        val testObserver = repository.getFavoritesObservable().test()
-        val lastState = testObserver.assertNoErrors().values().last()
-
-        Assert.assertEquals(1, lastState.size)
-        Assert.assertEquals("Favorite", lastState.first().title)
-        Assert.assertEquals("http://favexample.com", lastState.first().url)
-        Assert.assertEquals(0, lastState.first().position)
     }
 
     @Test
@@ -500,12 +495,9 @@ class SavedSitesRepositoryTest {
     @Test
     fun whenBookmarkAddedToRootThenGetFolderReturnsRootFolder() = runTest {
         val bookmark = repository.insertBookmark(title = "name", url = "foo.com")
-        repository.getFolderContent(bookmark.parentId).test {
-            val result = awaitItem()
-            Assert.assertTrue(result.first.size == 1)
-            Assert.assertTrue(result.first.first().id == bookmark.id)
-            Assert.assertTrue(result.second.isEmpty())
-            cancelAndConsumeRemainingEvents()
+        repository.getFolderTreeItems(bookmark.parentId).let { result ->
+            Assert.assertTrue(result.size == 1)
+            Assert.assertTrue(result.first().id == bookmark.id)
         }
     }
 
@@ -547,11 +539,8 @@ class SavedSitesRepositoryTest {
         val bookmarkTwo = repository.insertBookmark(title = "two", url = "footwo.com")
         repository.updateBookmark(bookmarkTwo.copy(parentId = folder.id), bookmarkTwo.parentId)
 
-        repository.getFolderContent(folder.id).test {
-            val result = awaitItem()
-            Assert.assertTrue(result.first.size == 2)
-            Assert.assertTrue(result.second.isEmpty())
-            cancelAndConsumeRemainingEvents()
+        repository.getFolderTreeItems(folder.id).let { result ->
+            Assert.assertTrue(result.size == 2)
         }
     }
 
@@ -571,12 +560,11 @@ class SavedSitesRepositoryTest {
 
         repository.insert(BookmarkFolder(id = "folder3", name = "folder2", lastModified = "timestamp", parentId = "folder2"))
 
-        repository.getFolderContent(folder.id).test {
-            val result = awaitItem()
-            Assert.assertTrue(result.first.size == 2)
-            Assert.assertTrue(result.second.size == 1)
-            Assert.assertEquals(result.second.first().id, "folder3")
-            cancelAndConsumeRemainingEvents()
+        repository.getFolderTreeItems(folder.id).let { result ->
+            Assert.assertTrue(result.size == 3)
+            Assert.assertTrue(result.filter { it.url != null }.size == 2)
+            Assert.assertTrue(result.filter { it.url == null }.size == 1)
+            Assert.assertEquals(result[2].id, "folder3")
         }
     }
 
@@ -588,17 +576,11 @@ class SavedSitesRepositoryTest {
         val folderTwo =
             repository.insert(BookmarkFolder(id = "folder2", name = "folder2", lastModified = "timestamp", parentId = SavedSitesNames.BOOKMARKS_ROOT))
 
-        repository.getFolderContent(SavedSitesNames.BOOKMARKS_ROOT).test {
-            val result = awaitItem()
-            assertEquals(listOf(bookmark), result.first)
+        assertEquals(bookmark.id, repository.getFolderTreeItems(SavedSitesNames.BOOKMARKS_ROOT).first().id)
 
-            val updatedBookmark = bookmark.copy(parentId = folderTwo.id)
-            repository.updateBookmark(updatedBookmark, bookmark.parentId)
-
-            val updatedResult = awaitItem()
-            assertTrue(updatedResult.first.isEmpty())
-            cancelAndConsumeRemainingEvents()
-        }
+        val updatedBookmark = bookmark.copy(parentId = folderTwo.id)
+        repository.updateBookmark(updatedBookmark, bookmark.parentId)
+        assertTrue(repository.getFolderTreeItems(SavedSitesNames.BOOKMARKS_ROOT).filterNot { it.url == null }.isEmpty())
     }
 
     @Test
@@ -863,24 +845,12 @@ class SavedSitesRepositoryTest {
 
         givenFolderWithEntities(parentFolder.id, totalBookmarks, totalFolders)
 
-        repository.getFolderContent(parentFolder.id).test {
-            val result = awaitItem()
+        assert(repository.getFolderTreeItems(SavedSitesNames.BOOKMARKS_ROOT).size == 1)
+        assert(repository.getFolderTreeItems(parentFolder.id).size == 13)
 
-            assert(result.first.size == 10)
-            assert(result.second.size == 3)
-
-            cancelAndConsumeRemainingEvents()
-        }
-
-        repository.getFolderContent(SavedSitesNames.BOOKMARKS_ROOT).test {
-            val result = awaitItem()
-
-            val folder = result.second.first()
-
-            assert(folder.numBookmarks == 10)
-            assert(folder.numFolders == 3)
-
-            cancelAndConsumeRemainingEvents()
+        repository.getFolderTreeItems(parentFolder.id).let { result ->
+            assert(result.filter { it.url != null }.size == 10)
+            assert(result.filter { it.url == null }.size == 3)
         }
     }
 
@@ -925,17 +895,15 @@ class SavedSitesRepositoryTest {
 
         repository.getSavedSites(SavedSitesNames.BOOKMARKS_ROOT).test {
             val savedSites = awaitItem()
-            assertTrue(savedSites.bookmarks.size == 2)
+            assertTrue(savedSites.bookmarks.size == 3)
             assertTrue(savedSites.favorites.size == 2)
-            assertTrue(savedSites.folders.size == 1)
             cancelAndConsumeRemainingEvents()
         }
 
         repository.getSavedSites(subFolderId).test {
             val savedSites = awaitItem()
             assertTrue(savedSites.bookmarks.size == 10)
-            assertTrue(savedSites.favorites.isEmpty())
-            assertTrue(savedSites.folders.isEmpty())
+            assertTrue(savedSites.favorites.size == 2)
             cancelAndConsumeRemainingEvents()
         }
     }
@@ -1054,187 +1022,6 @@ class SavedSitesRepositoryTest {
     }
 
     @Test
-    fun whenBookmarkIsReplacedWithDifferentIdThenDataIsUpdated() {
-        val rootFolder = BookmarkFolder(id = SavedSitesNames.BOOKMARKS_ROOT, name = "root", lastModified = "timestamp", parentId = "")
-        repository.insert(rootFolder)
-
-        val bookmark = repository.insert(
-            Bookmark(
-                id = "bookmark1",
-                title = "title",
-                url = "foo.com",
-                lastModified = "timestamp",
-                parentId = "folder2",
-            ),
-        ) as Bookmark
-
-        val updatedBookmark = bookmark.copy(id = "bookmark2")
-
-        repository.replaceBookmark(updatedBookmark, bookmark.id)
-
-        val bookmarkUpdated = repository.getBookmark(bookmark.url)!!
-
-        Assert.assertTrue(updatedBookmark.id == bookmarkUpdated.id)
-        Assert.assertTrue(bookmark.url == bookmarkUpdated.url)
-        Assert.assertTrue(bookmark.title == bookmarkUpdated.title)
-    }
-
-    @Test
-    fun whenBookmarkIsReplacedWithSameIdThenDataIsUpdated() {
-        val rootFolder = BookmarkFolder(id = SavedSitesNames.BOOKMARKS_ROOT, name = "root", lastModified = "timestamp", parentId = "")
-        repository.insert(rootFolder)
-
-        val bookmark = repository.insert(
-            Bookmark(
-                id = "bookmark1",
-                title = "title",
-                url = "foo.com",
-                lastModified = "timestamp",
-                parentId = "folder2",
-            ),
-        ) as Bookmark
-
-        val updatedBookmark = bookmark.copy(title = "title2")
-
-        repository.replaceBookmark(updatedBookmark, bookmark.id)
-
-        val bookmarkUpdated = repository.getBookmark(bookmark.url)!!
-
-        Assert.assertTrue(bookmark.id == bookmarkUpdated.id)
-        Assert.assertTrue(bookmark.url == bookmarkUpdated.url)
-        Assert.assertTrue("title2" == bookmarkUpdated.title)
-    }
-
-    @Test
-    fun whenReplacingBookmarkWithBookmarkFromAnotherFolderThenDataIsUpdated() {
-        val rootFolder = BookmarkFolder(id = SavedSitesNames.BOOKMARKS_ROOT, name = "root", lastModified = "timestamp", parentId = "")
-        val subFolder = BookmarkFolder(id = "folder", name = "Folder", lastModified = "timestamp", parentId = rootFolder.id)
-        repository.insert(rootFolder)
-        repository.insert(subFolder)
-
-        val bookmark = repository.insert(
-            Bookmark(
-                id = "bookmark1",
-                title = "title",
-                url = "foo.com",
-                lastModified = "timestamp",
-                parentId = rootFolder.id,
-            ),
-        ) as Bookmark
-
-        val updatedBookmark = bookmark.copy(title = "title2", parentId = subFolder.id)
-
-        repository.replaceBookmark(updatedBookmark, bookmark.id)
-
-        val bookmarkUpdated = repository.getBookmarkById(bookmark.id)!!
-
-        Assert.assertTrue(bookmark.id == bookmarkUpdated.id)
-        Assert.assertTrue(subFolder.id == bookmarkUpdated.parentId)
-    }
-
-    @Test
-    fun whenFavouriteIsReplacedWithSameIdThenDataIsUpdated() {
-        val favorite = Favorite("favorite1", "Favorite", "http://favexample.com", "timestamp", 0)
-        givenFavoriteStored(favorite)
-
-        val favoriteUpdated = Favorite("favorite1", "Favorite New", "http://favexample.com", "timestamp", 0)
-        repository.replaceFavourite(favoriteUpdated, favorite.id)
-
-        val favoriteStored = repository.getFavoriteById(favorite.id)!!
-
-        Assert.assertTrue(favoriteUpdated.id == favoriteStored.id)
-        Assert.assertTrue(favoriteUpdated.url == favoriteStored.url)
-        Assert.assertTrue(favoriteUpdated.title == favoriteStored.title)
-    }
-
-    @Test
-    fun whenFavouriteIsReplacedWithDifferentIdThenDataIsUpdated() {
-        val favorite = Favorite("favorite1", "Favorite", "http://favexample.com", "timestamp", 0)
-        givenFavoriteStored(favorite)
-
-        val favoriteUpdated = Favorite("favorite2", "Favorite New", "http://favexample.com", "timestamp", 0)
-        repository.replaceFavourite(favoriteUpdated, favorite.id)
-
-        val favoriteNulled = repository.getFavoriteById(favorite.id)
-        Assert.assertTrue(favoriteNulled == null)
-
-        val favoriteStored = repository.getFavoriteById(favoriteUpdated.id)!!
-        Assert.assertTrue(favoriteUpdated.id == favoriteStored.id)
-        Assert.assertTrue(favoriteUpdated.url == favoriteStored.url)
-        Assert.assertTrue(favoriteUpdated.title == favoriteStored.title)
-    }
-
-    @Test
-    fun whenBookmarkModifiedAfterThresholdThenGetModifiedSinceHasBookmarks() {
-        val since = OffsetDateTime.now(ZoneOffset.UTC).minusHours(1)
-
-        val modifiedEarlierBookmarks = givenSomeBookmarks(5, DatabaseDateFormatter.iso8601(twoHoursAgo))
-        savedSitesEntitiesDao.insertList(modifiedEarlierBookmarks)
-
-        val bookmarks = givenSomeBookmarks(3)
-        savedSitesEntitiesDao.insertList(bookmarks)
-
-        val relation = givenFolderWithContent(SavedSitesNames.BOOKMARKS_ROOT, modifiedEarlierBookmarks.plus(bookmarks))
-        savedSitesRelationsDao.insertList(relation)
-
-        val modifiedSinceBookmarks = repository.getBookmarksModifiedSince(DatabaseDateFormatter.iso8601(since))
-        assertEquals(bookmarks.size, modifiedSinceBookmarks.size)
-    }
-
-    @Test
-    fun whenBookmarkModifiedBeforeThresholdThenGetModifiedSinceIsEmpty() {
-        val since = OffsetDateTime.now(ZoneOffset.UTC).minusHours(1)
-        val modifiedEarlierBookmarks = givenSomeBookmarks(5, DatabaseDateFormatter.iso8601(twoHoursAgo))
-        savedSitesEntitiesDao.insertList(modifiedEarlierBookmarks)
-
-        val relation = givenFolderWithContent(SavedSitesNames.BOOKMARKS_ROOT, modifiedEarlierBookmarks)
-        savedSitesRelationsDao.insertList(relation)
-
-        val modifiedSinceBookmarks = repository.getBookmarksModifiedSince(DatabaseDateFormatter.iso8601(since))
-        assertTrue(modifiedSinceBookmarks.isEmpty())
-    }
-
-    @Test
-    fun whenFolderModifiedAfterThresholdThenGetModifiedSinceHasFolders() {
-        val rootFolder = BookmarkFolder(
-            id = SavedSitesNames.BOOKMARKS_ROOT,
-            name = "root",
-            lastModified = DatabaseDateFormatter.iso8601(oneHourAgo),
-            parentId = "",
-        )
-        repository.insert(rootFolder)
-
-        val modifiedEarlierBookmarks = givenSomeBookmarks(5, DatabaseDateFormatter.iso8601(oneHourAgo))
-        savedSitesEntitiesDao.insertList(modifiedEarlierBookmarks)
-
-        val relation = givenFolderWithContent(SavedSitesNames.BOOKMARKS_ROOT, modifiedEarlierBookmarks)
-        savedSitesRelationsDao.insertList(relation)
-
-        val modifiedSinceFolders = repository.getFoldersModifiedSince(DatabaseDateFormatter.iso8601(twoHoursAgo))
-        assertEquals(1, modifiedSinceFolders.size)
-    }
-
-    @Test
-    fun whenFolderModifiedBeforeThresholdThenGetModifiedSinceIsEmpty() {
-        val rootFolder = BookmarkFolder(
-            id = SavedSitesNames.BOOKMARKS_ROOT,
-            name = "root",
-            lastModified = DatabaseDateFormatter.iso8601(twoHoursAgo),
-            parentId = "",
-        )
-        repository.insert(rootFolder)
-
-        val modifiedEarlierBookmarks = givenSomeBookmarks(5, DatabaseDateFormatter.iso8601(twoHoursAgo))
-        savedSitesEntitiesDao.insertList(modifiedEarlierBookmarks)
-
-        val relation = givenFolderWithContent(SavedSitesNames.BOOKMARKS_ROOT, modifiedEarlierBookmarks)
-        savedSitesRelationsDao.insertList(relation)
-
-        val modifiedSinceFolders = repository.getFoldersModifiedSince(DatabaseDateFormatter.iso8601(oneHourAgo))
-        assertTrue(modifiedSinceFolders.isEmpty())
-    }
-
-    @Test
     fun whenSubFolderContentIsReplacedThenLocalDataIsUpdated() = runTest {
         val rootFolder = BookmarkFolder(id = SavedSitesNames.BOOKMARKS_ROOT, name = "root", lastModified = "timestamp", parentId = "")
         repository.insert(rootFolder)
@@ -1332,27 +1119,6 @@ class SavedSitesRepositoryTest {
     }
 
     @Test
-    fun whenUpdatingModifiedSinceThenDatesAreProperlyUpdated() {
-        val twoHoursAgo = DatabaseDateFormatter.iso8601(OffsetDateTime.now(ZoneOffset.UTC).minusHours(2))
-        val oneHourAgo = DatabaseDateFormatter.iso8601(OffsetDateTime.now(ZoneOffset.UTC).minusHours(1))
-
-        givenEmptyDBState()
-        val favorite = repository.insertFavorite("favourite1", "https://favorite.com", "favorite", twoHoursAgo)
-        val bookmark = Bookmark("bookmark1", "title", "www.example.com", "folder2", twoHoursAgo)
-        repository.insert(bookmark)
-        val folder = BookmarkFolder("folder1", "title", SavedSitesNames.BOOKMARKS_ROOT, 0, 0, lastModified = twoHoursAgo)
-        repository.insert(folder)
-
-        repository.updateModifiedSince(favorite.id, oneHourAgo)
-        repository.updateModifiedSince(bookmark.id, oneHourAgo)
-        repository.updateModifiedSince(folder.id, oneHourAgo)
-
-        assert(repository.getFavoriteById(favorite.id)!!.lastModified == oneHourAgo)
-        assert(repository.getBookmarkById(bookmark.id)!!.lastModified == oneHourAgo)
-        assert(repository.getFolder(folder.id)!!.lastModified == oneHourAgo)
-    }
-
-    @Test
     fun whenDeletingAFolderWithFavouriteThenDataIsDeleted() {
         val twoHoursAgo = DatabaseDateFormatter.iso8601(OffsetDateTime.now(ZoneOffset.UTC).minusHours(2))
 
@@ -1436,5 +1202,51 @@ class SavedSitesRepositoryTest {
     private fun givenEmptyDBState() {
         savedSitesRelationsDao.insertList(givenFolderWithContent(SavedSitesNames.BOOKMARKS_ROOT, emptyList()))
         savedSitesRelationsDao.insertList(givenFolderWithContent(SavedSitesNames.FAVORITES_ROOT, emptyList()))
+    }
+
+    @Test
+    fun whenReplaceBookmarkFolderCalledThenFolderRelationsAreUpdatedCorrectly() = runTest {
+        val folderId = "folderId"
+        val initialEntities = listOf("123", "345")
+        val updatedEntities = listOf("567", "789")
+
+        repository.insert(BookmarkFolder(id = folderId, name = "folder1", lastModified = "timestamp", parentId = SavedSitesNames.BOOKMARKS_ROOT))
+        initialEntities.forEach { entityId ->
+            savedSitesEntitiesDao.insert(Entity(entityId, "title", "www.example.com", type = BOOKMARK, lastModified = "timestamp"))
+            savedSitesRelationsDao.insert(Relation(folderId = folderId, entityId = entityId))
+        }
+
+        savedSitesRelationsDao.replaceBookmarkFolder(folderId, updatedEntities)
+
+        val relations = savedSitesRelationsDao.relationsByFolderId(folderId)
+        assertEquals(updatedEntities.size, relations.size)
+        assertEquals(relations[0].entityId, updatedEntities[0])
+        assertEquals(relations[1].entityId, updatedEntities[1])
+    }
+
+    @Test
+    fun whenUpdateBookmarkWithUpdateFavoriteTrueAndBookmarkIsFavoriteThenFavoriteIsInserted() = runTest {
+        givenEmptyDBState()
+
+        val bookmark = Bookmark("bookmark1", "title", "www.example.com", "timestamp", SavedSitesNames.BOOKMARKS_ROOT, isFavorite = true)
+        repository.insert(bookmark)
+
+        repository.updateBookmark(bookmark, SavedSitesNames.BOOKMARKS_ROOT, updateFavorite = true)
+
+        assertNotNull(repository.getFavorite(bookmark.url))
+    }
+
+    @Test
+    fun whenUpdateBookmarkWithUpdateFavoriteTrueAndBookmarkIsNotFavoriteThenFavoriteIsDeleted() = runTest {
+        givenEmptyDBState()
+
+        val bookmark = Bookmark("bookmark1", "title", "www.example.com", "timestamp", SavedSitesNames.BOOKMARKS_ROOT, isFavorite = false)
+        val favorite = Favorite("favorite1", "title", "www.example.com", "timestamp", 0)
+        repository.insert(bookmark)
+        repository.insertFavorite(favorite.title, favorite.url, favorite.title, favorite.lastModified)
+
+        repository.updateBookmark(bookmark, SavedSitesNames.BOOKMARKS_ROOT, updateFavorite = true)
+
+        assertNull(repository.getFavorite(bookmark.url))
     }
 }

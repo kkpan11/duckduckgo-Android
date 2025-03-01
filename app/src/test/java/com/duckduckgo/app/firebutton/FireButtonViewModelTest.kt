@@ -18,7 +18,6 @@ package com.duckduckgo.app.firebutton
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
-import com.duckduckgo.app.CoroutineTestRule
 import com.duckduckgo.app.fire.FireAnimationLoader
 import com.duckduckgo.app.firebutton.FireButtonViewModel.Command
 import com.duckduckgo.app.pixels.AppPixelName
@@ -27,7 +26,7 @@ import com.duckduckgo.app.settings.clear.ClearWhenOption
 import com.duckduckgo.app.settings.clear.FireAnimation
 import com.duckduckgo.app.settings.db.SettingsDataStore
 import com.duckduckgo.app.statistics.pixels.Pixel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.duckduckgo.common.test.CoroutineTestRule
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -40,7 +39,6 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
-@OptIn(ExperimentalCoroutinesApi::class)
 internal class FireButtonViewModelTest {
 
     @get:Rule
@@ -67,6 +65,7 @@ internal class FireButtonViewModelTest {
 
         whenever(mockAppSettingsDataStore.automaticallyClearWhenOption).thenReturn(ClearWhenOption.APP_EXIT_ONLY)
         whenever(mockAppSettingsDataStore.automaticallyClearWhatOption).thenReturn(ClearWhatOption.CLEAR_NONE)
+        whenever(mockAppSettingsDataStore.selectedFireAnimation).thenReturn(FireAnimation.HeroFire)
 
         testee = FireButtonViewModel(
             mockAppSettingsDataStore,
@@ -200,9 +199,11 @@ internal class FireButtonViewModelTest {
     fun whenNewFireAnimationSelectedThenUpdateViewState() = runTest {
         val expectedAnimation = FireAnimation.HeroWater
 
-        testee.onFireAnimationSelected(expectedAnimation)
-
         testee.viewState().test {
+            // expect HeroFire as a default which will happen when view state flow is created
+            assertEquals(FireAnimation.HeroFire, awaitItem().selectedFireAnimation)
+
+            testee.onFireAnimationSelected(expectedAnimation)
             assertEquals(expectedAnimation, awaitItem().selectedFireAnimation)
 
             cancelAndConsumeRemainingEvents()

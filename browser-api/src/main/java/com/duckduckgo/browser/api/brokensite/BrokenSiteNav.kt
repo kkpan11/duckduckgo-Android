@@ -16,16 +16,10 @@
 
 package com.duckduckgo.browser.api.brokensite
 
-import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import com.duckduckgo.app.global.baseHost
 import com.duckduckgo.app.global.model.Site
 import com.duckduckgo.app.trackerdetection.model.TrackerStatus
-
-interface BrokenSiteNav {
-    fun navigate(context: Context, data: BrokenSiteData): Intent
-}
+import com.duckduckgo.common.utils.baseHost
 
 data class BrokenSiteData(
     val url: String,
@@ -36,13 +30,18 @@ data class BrokenSiteData(
     val consentManaged: Boolean,
     val consentOptOutFailed: Boolean,
     val consentSelfTestFailed: Boolean,
-    val params: List<String>,
     val errorCodes: List<String>,
     val httpErrorCodes: String,
     val isDesktopMode: Boolean,
+    val reportFlow: ReportFlow,
+    val userRefreshCount: Int,
+    val openerContext: BrokenSiteOpenerContext?,
+    val jsPerformance: DoubleArray?,
 ) {
+    enum class ReportFlow { MENU, DASHBOARD, TOGGLE_DASHBOARD, TOGGLE_MENU, RELOAD_THREE_TIMES_WITHIN_20_SECONDS }
+
     companion object {
-        fun fromSite(site: Site?, params: List<String> = emptyList()): BrokenSiteData {
+        fun fromSite(site: Site?, reportFlow: ReportFlow): BrokenSiteData {
             val events = site?.trackingEvents
             val blockedTrackers = events?.filter { it.status == TrackerStatus.BLOCKED }
                 ?.map { Uri.parse(it.trackerUrl).baseHost.orEmpty() }
@@ -57,6 +56,9 @@ data class BrokenSiteData(
             val consentOptOutFailed = site?.consentOptOutFailed ?: false
             val consentSelfTestFailed = site?.consentSelfTestFailed ?: false
             val isDesktopMode = site?.isDesktopMode ?: false
+            val userRefreshCount = site?.realBrokenSiteContext?.userRefreshCount ?: 0
+            val openerContext = site?.realBrokenSiteContext?.openerContext
+            val jsPerformance = site?.realBrokenSiteContext?.jsPerformance
             return BrokenSiteData(
                 url = url,
                 blockedTrackers = blockedTrackers,
@@ -66,10 +68,13 @@ data class BrokenSiteData(
                 consentManaged = consentManaged,
                 consentOptOutFailed = consentOptOutFailed,
                 consentSelfTestFailed = consentSelfTestFailed,
-                params = params,
                 errorCodes = errorCodes,
                 httpErrorCodes = httErrorCodes,
                 isDesktopMode = isDesktopMode,
+                reportFlow = reportFlow,
+                userRefreshCount = userRefreshCount,
+                openerContext = openerContext,
+                jsPerformance = jsPerformance,
             )
         }
     }

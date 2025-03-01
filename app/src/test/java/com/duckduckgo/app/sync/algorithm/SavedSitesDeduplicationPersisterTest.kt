@@ -20,17 +20,27 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.duckduckgo.app.CoroutineTestRule
+import com.duckduckgo.app.bookmarks.BookmarkTestUtils
+import com.duckduckgo.app.bookmarks.BookmarkTestUtils.bookmarksRoot
+import com.duckduckgo.app.bookmarks.BookmarkTestUtils.favouritesRoot
 import com.duckduckgo.app.global.db.AppDatabase
+import com.duckduckgo.app.sync.FakeDisplayModeSettingsRepository
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.savedsites.api.SavedSitesRepository
 import com.duckduckgo.savedsites.api.models.BookmarkFolder
 import com.duckduckgo.savedsites.api.models.SavedSite.Bookmark
-import com.duckduckgo.savedsites.api.models.SavedSite.Favorite
 import com.duckduckgo.savedsites.api.models.SavedSitesNames
+import com.duckduckgo.savedsites.impl.MissingEntitiesRelationReconciler
+import com.duckduckgo.savedsites.impl.RealFavoritesDelegate
 import com.duckduckgo.savedsites.impl.RealSavedSitesRepository
+import com.duckduckgo.savedsites.impl.sync.RealSyncSavedSitesRepository
+import com.duckduckgo.savedsites.impl.sync.SyncSavedSitesRepository
 import com.duckduckgo.savedsites.impl.sync.algorithm.RealSavedSitesDuplicateFinder
 import com.duckduckgo.savedsites.impl.sync.algorithm.SavedSitesDeduplicationPersister
 import com.duckduckgo.savedsites.impl.sync.algorithm.SavedSitesDuplicateFinder
+import com.duckduckgo.savedsites.impl.sync.store.RealSavedSitesSyncEntitiesStore
+import com.duckduckgo.savedsites.impl.sync.store.SavedSitesSyncMetadataDao
+import com.duckduckgo.savedsites.impl.sync.store.SavedSitesSyncMetadataDatabase
 import com.duckduckgo.savedsites.store.SavedSitesEntitiesDao
 import com.duckduckgo.savedsites.store.SavedSitesRelationsDao
 import org.junit.Assert.assertTrue
@@ -50,12 +60,18 @@ class SavedSitesDeduplicationPersisterTest {
     var coroutinesTestRule = CoroutineTestRule()
 
     private lateinit var db: AppDatabase
+    private lateinit var savedSitesDatabase: SavedSitesSyncMetadataDatabase
+
     private lateinit var repository: SavedSitesRepository
+    private lateinit var syncSavedSitesRepository: SyncSavedSitesRepository
     private lateinit var savedSitesEntitiesDao: SavedSitesEntitiesDao
     private lateinit var savedSitesRelationsDao: SavedSitesRelationsDao
+    private lateinit var savedSitesMetadataDao: SavedSitesSyncMetadataDao
     private lateinit var duplicateFinder: SavedSitesDuplicateFinder
-
     private lateinit var persister: SavedSitesDeduplicationPersister
+    private val store = RealSavedSitesSyncEntitiesStore(
+        InstrumentationRegistry.getInstrumentation().context,
+    )
 
     @Before
     fun setup() {
@@ -66,10 +82,33 @@ class SavedSitesDeduplicationPersisterTest {
         savedSitesEntitiesDao = db.syncEntitiesDao()
         savedSitesRelationsDao = db.syncRelationsDao()
 
-        repository = RealSavedSitesRepository(savedSitesEntitiesDao, savedSitesRelationsDao)
+        savedSitesDatabase = Room.inMemoryDatabaseBuilder(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            SavedSitesSyncMetadataDatabase::class.java,
+        )
+            .allowMainThreadQueries()
+            .build()
+        savedSitesMetadataDao = savedSitesDatabase.syncMetadataDao()
+
+        val favoritesDelegate = RealFavoritesDelegate(
+            savedSitesEntitiesDao,
+            savedSitesRelationsDao,
+            FakeDisplayModeSettingsRepository(),
+            MissingEntitiesRelationReconciler(savedSitesEntitiesDao),
+            coroutinesTestRule.testDispatcherProvider,
+        )
+
+        syncSavedSitesRepository = RealSyncSavedSitesRepository(savedSitesEntitiesDao, savedSitesRelationsDao, savedSitesMetadataDao, store)
+        repository = RealSavedSitesRepository(
+            savedSitesEntitiesDao,
+            savedSitesRelationsDao,
+            favoritesDelegate,
+            MissingEntitiesRelationReconciler(savedSitesEntitiesDao),
+            coroutinesTestRule.testDispatcherProvider,
+        )
         duplicateFinder = RealSavedSitesDuplicateFinder(repository)
 
-        persister = SavedSitesDeduplicationPersister(repository, duplicateFinder)
+        persister = SavedSitesDeduplicationPersister(repository, syncSavedSitesRepository, duplicateFinder)
     }
 
     @Test
@@ -110,36 +149,39 @@ class SavedSitesDeduplicationPersisterTest {
     }
 
     @Test
-    fun whenProcessingFavouriteNotPresentLocallyThenFavouriteIsInserted() {
-        val favourite = Favorite("bookmark1", "title", "www.example.com", "timestamp", 0)
-        assertTrue(repository.getFavoriteById(favourite.id) == null)
+    fun whenProcessingEmptyFavouriteFoldersThenFavouritesAreAdded() {
+        // given some favourites
+        val firstBatch = BookmarkTestUtils.givenSomeBookmarks(10)
+        savedSitesEntitiesDao.insertList(firstBatch)
+        savedSitesRelationsDao.insertList(BookmarkTestUtils.givenFolderWithContent(bookmarksRoot.entityId, firstBatch))
 
-        persister.processFavourite(favourite)
+        // when processing the favourites folder
+        persister.processFavouritesFolder(favouritesRoot.entityId, firstBatch.map { it.entityId })
 
-        assertTrue(repository.getFavoriteById(favourite.id) != null)
+        // then all favourites have been added
+        val favourites = syncSavedSitesRepository.getFavoritesSync(favouritesRoot.entityId)
+        assertTrue(favourites.map { it.id } == firstBatch.map { it.entityId })
     }
 
     @Test
-    fun whenProcessingDeletedFavouriteNotPresentLocallyThenFavouriteIsNotInserted() {
-        val favourite = Favorite("bookmark1", "title", "www.example.com", "timestamp", 0, deleted = "1")
-        assertTrue(repository.getFavoriteById(favourite.id) == null)
+    fun whenProcessingNotEmptyFavouriteFoldersThenFavouritesAreAdded() {
+        // given some favourites
+        val firstBatch = BookmarkTestUtils.givenSomeBookmarks(10)
+        savedSitesEntitiesDao.insertList(firstBatch)
+        savedSitesRelationsDao.insertList(BookmarkTestUtils.givenFolderWithContent(bookmarksRoot.entityId, firstBatch))
+        savedSitesRelationsDao.insertList(BookmarkTestUtils.givenFolderWithContent(favouritesRoot.entityId, firstBatch))
 
-        persister.processFavourite(favourite)
+        // and new bookmarks have been added
+        val secondBatch = BookmarkTestUtils.givenSomeBookmarks(10)
+        savedSitesEntitiesDao.insertList(secondBatch)
+        savedSitesRelationsDao.insertList(BookmarkTestUtils.givenFolderWithContent(bookmarksRoot.entityId, secondBatch))
 
-        assertTrue(repository.getFavoriteById(favourite.id) == null)
-    }
+        // when processing the favourites folder
+        persister.processFavouritesFolder(favouritesRoot.entityId, secondBatch.map { it.entityId })
 
-    @Test
-    fun whenProcessingFavouriteDuplicateThenFavouriteIdIsReplaced() {
-        val favourite = Favorite("bookmark1", "title", "www.example.com", "timestamp", 0)
-        repository.insert(favourite)
-        assertTrue(repository.getFavoriteById(favourite.id) != null)
-
-        val remoteFavourite = favourite.copy(id = "remotebookmark1")
-        persister.processFavourite(remoteFavourite)
-
-        assertTrue(repository.getFavoriteById(favourite.id) == null)
-        assertTrue(repository.getFavoriteById(remoteFavourite.id) != null)
+        // then all favourites have been added
+        val favourites = repository.getFavoritesSync()
+        assertTrue(favourites.map { it.id } == firstBatch.map { it.entityId }.plus(secondBatch.map { it.entityId }))
     }
 
     @Test
@@ -147,7 +189,7 @@ class SavedSitesDeduplicationPersisterTest {
         val folder = BookmarkFolder("folder1", "title", SavedSitesNames.BOOKMARKS_ROOT, 0, 0)
         assertTrue(repository.getFolder(folder.id) == null)
 
-        persister.processBookmarkFolder(folder)
+        persister.processBookmarkFolder(folder, emptyList())
 
         assertTrue(repository.getFolder(folder.id) != null)
     }
@@ -157,7 +199,7 @@ class SavedSitesDeduplicationPersisterTest {
         val folder = BookmarkFolder("folder1", "title", SavedSitesNames.BOOKMARKS_ROOT, 0, 0, deleted = "1")
         assertTrue(repository.getFolder(folder.id) == null)
 
-        persister.processBookmarkFolder(folder)
+        persister.processBookmarkFolder(folder, emptyList())
 
         assertTrue(repository.getFolder(folder.id) == null)
     }
@@ -169,20 +211,20 @@ class SavedSitesDeduplicationPersisterTest {
         assertTrue(repository.getFolder(folder.id) != null)
 
         val remoteFolder = folder.copy(name = "remotefolder1")
-        persister.processBookmarkFolder(remoteFolder)
+        persister.processBookmarkFolder(remoteFolder, emptyList())
 
         assertTrue(repository.getFolder(folder.id) != null)
         assertTrue(repository.getFolder(folder.id)!!.name == remoteFolder.name)
     }
 
     @Test
-    fun whenProcessingRemoteDeletdFolderPresentLocallyThenFolderIsDeleted() {
+    fun whenProcessingRemoteDeletedFolderPresentLocallyThenFolderIsDeleted() {
         val folder = BookmarkFolder("folder1", "title", SavedSitesNames.BOOKMARKS_ROOT, 0, 0)
         repository.insert(folder)
         assertTrue(repository.getFolder(folder.id) != null)
 
         val deletedFolder = folder.copy(deleted = "1")
-        persister.processBookmarkFolder(deletedFolder)
+        persister.processBookmarkFolder(deletedFolder, emptyList())
 
         assertTrue(repository.getFolder(folder.id) == null)
     }

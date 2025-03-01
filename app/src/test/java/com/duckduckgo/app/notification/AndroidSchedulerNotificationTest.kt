@@ -33,6 +33,7 @@ package com.duckduckgo.app.notification
  */
 
 import android.util.Log
+import androidx.core.app.NotificationManagerCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.Configuration
@@ -40,9 +41,8 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.impl.utils.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
-import com.duckduckgo.app.CoroutineTestRule
 import com.duckduckgo.app.notification.model.SchedulableNotification
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.duckduckgo.common.test.CoroutineTestRule
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -54,28 +54,29 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 @RunWith(AndroidJUnit4::class)
-@ExperimentalCoroutinesApi
 class AndroidNotificationSchedulerTest {
 
-    @ExperimentalCoroutinesApi
     @get:Rule
     var coroutinesTestRule = CoroutineTestRule()
 
-    private val clearNotification: SchedulableNotification = mock()
-    private val privacyNotification: SchedulableNotification = mock()
+    private val mockClearNotification: SchedulableNotification = mock()
+    private val mockPrivacyNotification: SchedulableNotification = mock()
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private lateinit var workManager: WorkManager
+    private lateinit var notificationManager: NotificationManagerCompat
     private lateinit var testee: NotificationScheduler
 
     @Before
     fun before() {
         initializeWorkManager()
+        notificationManager = NotificationManagerCompat.from(context)
 
         testee = NotificationScheduler(
             workManager,
-            clearNotification,
-            privacyNotification,
+            notificationManager,
+            mockClearNotification,
+            mockPrivacyNotification,
         )
     }
 
@@ -92,8 +93,8 @@ class AndroidNotificationSchedulerTest {
 
     @Test
     fun whenPrivacyNotificationClearDataCanShowThenPrivacyNotificationIsScheduled() = runTest {
-        whenever(privacyNotification.canShow()).thenReturn(true)
-        whenever(clearNotification.canShow()).thenReturn(true)
+        whenever(mockPrivacyNotification.canShow()).thenReturn(true)
+        whenever(mockClearNotification.canShow()).thenReturn(true)
 
         testee.scheduleNextNotification()
 
@@ -102,8 +103,8 @@ class AndroidNotificationSchedulerTest {
 
     @Test
     fun whenPrivacyNotificationCanShowButClearDataCannotThenPrivacyNotificationIsScheduled() = runTest {
-        whenever(privacyNotification.canShow()).thenReturn(true)
-        whenever(clearNotification.canShow()).thenReturn(false)
+        whenever(mockPrivacyNotification.canShow()).thenReturn(true)
+        whenever(mockClearNotification.canShow()).thenReturn(false)
 
         testee.scheduleNextNotification()
 
@@ -112,8 +113,8 @@ class AndroidNotificationSchedulerTest {
 
     @Test
     fun whenPrivacyNotificationCannotShowAndClearNotificationCanShowThenClearNotificationIsScheduled() = runTest {
-        whenever(privacyNotification.canShow()).thenReturn(false)
-        whenever(clearNotification.canShow()).thenReturn(true)
+        whenever(mockPrivacyNotification.canShow()).thenReturn(false)
+        whenever(mockClearNotification.canShow()).thenReturn(true)
 
         testee.scheduleNextNotification()
 
@@ -122,8 +123,8 @@ class AndroidNotificationSchedulerTest {
 
     @Test
     fun whenPrivacyNotificationAndClearNotificationCannotShowThenNoNotificationScheduled() = runTest {
-        whenever(privacyNotification.canShow()).thenReturn(false)
-        whenever(clearNotification.canShow()).thenReturn(false)
+        whenever(mockPrivacyNotification.canShow()).thenReturn(false)
+        whenever(mockClearNotification.canShow()).thenReturn(false)
 
         testee.scheduleNextNotification()
 

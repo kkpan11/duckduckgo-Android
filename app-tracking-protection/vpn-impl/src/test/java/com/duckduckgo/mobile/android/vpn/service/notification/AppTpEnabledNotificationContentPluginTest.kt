@@ -16,23 +16,24 @@
 
 package com.duckduckgo.mobile.android.vpn.service.notification
 
+import android.app.PendingIntent
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.cash.turbine.test
-import com.duckduckgo.app.CoroutineTestRule
-import com.duckduckgo.app.global.formatters.time.DatabaseDateFormatter
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.common.utils.formatters.time.DatabaseDateFormatter
 import com.duckduckgo.mobile.android.app.tracking.AppTrackingProtection
 import com.duckduckgo.mobile.android.vpn.model.TrackingApp
 import com.duckduckgo.mobile.android.vpn.model.VpnTracker
 import com.duckduckgo.mobile.android.vpn.service.VpnEnabledNotificationContentPlugin
+import com.duckduckgo.mobile.android.vpn.service.VpnEnabledNotificationContentPlugin.NotificationActions
 import com.duckduckgo.mobile.android.vpn.stats.AppTrackerBlockingStatsRepository
 import com.duckduckgo.mobile.android.vpn.stats.RealAppTrackerBlockingStatsRepository
 import com.duckduckgo.mobile.android.vpn.store.VpnDatabase
 import com.duckduckgo.mobile.android.vpn.trackers.AppTrackerEntity
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
@@ -45,7 +46,6 @@ import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.whenever
 
 @RunWith(AndroidJUnit4::class)
-@OptIn(ExperimentalCoroutinesApi::class)
 class AppTpEnabledNotificationContentPluginTest {
 
     @get:Rule
@@ -63,6 +63,13 @@ class AppTpEnabledNotificationContentPluginTest {
 
     @Mock
     private lateinit var networkProtectionState: NetworkProtectionState
+
+    private val intentProvider = object : AppTpEnabledNotificationContentPlugin.IntentProvider {
+        override fun getOnPressNotificationIntent(): PendingIntent? = null
+
+        override fun getDeleteNotificationIntent(): PendingIntent? = null
+    }
+
     private val resources = InstrumentationRegistry.getInstrumentation().targetContext.resources
     private lateinit var plugin: AppTpEnabledNotificationContentPlugin
 
@@ -80,7 +87,8 @@ class AppTpEnabledNotificationContentPluginTest {
             appTrackerBlockingStatsRepository,
             appTrackingProtection,
             networkProtectionState,
-        ) { null }
+            intentProvider,
+        )
     }
 
     @After
@@ -95,8 +103,8 @@ class AppTpEnabledNotificationContentPluginTest {
 
         val content = plugin.getInitialContent()
 
-        content!!.assertTitleEquals("App Tracking Protection is enabled and blocking tracking attempts across your apps")
-        assertNull(content.notificationAction)
+        content!!.assertTextEquals("App Tracking Protection is enabled and blocking tracking attempts across your apps")
+        assertEquals(NotificationActions.VPNFeatureActions(emptyList()), content.notificationActions)
     }
 
     @Test
@@ -113,22 +121,21 @@ class AppTpEnabledNotificationContentPluginTest {
         plugin.getUpdatedContent().test {
             val item = awaitItem()
 
-            item.assertTitleEquals("Scanning for tracking activity… beep… boop")
+            item.assertTextEquals("Scanning for tracking activity… beep… boop")
+
+            assertTrue(item.notificationActions is NotificationActions.VPNFeatureActions)
 
             cancelAndConsumeRemainingEvents()
         }
     }
 
     @Test
-    fun getUpdateContentAppTpNotEnabledThenReturnsCorrectInitialUpdatedNotificationContent() = runTest {
+    fun getUpdateContentAppTpNotEnabledThenReturnsNoContent() = runTest {
         whenever(appTrackingProtection.isEnabled()).thenReturn(false)
+        whenever(networkProtectionState.isEnabled()).thenReturn(false)
 
         plugin.getUpdatedContent().test {
-            val item = awaitItem()
-
-            item.assertTitleEquals("")
-
-            cancelAndConsumeRemainingEvents()
+            expectNoEvents()
         }
     }
 
@@ -145,27 +152,23 @@ class AppTpEnabledNotificationContentPluginTest {
             skipItems(1)
             val item = awaitItem()
 
-            item.assertTitleEquals("Tracking attempts blocked in 1 app (past hour).")
+            item.assertTextEquals("Tracking attempts blocked in 1 app (past hour).")
 
             cancelAndConsumeRemainingEvents()
         }
     }
 
     @Test
-    fun getUpdateContentOneCompanyAppTpNotEnabledThenReturnsCorrectUpdatedNotificationContent() = runTest {
+    fun getUpdateContentOneCompanyAppTpNotEnabledThenReturnsNoContent() = runTest {
         whenever(appTrackingProtection.isEnabled()).thenReturn(false)
+        whenever(networkProtectionState.isEnabled()).thenReturn(false)
 
         plugin.getUpdatedContent().test {
             val trackers = listOf(aTrackerAndCompany())
             appTrackerBlockingStatsRepository.insert(trackers)
             db.vpnAppTrackerBlockingDao().insertTrackerEntities(trackers.map { it.asEntity() })
 
-            skipItems(1)
-            val item = awaitItem()
-
-            item.assertTitleEquals("")
-
-            cancelAndConsumeRemainingEvents()
+            expectNoEvents()
         }
     }
 
@@ -188,15 +191,16 @@ class AppTpEnabledNotificationContentPluginTest {
 
             val item = expectMostRecentItem()
 
-            item.assertTitleEquals("Tracking attempts blocked across 2 apps (past hour).")
+            item.assertTextEquals("Tracking attempts blocked across 2 apps (past hour).")
 
             cancelAndConsumeRemainingEvents()
         }
     }
 
     @Test
-    fun getUpdateContentMultipleDifferentAppsAppTpNotEnabledThenReturnsCorrectUpdatedNotificationContent() = runTest {
+    fun getUpdateContentMultipleDifferentAppsAppTpNotEnabledThenReturnsNoContent() = runTest {
         whenever(appTrackingProtection.isEnabled()).thenReturn(false)
+        whenever(networkProtectionState.isEnabled()).thenReturn(false)
 
         plugin.getUpdatedContent().test {
             val trackers = listOf(
@@ -210,12 +214,7 @@ class AppTpEnabledNotificationContentPluginTest {
             appTrackerBlockingStatsRepository.insert(trackers)
             db.vpnAppTrackerBlockingDao().insertTrackerEntities(trackers.map { it.asEntity() })
 
-            skipItems(1)
-            val item = awaitItem()
-
-            item.assertTitleEquals("")
-
-            cancelAndConsumeRemainingEvents()
+            expectNoEvents()
         }
     }
 
@@ -229,7 +228,7 @@ class AppTpEnabledNotificationContentPluginTest {
 
             val item = expectMostRecentItem()
 
-            item.assertTitleEquals("Scanning for tracking activity… beep… boop")
+            item.assertTextEquals("Scanning for tracking activity… beep… boop")
 
             cancelAndConsumeRemainingEvents()
         }
@@ -248,23 +247,20 @@ class AppTpEnabledNotificationContentPluginTest {
 
             val item = expectMostRecentItem()
 
-            item.assertTitleEquals("Tracking attempts blocked in 1 app (past hour).")
+            item.assertTextEquals("Tracking attempts blocked in 1 app (past hour).")
 
             cancelAndConsumeRemainingEvents()
         }
     }
 
     @Test
-    fun getUpdateContentMultipleSameAppTpNotEnabledThenReturnsCorrectUpdatedNotificationContent() = runTest {
+    fun getUpdateContentMultipleSameAppTpNotEnabledThenReturnsNoContent() = runTest {
         whenever(appTrackingProtection.isEnabled()).thenReturn(false)
+        whenever(networkProtectionState.isEnabled()).thenReturn(false)
         plugin.getUpdatedContent().test {
             appTrackerBlockingStatsRepository.insert(listOf(aTrackerAndCompany(), aTrackerAndCompany()))
 
-            val item = expectMostRecentItem()
-
-            item.assertTitleEquals("")
-
-            cancelAndConsumeRemainingEvents()
+            expectNoEvents()
         }
     }
 
@@ -320,6 +316,6 @@ class AppTpEnabledNotificationContentPluginTest {
     }
 }
 
-internal fun VpnEnabledNotificationContentPlugin.VpnEnabledNotificationContent.assertTitleEquals(expected: String) {
-    assertEquals(expected, this.title.toString())
+internal fun VpnEnabledNotificationContentPlugin.VpnEnabledNotificationContent.assertTextEquals(expected: String) {
+    assertEquals(expected, this.text.toString())
 }

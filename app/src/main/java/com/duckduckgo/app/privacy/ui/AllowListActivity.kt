@@ -27,15 +27,15 @@ import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivityAllowlistBinding
 import com.duckduckgo.app.browser.databinding.DialogEditAllowlistBinding
 import com.duckduckgo.app.browser.favicon.FaviconManager
-import com.duckduckgo.app.global.DuckDuckGoActivity
-import com.duckduckgo.app.global.extensions.html
 import com.duckduckgo.app.privacy.model.UserAllowListedDomain
 import com.duckduckgo.app.privacy.ui.AllowListViewModel.Command.*
+import com.duckduckgo.common.ui.DuckDuckGoActivity
+import com.duckduckgo.common.ui.view.dialog.CustomAlertDialogBuilder
+import com.duckduckgo.common.ui.view.dialog.TextAlertDialogBuilder
+import com.duckduckgo.common.ui.view.dialog.TextAlertDialogBuilder.EventListener
+import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.extensions.html
 import com.duckduckgo.di.scopes.ActivityScope
-import com.duckduckgo.mobile.android.ui.view.dialog.CustomAlertDialogBuilder
-import com.duckduckgo.mobile.android.ui.view.dialog.TextAlertDialogBuilder
-import com.duckduckgo.mobile.android.ui.view.dialog.TextAlertDialogBuilder.EventListener
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
 import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
@@ -109,7 +109,7 @@ class AllowListActivity : DuckDuckGoActivity() {
         val inputBinding = DialogEditAllowlistBinding.inflate(layoutInflater)
         CustomAlertDialogBuilder(this)
             .setTitle(R.string.dialogAddTitle)
-            .setPositiveButton(R.string.dialogSave)
+            .setPositiveButton(com.duckduckgo.mobile.android.R.string.dialogSave)
             .setNegativeButton(R.string.cancel)
             .setView(inputBinding)
             .addEventListener(
@@ -128,7 +128,7 @@ class AllowListActivity : DuckDuckGoActivity() {
         inputBinding.customDialogTextInput.text = entry.domain
         CustomAlertDialogBuilder(this)
             .setTitle(R.string.dialogEditTitle)
-            .setPositiveButton(R.string.dialogSave)
+            .setPositiveButton(com.duckduckgo.mobile.android.R.string.dialogSave)
             .setNegativeButton(R.string.cancel)
             .setView(inputBinding)
             .addEventListener(
@@ -144,7 +144,7 @@ class AllowListActivity : DuckDuckGoActivity() {
 
     private fun showDeleteDialog(entry: UserAllowListedDomain) {
         TextAlertDialogBuilder(this)
-            .setTitle(R.string.dialogConfirmTitle)
+            .setTitle(com.duckduckgo.mobile.android.R.string.dialogConfirmTitle)
             .setMessage(getString(R.string.allowlistEntryDeleteConfirmMessage, entry.domain).html(this))
             .setPositiveButton(android.R.string.yes)
             .setNegativeButton(android.R.string.no)

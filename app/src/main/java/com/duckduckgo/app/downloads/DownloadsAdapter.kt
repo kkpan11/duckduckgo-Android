@@ -31,13 +31,13 @@ import com.duckduckgo.app.downloads.DownloadViewItem.Empty
 import com.duckduckgo.app.downloads.DownloadViewItem.Header
 import com.duckduckgo.app.downloads.DownloadViewItem.Item
 import com.duckduckgo.app.downloads.DownloadViewItem.NotifyMe
-import com.duckduckgo.app.global.formatters.data.DataSizeFormatter
+import com.duckduckgo.common.ui.menu.PopupMenu
+import com.duckduckgo.common.ui.notifyme.NotifyMeView
+import com.duckduckgo.common.ui.view.gone
+import com.duckduckgo.common.ui.view.show
+import com.duckduckgo.common.utils.formatters.data.DataSizeFormatter
 import com.duckduckgo.downloads.store.DownloadStatus.FINISHED
 import com.duckduckgo.mobile.android.databinding.RowTwoLineItemBinding
-import com.duckduckgo.mobile.android.ui.menu.PopupMenu
-import com.duckduckgo.mobile.android.ui.notifyme.NotifyMeView
-import com.duckduckgo.mobile.android.ui.view.gone
-import com.duckduckgo.mobile.android.ui.view.show
 import javax.inject.Inject
 
 class DownloadsAdapter @Inject constructor(
@@ -61,6 +61,7 @@ class DownloadsAdapter @Inject constructor(
                 listener = downloadsItemListener,
                 formatter = dataSizeFormatter,
             )
+
             VIEW_TYPE_NOTIFY_ME -> NotifyMeViewHolder(
                 binding = ViewItemDownloadsNotifyMeBinding.inflate(inflater, parent, false),
                 listener = downloadsItemListener,
@@ -158,7 +159,10 @@ class DownloadsAdapter @Inject constructor(
             anchor: View,
             item: Item,
         ) {
-            val popupMenu = PopupMenu(layoutInflater, layout.popup_window_download_item_menu)
+            val popupMenu = PopupMenu(
+                layoutInflater,
+                layout.popup_window_download_item_menu,
+            )
             val view = popupMenu.contentView
             val shareItemView = view.findViewById<View>(R.id.share)
             val deleteItemView = view.findViewById<View>(R.id.delete)
@@ -187,7 +191,10 @@ class DownloadsAdapter @Inject constructor(
         init {
             binding.root.setOnVisibilityChange(
                 object : NotifyMeView.OnVisibilityChangedListener {
-                    override fun onVisibilityChange(v: View?, isVisible: Boolean) {
+                    override fun onVisibilityChange(
+                        v: View?,
+                        isVisible: Boolean,
+                    ) {
                         listener.onItemVisibilityChanged(isVisible)
                     }
                 },

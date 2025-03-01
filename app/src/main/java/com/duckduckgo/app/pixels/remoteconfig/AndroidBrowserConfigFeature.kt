@@ -43,4 +43,52 @@ interface AndroidBrowserConfigFeature {
      */
     @Toggle.DefaultValue(false)
     fun collectFullWebViewVersion(): Toggle
+
+    /**
+     * @return `true` when the remote config has the global "screenLock" androidBrowserConfig
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `false`
+     */
+    @Toggle.DefaultValue(false)
+    fun screenLock(): Toggle
+
+    /**
+     * @return `true` when the remote config has the global "optimizeTrackerEvaluationV2" androidBrowserConfig
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `false`
+     */
+    @Toggle.DefaultValue(false)
+    fun optimizeTrackerEvaluationV2(): Toggle
+
+    /**
+     * @return `true` when the remote config has the global "errorPagePixel" androidBrowserConfig
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `true`
+     */
+    @Toggle.DefaultValue(true)
+    fun errorPagePixel(): Toggle
+
+    /**
+     * @return `true` when the remote config has the global "featuresRequestHeader" androidBrowserConfig
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `false`
+     */
+    @Toggle.DefaultValue(false)
+    fun featuresRequestHeader(): Toggle
+
+    /**
+     * @return `true` when the remote config has the global "webLocalStorage" androidBrowserConfig
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `false`
+     */
+    @Toggle.DefaultValue(false)
+    fun webLocalStorage(): Toggle
+
+    /**
+     * @return `true` when the remote config has the global "enableMaliciousSiteProtection" androidBrowserConfig
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `false`
+     */
+    @Toggle.DefaultValue(false)
+    fun enableMaliciousSiteProtection(): Toggle
 }

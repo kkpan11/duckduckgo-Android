@@ -26,6 +26,8 @@ import android.text.style.ClickableSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.UnderlineSpan
 import android.view.View
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -35,15 +37,16 @@ import com.duckduckgo.app.about.AboutDuckDuckGoViewModel.Command
 import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivityAboutDuckDuckGoBinding
-import com.duckduckgo.app.global.AppUrl.Url
-import com.duckduckgo.app.global.DuckDuckGoActivity
-import com.duckduckgo.browser.api.ui.WebViewActivityWithParams
+import com.duckduckgo.browser.api.ui.BrowserScreens.WebViewActivityWithParams
+import com.duckduckgo.common.ui.DuckDuckGoActivity
+import com.duckduckgo.common.ui.view.getColorFromAttr
+import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.AppUrl.Url
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.mobile.android.R.attr
-import com.duckduckgo.mobile.android.ui.view.getColorFromAttr
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
 import com.duckduckgo.navigation.api.GlobalActivityStarter
-import com.duckduckgo.networkprotection.api.NetPWaitlistInvitedScreenNoParams
+import com.duckduckgo.settings.api.SettingsPageFeature
+import com.duckduckgo.subscriptions.api.PrivacyProFeedbackScreens.GeneralPrivacyProFeedbackScreenNoParams
 import com.google.android.material.snackbar.Snackbar
 import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
@@ -52,6 +55,9 @@ import kotlinx.coroutines.flow.onEach
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(AboutScreenNoParams::class)
 class AboutDuckDuckGoActivity : DuckDuckGoActivity() {
+
+    @Inject
+    lateinit var settingsPageFeature: SettingsPageFeature
 
     private val viewModel: AboutDuckDuckGoViewModel by bindViewModel()
     private val binding: ActivityAboutDuckDuckGoBinding by viewBinding()
@@ -75,6 +81,14 @@ class AboutDuckDuckGoActivity : DuckDuckGoActivity() {
         setContentView(binding.root)
         setupToolbar(binding.includeToolbar.toolbar)
 
+        if (settingsPageFeature.newSettingsPage().isEnabled()) {
+            supportActionBar?.setTitle(R.string.aboutActivityTitleNew)
+            binding.includeContent.aboutTextNew.isVisible = true
+
+            binding.includeContent.aboutText.isGone = true
+            binding.includeContent.aboutProvideFeedback.isGone = true
+        }
+
         configureUiEventHandlers()
         observeViewModel()
         configureClickableLinks()
@@ -82,18 +96,31 @@ class AboutDuckDuckGoActivity : DuckDuckGoActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel.resetNetPEasterEggCounter()
+        viewModel.resetEasterEggCounter()
     }
 
     private fun configureClickableLinks() {
-        with(binding.includeContent.aboutText) {
-            text = addClickableLinks()
-            movementMethod = LinkMovementMethod.getInstance()
+        if (settingsPageFeature.newSettingsPage().isEnabled()) {
+            with(binding.includeContent.aboutTextNew) {
+                text = addClickableLinks()
+                movementMethod = LinkMovementMethod.getInstance()
+            }
+        } else {
+            with(binding.includeContent.aboutText) {
+                text = addClickableLinks()
+                movementMethod = LinkMovementMethod.getInstance()
+            }
         }
     }
 
     private fun addClickableLinks(): SpannableString {
-        val fullText = getText(R.string.aboutDescription) as SpannedString
+        val fullText = getText(
+            if (settingsPageFeature.newSettingsPage().isEnabled()) {
+                R.string.aboutDescriptionNew
+            } else {
+                R.string.aboutDescription
+            },
+        ) as SpannedString
         val spannableString = SpannableString(fullText)
         val annotations = fullText.getSpans(0, fullText.length, Annotation::class.java)
 
@@ -185,23 +212,18 @@ class AboutDuckDuckGoActivity : DuckDuckGoActivity() {
             .launchIn(lifecycleScope)
     }
 
-    private fun launchNetPWaitlist() {
-        globalActivityStarter.start(this, NetPWaitlistInvitedScreenNoParams)
-    }
-
     private fun processCommand(it: Command) {
         when (it) {
             is Command.LaunchBrowserWithLearnMoreUrl -> launchBrowserScreen()
             is Command.LaunchWebViewWithPrivacyPolicyUrl -> launchWebViewScreen()
             is Command.LaunchBrowserWithPrivacyProtectionsUrl -> launchPrivacyProtectionsScreen()
-            is Command.ShowNetPUnlockedSnackbar -> showNetPUnlockedSnackbar()
-            is Command.LaunchNetPWaitlist -> launchNetPWaitlist()
             is Command.LaunchFeedback -> launchFeedback()
+            is Command.LaunchPproUnifiedFeedback -> launchPproUnifiedFeedback()
         }
     }
 
     private fun launchBrowserScreen() {
-        startActivity(BrowserActivity.intent(this, Url.ABOUT))
+        startActivity(BrowserActivity.intent(this, Url.ABOUT, interstitialScreen = true))
         finish()
     }
 
@@ -225,19 +247,15 @@ class AboutDuckDuckGoActivity : DuckDuckGoActivity() {
         )
     }
 
-    private fun showNetPUnlockedSnackbar() {
-        Snackbar.make(
-            binding.root,
-            R.string.netpUnlockedSnackbar,
-            Snackbar.LENGTH_LONG,
-        ).setAction(R.string.netpUnlockedSnackbarAction) {
-            viewModel.onNetPUnlockedActionClicked()
-        }.setDuration(3500) // LENGTH_LONG is not long enough, increase to 3.5 sec
-            .show()
-    }
-
     private fun launchFeedback() {
         feedbackFlow.launch(null)
+    }
+
+    private fun launchPproUnifiedFeedback() {
+        globalActivityStarter.start(
+            this,
+            GeneralPrivacyProFeedbackScreenNoParams,
+        )
     }
 
     companion object {

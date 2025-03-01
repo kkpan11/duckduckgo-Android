@@ -16,7 +16,7 @@
 
 package com.duckduckgo.privacy.config.store.features.amplinks
 
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.feature.toggles.api.FeatureExceptions.FeatureException
 import com.duckduckgo.privacy.config.store.*
 import java.util.concurrent.CopyOnWriteArrayList
@@ -34,6 +34,7 @@ class RealAmpLinksRepository(
     val database: PrivacyConfigDatabase,
     coroutineScope: CoroutineScope,
     dispatcherProvider: DispatcherProvider,
+    isMainProcess: Boolean,
 ) : AmpLinksRepository {
 
     private val ampLinksDao: AmpLinksDao = database.ampLinksDao()
@@ -44,7 +45,9 @@ class RealAmpLinksRepository(
 
     init {
         coroutineScope.launch(dispatcherProvider.io()) {
-            loadToMemory()
+            if (isMainProcess) {
+                loadToMemory()
+            }
         }
     }
 

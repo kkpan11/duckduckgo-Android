@@ -16,7 +16,7 @@
 
 package com.duckduckgo.privacy.config.store.features.trackingparameters
 
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.feature.toggles.api.FeatureExceptions.FeatureException
 import com.duckduckgo.privacy.config.store.*
 import java.util.concurrent.CopyOnWriteArrayList
@@ -33,6 +33,7 @@ class RealTrackingParametersRepository(
     val database: PrivacyConfigDatabase,
     coroutineScope: CoroutineScope,
     dispatcherProvider: DispatcherProvider,
+    isMainProcess: Boolean,
 ) : TrackingParametersRepository {
 
     private val trackingParametersDao: TrackingParametersDao = database.trackingParametersDao()
@@ -42,7 +43,9 @@ class RealTrackingParametersRepository(
 
     init {
         coroutineScope.launch(dispatcherProvider.io()) {
-            loadToMemory()
+            if (isMainProcess) {
+                loadToMemory()
+            }
         }
     }
 

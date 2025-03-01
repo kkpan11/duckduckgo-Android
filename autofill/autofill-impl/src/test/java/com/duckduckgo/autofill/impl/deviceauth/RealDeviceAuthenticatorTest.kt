@@ -19,9 +19,7 @@ package com.duckduckgo.autofill.impl.deviceauth
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
-import com.duckduckgo.autofill.impl.R
-import com.duckduckgo.autofill.impl.deviceauth.DeviceAuthenticator.Features.AUTOFILL_TO_ACCESS_CREDENTIALS
-import com.duckduckgo.autofill.impl.deviceauth.DeviceAuthenticator.Features.AUTOFILL_TO_USE_CREDENTIALS
+import com.duckduckgo.autofill.impl.R.string
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mock
@@ -95,44 +93,34 @@ class RealDeviceAuthenticatorTest {
 
     @Test
     fun whenAuthenticateToAccessCredentialsIsCalledWithFragmentThenLaunchAuthLauncher() {
-        testee.authenticate(AUTOFILL_TO_ACCESS_CREDENTIALS, fragment) {}
-        verify(authLauncher).launch(eq(R.string.autofill_auth_text_for_access), eq(fragment), any())
-    }
-
-    @Test
-    fun whenAuthenticateToUseCredentialsIsCalledWithFragmentThenLaunchAuthLauncher() {
-        testee.authenticate(AUTOFILL_TO_USE_CREDENTIALS, fragment) {}
-        verify(authLauncher).launch(eq(R.string.autofill_auth_text_for_using), eq(fragment), any())
+        testee.authenticate(fragment) {}
+        verifyAuthDialogLaunched()
     }
 
     @Test
     fun whenAuthenticateToAccessCredentialsIsCalledWithActivityThenLaunchAuthLauncher() {
-        testee.authenticate(AUTOFILL_TO_ACCESS_CREDENTIALS, fragment) {}
-        verify(authLauncher).launch(eq(R.string.autofill_auth_text_for_access), eq(fragment), any())
+        testee.authenticate(fragment) {}
+        verifyAuthDialogLaunched()
     }
 
-    @Test
-    fun whenAuthenticateToUseCredentialsIsCalledWithActivityThenLaunchAuthLauncher() {
-        testee.authenticate(AUTOFILL_TO_USE_CREDENTIALS, fragment) {}
-        verify(authLauncher).launch(eq(R.string.autofill_auth_text_for_using), eq(fragment), any())
-    }
-
-    @Test
-    fun whenAuthGracePeriodActiveThenNoDeviceAuthLaunchedWhenUsingCredentials() {
-        whenever(autofillAuthorizationGracePeriod.isAuthRequired()).thenReturn(false)
-        testee.authenticate(AUTOFILL_TO_USE_CREDENTIALS, fragmentActivity) {}
-        verifyAuthNotLaunched()
+    private fun verifyAuthDialogLaunched() {
+        verify(authLauncher).launch(
+            featureTitleText = eq(string.biometric_prompt_title),
+            featureAuthText = eq(string.autofill_auth_text_for_access),
+            fragment = eq(fragment),
+            onResult = any(),
+        )
     }
 
     @Test
     fun whenAuthGracePeriodActiveThenNoDeviceAuthLaunchedWhenAccessingCredentials() {
         whenever(autofillAuthorizationGracePeriod.isAuthRequired()).thenReturn(false)
-        testee.authenticate(AUTOFILL_TO_ACCESS_CREDENTIALS, fragmentActivity) {}
+        testee.authenticate(fragmentActivity) {}
         verifyAuthNotLaunched()
     }
 
     private fun verifyAuthNotLaunched() {
-        verify(authLauncher, never()).launch(any(), any<Fragment>(), any())
-        verify(authLauncher, never()).launch(any(), any<FragmentActivity>(), any())
+        verify(authLauncher, never()).launch(any(), any(), any<Fragment>(), any())
+        verify(authLauncher, never()).launch(any(), any(), any<FragmentActivity>(), any())
     }
 }

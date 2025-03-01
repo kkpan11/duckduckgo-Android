@@ -19,9 +19,11 @@ package com.duckduckgo.mobile.android.vpn.service
 import android.app.PendingIntent
 import android.text.SpannableStringBuilder
 import androidx.core.app.NotificationCompat
+import com.duckduckgo.mobile.android.vpn.service.VpnEnabledNotificationContentPlugin.NotificationActions.VPNFeatureActions
 import kotlinx.coroutines.flow.Flow
 
 interface VpnEnabledNotificationContentPlugin {
+    val uuid: String
 
     /**
      * This method will be called to show the first notification when the VPN is enabled.
@@ -57,15 +59,19 @@ interface VpnEnabledNotificationContentPlugin {
     fun isActive(): Boolean
 
     data class VpnEnabledNotificationContent(
-        val title: SpannableStringBuilder,
+        val title: String?,
+        val text: SpannableStringBuilder,
         val onNotificationPressIntent: PendingIntent?,
-        val notificationAction: NotificationCompat.Action?,
+        val notificationActions: NotificationActions,
+        val deleteIntent: PendingIntent?,
     ) {
         companion object {
             val EMPTY = VpnEnabledNotificationContent(
-                title = SpannableStringBuilder(),
+                title = null,
+                text = SpannableStringBuilder(),
                 onNotificationPressIntent = null,
-                notificationAction = null,
+                notificationActions = VPNFeatureActions(emptyList()),
+                deleteIntent = null,
             )
         }
     }
@@ -75,5 +81,10 @@ interface VpnEnabledNotificationContentPlugin {
         NORMAL,
         HIGH,
         VERY_HIGH,
+    }
+
+    sealed class NotificationActions {
+        object VPNActions : NotificationActions()
+        data class VPNFeatureActions(val actions: List<NotificationCompat.Action>) : NotificationActions()
     }
 }

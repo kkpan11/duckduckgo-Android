@@ -27,20 +27,24 @@ android {
         generateDaggerFactories = true // default is false
     }
     namespace 'com.duckduckgo.autofill.internal'
+    lintOptions {
+        baseline file("lint-baseline.xml")
+    }
 }
 
 dependencies {
     implementation project(path: ':autofill-api')
     implementation project(':autofill-impl')
+    implementation project(':autofill-store')
     implementation project(':internal-features-api')
     implementation project(path: ':browser-api')
+    implementation project(path: ':navigation-api')
 
     anvil project(path: ':anvil-compiler')
     implementation project(path: ':anvil-annotations')
     implementation project(':di')
     implementation project(path: ':common-utils')
 
-    implementation Kotlin.stdlib.jdk7
     implementation AndroidX.lifecycle.runtime.ktx
     implementation AndroidX.lifecycle.viewModelKtx
     implementation AndroidX.lifecycle.process

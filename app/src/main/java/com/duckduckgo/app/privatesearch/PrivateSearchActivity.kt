@@ -18,6 +18,8 @@ package com.duckduckgo.app.privatesearch
 
 import android.os.Bundle
 import android.widget.CompoundButton
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -25,12 +27,13 @@ import com.duckduckgo.anvil.annotations.ContributeToActivityStarter
 import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivityPrivateSearchBinding
-import com.duckduckgo.app.global.DuckDuckGoActivity
 import com.duckduckgo.app.privatesearch.PrivateSearchViewModel.Command
-import com.duckduckgo.browser.api.ui.WebViewActivityWithParams
+import com.duckduckgo.browser.api.ui.BrowserScreens.WebViewActivityWithParams
+import com.duckduckgo.common.ui.DuckDuckGoActivity
+import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.di.scopes.ActivityScope
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
 import com.duckduckgo.navigation.api.GlobalActivityStarter
+import com.duckduckgo.settings.api.SettingsPageFeature
 import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -42,11 +45,18 @@ class PrivateSearchActivity : DuckDuckGoActivity() {
     @Inject
     lateinit var globalActivityStarter: GlobalActivityStarter
 
+    @Inject
+    lateinit var settingsPageFeature: SettingsPageFeature
+
     private val viewModel: PrivateSearchViewModel by bindViewModel()
     private val binding: ActivityPrivateSearchBinding by viewBinding()
 
     private val autocompleteToggleListener = CompoundButton.OnCheckedChangeListener { _, isChecked ->
         viewModel.onAutocompleteSettingChanged(isChecked)
+    }
+
+    private val autocompleteRecentlyVisitedSitesToggleListener = CompoundButton.OnCheckedChangeListener { _, isChecked ->
+        viewModel.onAutocompleteRecentlyVisitedSitesSettingChanged(isChecked)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,24 +65,49 @@ class PrivateSearchActivity : DuckDuckGoActivity() {
         setContentView(binding.root)
         setupToolbar(binding.includeToolbar.toolbar)
 
+        if (settingsPageFeature.newSettingsPage().isEnabled()) {
+            with(binding) {
+                privateSearchHeaderImage.isGone = true
+                privateSearchTitle.isGone = true
+                privateSearchDescription.isGone = true
+                privateSearchHeadingSearchSettings.isGone = true
+
+                privateSearchHeaderImageNew.isVisible = true
+                privateSearchTitleNew.isVisible = true
+                statusIndicator.isVisible = true
+                privateSearchDescriptionNew.isVisible = true
+            }
+        }
+
         configureUiEventHandlers()
         observeViewModel()
     }
 
     private fun configureUiEventHandlers() {
         binding.privateSearchAutocompleteToggle.setOnCheckedChangeListener(autocompleteToggleListener)
+        binding.privateSearchAutocompleteRecentlyVisitedSitesToggle.setOnCheckedChangeListener(autocompleteRecentlyVisitedSitesToggleListener)
         binding.privateSearchMoreSearchSettings.setOnClickListener { viewModel.onPrivateSearchMoreSearchSettingsClicked() }
     }
 
     private fun observeViewModel() {
-        viewModel.viewState()
+        viewModel.viewState
             .flowWithLifecycle(lifecycle, Lifecycle.State.RESUMED)
             .onEach { viewState ->
-                viewState.let {
+                viewState?.let {
                     binding.privateSearchAutocompleteToggle.quietlySetIsChecked(
                         newCheckedState = it.autoCompleteSuggestionsEnabled,
                         changeListener = autocompleteToggleListener,
                     )
+                    if (it.storeHistoryEnabled) {
+                        binding.privateSearchAutocompleteRecentlyVisitedSites.isVisible = true
+                        binding.privateSearchAutocompleteRecentlyVisitedSitesToggle.quietlySetIsChecked(
+                            newCheckedState = it.autoCompleteRecentlyVisitedSitesSuggestionsUserEnabled,
+                            changeListener = autocompleteRecentlyVisitedSitesToggleListener,
+                        )
+                        binding.privateSearchAutocompleteRecentlyVisitedSitesToggle.isEnabled = it.autoCompleteSuggestionsEnabled
+                    } else {
+                        binding.privateSearchAutocompleteRecentlyVisitedSites.isVisible = false
+                    }
                 }
             }.launchIn(lifecycleScope)
 

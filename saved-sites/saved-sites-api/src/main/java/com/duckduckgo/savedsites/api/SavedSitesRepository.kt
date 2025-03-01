@@ -19,6 +19,7 @@ package com.duckduckgo.savedsites.api
 import com.duckduckgo.savedsites.api.models.BookmarkFolder
 import com.duckduckgo.savedsites.api.models.BookmarkFolderItem
 import com.duckduckgo.savedsites.api.models.FolderBranch
+import com.duckduckgo.savedsites.api.models.FolderTreeItem
 import com.duckduckgo.savedsites.api.models.SavedSite
 import com.duckduckgo.savedsites.api.models.SavedSite.Bookmark
 import com.duckduckgo.savedsites.api.models.SavedSite.Favorite
@@ -42,23 +43,9 @@ interface SavedSitesRepository {
     /**
      * Returns all [Bookmark] and [BookmarkFolder] inside a folder
      * @param folderId the id of the folder.
-     * @return [Flow] [Pair] of [Bookmark] and [BookmarkFolder] inside a folder
+     * @return [FolderTreeItem]s inside a folder
      */
-    fun getFolderContent(folderId: String): Flow<Pair<List<Bookmark>, List<BookmarkFolder>>>
-
-    /**
-     * Returns all [Bookmark] and [BookmarkFolder] inside a folder
-     * @param folderId the id of the folder.
-     * @return [Pair] of [Bookmark] and [BookmarkFolder] inside a folder
-     */
-    fun getFolderContentSync(folderId: String): Pair<List<Bookmark>, List<BookmarkFolder>>
-
-    /**
-     * Returns all [Bookmark] and [BookmarkFolder] inside a folder, also deleted objects
-     * @param folderId the id of the folder.
-     * @return [Pair] of [Bookmark] and [BookmarkFolder] inside a folder
-     */
-    fun getAllFolderContentSync(folderId: String): Pair<List<Bookmark>, List<BookmarkFolder>>
+    fun getFolderTreeItems(folderId: String): List<FolderTreeItem>
 
     /**
      * Returns complete list of [BookmarkFolderItem] inside a folder. This method traverses all folders.
@@ -221,7 +208,7 @@ interface SavedSitesRepository {
      * Deletes a [SavedSite]
      * @param savedSite to be deleted
      */
-    fun delete(savedSite: SavedSite)
+    fun delete(savedSite: SavedSite, deleteBookmark: Boolean = false)
 
     /**
      * Updates the content of a [Favorite]
@@ -233,10 +220,12 @@ interface SavedSitesRepository {
      * Updates the content of a [Bookmark]
      * @param savedSite to be updated
      * @param fromFolderId id of the previous bookmark folder
+     * @param updateFavorite specifies whether the bookmark's favorite state has changed, default value is false
      */
     fun updateBookmark(
         bookmark: Bookmark,
         fromFolderId: String,
+        updateFavorite: Boolean = false,
     )
 
     /**
@@ -278,30 +267,6 @@ interface SavedSitesRepository {
     fun replaceFolderContent(folder: BookmarkFolder, oldId: String)
 
     /**
-     * Replaces an existing [Bookmark]
-     * Used when syncing data from the backend
-     * There are scenarios when a duplicate remote bookmark has to be replace the local one
-     * @param bookmark the bookmark to replace locally
-     * @param localId the id of the local bookmark to be replaced
-     */
-    fun replaceBookmark(
-        bookmark: Bookmark,
-        localId: String,
-    )
-
-    /**
-     * Replaces an existing [Favorite]
-     * Used when syncing data from the backend
-     * There are scenarios when a duplicate remote favourite has to be replace the local one
-     * @param favorite the favourite to replace locally
-     * @param localId the local Id to be replaced
-     */
-    fun replaceFavourite(
-        favorite: Favorite,
-        localId: String,
-    )
-
-    /**
      * Returns a [BookmarkFolder] based on its id
      * @param folderId of the [BookmarkFolder]
      * @return [BookmarkFolder] if exists, or null if doesn't
@@ -339,33 +304,13 @@ interface SavedSitesRepository {
     fun lastModified(): Flow<String>
 
     /**
-     * Returns the list of [BookmarkFolder] modified after [since]
-     * @param since timestamp of modification for filtering
-     * @return [List] of [BookmarkFolder]
-     */
-    fun getFoldersModifiedSince(since: String): List<BookmarkFolder>
-
-    /**
-     * Returns the list of [Bookmark] modified after [since]
-     * @param since timestamp of modification for filtering
-     * @return [List] of [Bookmark]
-     */
-    fun getBookmarksModifiedSince(since: String): List<Bookmark>
-
-    /**
      * Deletes all entities with deleted = 1
      * This makes the deletion permanent
      */
     fun pruneDeleted()
 
     /**
-     * Returns list of [String] of [Entity] id modified before [date] in ISO format
-     * @return [List] of [String]
+     * Deletes and re-inserts a folder relation
      */
-    fun getEntitiesModifiedBefore(date: String): List<String>
-
-    /**
-     * Updates entity [entityId] to a modified date of [modifiedSince]
-     */
-    fun updateModifiedSince(entityId: String, modifiedSince: String)
+    fun updateFolderRelation(folderId: String, entities: List<String>)
 }

@@ -21,20 +21,22 @@ import com.duckduckgo.savedsites.api.SavedSitesRepository
 import com.duckduckgo.savedsites.api.models.BookmarkFolder
 import com.duckduckgo.savedsites.api.models.SavedSite
 import com.duckduckgo.savedsites.api.models.SavedSite.Bookmark
-import com.duckduckgo.savedsites.api.models.SavedSite.Favorite
+import com.duckduckgo.savedsites.impl.sync.SyncSavedSitesRepository
 import com.squareup.anvil.annotations.ContributesBinding
+import java.time.OffsetDateTime
 import javax.inject.Inject
 import javax.inject.Named
-import org.threeten.bp.OffsetDateTime
 import timber.log.Timber
 
 @ContributesBinding(AppScope::class)
 @Named("timestampStrategy")
 class SavedSitesTimestampPersister @Inject constructor(
     private val savedSitesRepository: SavedSitesRepository,
+    private val syncSavedSitesRepository: SyncSavedSitesRepository,
 ) : SavedSitesSyncPersisterStrategy {
     override fun processBookmarkFolder(
         folder: BookmarkFolder,
+        children: List<String>,
     ) {
         // if there's a folder with the same id locally we check the conflict resolution
         // if TIMESTAMP -> new timestamp wins
@@ -44,11 +46,11 @@ class SavedSitesTimestampPersister @Inject constructor(
                 Timber.d("Sync-Bookmarks-Persister: remote folder ${folder.id} exists locally but was deleted, deleting locally")
                 savedSitesRepository.delete(localFolder)
             } else {
-                if (folder.modifiedAfter(localFolder.lastModified)) {
-                    Timber.d("Sync-Bookmarks-Persister: folder ${folder.id} modified after local folder, replacing content")
-                    savedSitesRepository.replaceFolderContent(folder, localFolder.id)
-                } else {
+                if (localFolder.modifiedAfter(folder.lastModified)) {
                     Timber.d("Sync-Bookmarks-Persister: folder ${folder.id} modified before local folder, nothing to do")
+                } else {
+                    Timber.d("Sync-Bookmarks-Persister: folder ${folder.id} modified after local folder, replacing content")
+                    syncSavedSitesRepository.replaceBookmarkFolder(folder, children)
                 }
             }
         } else {
@@ -59,6 +61,14 @@ class SavedSitesTimestampPersister @Inject constructor(
                 savedSitesRepository.insert(folder)
             }
         }
+    }
+
+    override fun processFavouritesFolder(
+        favouriteFolder: String,
+        children: List<String>,
+    ) {
+        // process favourites means replacing the current children with the remote
+        syncSavedSitesRepository.replaceFavouriteFolder(favouriteFolder, children)
     }
 
     override fun processBookmark(
@@ -73,11 +83,11 @@ class SavedSitesTimestampPersister @Inject constructor(
                 Timber.d("Sync-Bookmarks-Persister: remote bookmark ${bookmark.id} deleted, deleting local bookmark")
                 savedSitesRepository.delete(storedBookmark)
             } else {
-                if (bookmark.modifiedAfter(storedBookmark.lastModified)) {
-                    Timber.d("Sync-Bookmarks-Persister: bookmark ${bookmark.id} modified after local bookmark, replacing content")
-                    savedSitesRepository.replaceBookmark(bookmark, bookmark.id)
-                } else {
+                if (storedBookmark.modifiedAfter(bookmark.lastModified)) {
                     Timber.d("Sync-Bookmarks-Persister: bookmark ${bookmark.id} modified before local bookmark, nothing to do")
+                } else {
+                    Timber.d("Sync-Bookmarks-Persister: bookmark ${bookmark.id} modified after local bookmark, replacing content")
+                    syncSavedSitesRepository.replaceBookmark(bookmark, bookmark.id)
                 }
             }
         } else {
@@ -89,37 +99,11 @@ class SavedSitesTimestampPersister @Inject constructor(
             }
         }
     }
-
-    override fun processFavourite(
-        favourite: Favorite,
-    ) {
-        val storedFavourite = savedSitesRepository.getFavoriteById(favourite.id)
-        if (storedFavourite != null) {
-            if (favourite.isDeleted()) {
-                Timber.d("Sync-Bookmarks-Persister: remote favourite ${favourite.id} deleted, deleting local favourite")
-                savedSitesRepository.delete(favourite)
-            } else {
-                if (favourite.modifiedAfter(storedFavourite.lastModified)) {
-                    Timber.d("Sync-Bookmarks-Persister: favourite ${favourite.id} modified after local favourite, replacing content")
-                    savedSitesRepository.replaceFavourite(favourite, favourite.id)
-                } else {
-                    Timber.d("Sync-Bookmarks-Persister: favourite ${favourite.id} modified before local favourite, nothing to do")
-                }
-            }
-        } else {
-            if (favourite.isDeleted()) {
-                Timber.d("Sync-Bookmarks-Persister: favourite ${favourite.id} not present locally but was deleted, nothing to do")
-            } else {
-                Timber.d("Sync-Bookmarks-Persister: favourite ${favourite.id} not present locally, inserting")
-                savedSitesRepository.insert(favourite)
-            }
-        }
-    }
 }
 
 fun BookmarkFolder.modifiedAfter(after: String?): Boolean {
     return if (this.lastModified == null) {
-        true
+        false
     } else {
         if (after == null) {
             false
@@ -137,7 +121,7 @@ fun BookmarkFolder.isDeleted(): Boolean {
 
 fun SavedSite.modifiedAfter(after: String?): Boolean {
     return if (this.lastModified == null) {
-        true
+        false
     } else {
         if (after == null) {
             false

@@ -18,17 +18,13 @@ package com.duckduckgo.app.about
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
-import com.duckduckgo.app.CoroutineTestRule
 import com.duckduckgo.app.about.AboutDuckDuckGoViewModel.*
 import com.duckduckgo.app.about.AboutDuckDuckGoViewModel.Companion.MAX_EASTER_EGG_COUNT
 import com.duckduckgo.app.pixels.AppPixelName
-import com.duckduckgo.app.statistics.VariantManager
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
-import com.duckduckgo.networkprotection.api.NetworkProtectionWaitlist
-import com.duckduckgo.networkprotection.api.NetworkProtectionWaitlist.NetPWaitlistState.NotUnlocked
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.runBlocking
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.subscriptions.api.PrivacyProUnifiedFeedback
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,11 +34,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
+import org.mockito.kotlin.any
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
-@OptIn(ExperimentalCoroutinesApi::class)
 internal class AboutDuckDuckGoViewModelTest {
     @get:Rule
     @Suppress("unused")
@@ -57,30 +53,22 @@ internal class AboutDuckDuckGoViewModelTest {
     private lateinit var mockAppBuildConfig: AppBuildConfig
 
     @Mock
-    private lateinit var mockVariantManager: VariantManager
-
-    @Mock
     private lateinit var mockPixel: Pixel
 
     @Mock
-    private lateinit var networkProtectionWaitlist: NetworkProtectionWaitlist
+    private lateinit var privacyProUnifiedFeedback: PrivacyProUnifiedFeedback
 
     @Before
     fun before() {
         MockitoAnnotations.openMocks(this)
 
-        whenever(mockVariantManager.getVariant()).thenReturn(VariantManager.DEFAULT_VARIANT)
         whenever(mockAppBuildConfig.versionName).thenReturn("name")
         whenever(mockAppBuildConfig.versionCode).thenReturn(1)
-        runBlocking {
-            whenever(networkProtectionWaitlist.getState()).thenReturn(NotUnlocked)
-        }
 
         testee = AboutDuckDuckGoViewModel(
-            networkProtectionWaitlist,
             mockAppBuildConfig,
-            mockVariantManager,
             mockPixel,
+            privacyProUnifiedFeedback,
         )
     }
 
@@ -102,6 +90,17 @@ internal class AboutDuckDuckGoViewModelTest {
 
             assertEquals(Command.LaunchBrowserWithLearnMoreUrl, awaitItem())
             verify(mockPixel).fire(AppPixelName.SETTINGS_ABOUT_DDG_LEARN_MORE_PRESSED)
+
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
+    fun whenOnPrivacyProtectionsLinkClickedThenCommandLaunchBrowserWithPrivacyProtectionsUrlIsSent() = runTest {
+        testee.commands().test {
+            testee.onPrivacyProtectionsLinkClicked()
+
+            assertEquals(Command.LaunchBrowserWithPrivacyProtectionsUrl, awaitItem())
 
             cancelAndConsumeRemainingEvents()
         }
@@ -146,7 +145,7 @@ internal class AboutDuckDuckGoViewModelTest {
                 testee.onVersionClicked()
             }
 
-            assertTrue(testee.hasResetNetPEasterEggCounter())
+            assertTrue(testee.hasResetEasterEggCounter())
             verify(mockPixel).fire(AppPixelName.SETTINGS_ABOUT_DDG_VERSION_EASTER_EGG_PRESSED)
 
             cancelAndConsumeRemainingEvents()
@@ -155,6 +154,7 @@ internal class AboutDuckDuckGoViewModelTest {
 
     @Test
     fun whenOnProvideFeedbackClickedThenCommandLaunchFeedbackIsSent() = runTest {
+        whenever(privacyProUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(false)
         testee.commands().test {
             testee.onProvideFeedbackClicked()
 
@@ -166,12 +166,25 @@ internal class AboutDuckDuckGoViewModelTest {
     }
 
     @Test
+    fun whenOnProvideFeedbackClickedAndUnifiedFeedbackEnabledThenCommandLaunchUnifiedFeedbackIsSent() = runTest {
+        whenever(privacyProUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(true)
+        testee.commands().test {
+            testee.onProvideFeedbackClicked()
+
+            assertEquals(Command.LaunchPproUnifiedFeedback, awaitItem())
+            verify(mockPixel).fire(AppPixelName.SETTINGS_ABOUT_DDG_SHARE_FEEDBACK_PRESSED)
+
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
     fun whenResetNetPEasterEggCounterIsCalledThenEasterEggCounterIsZero() = runTest {
         testee.onVersionClicked()
-        assertFalse(testee.hasResetNetPEasterEggCounter())
+        assertFalse(testee.hasResetEasterEggCounter())
 
-        testee.resetNetPEasterEggCounter()
+        testee.resetEasterEggCounter()
 
-        assertTrue(testee.hasResetNetPEasterEggCounter())
+        assertTrue(testee.hasResetEasterEggCounter())
     }
 }

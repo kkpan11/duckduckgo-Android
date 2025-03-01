@@ -31,7 +31,10 @@ kotlin {
 }
 
 dependencies {
+    api project(":experiments-api")
+    api project(":feature-toggles-internal-api")
+
     implementation Google.dagger
-    implementation Kotlin.stdlib.jdk7
+    implementation "org.apache.commons:commons-math3:_"
 }
 

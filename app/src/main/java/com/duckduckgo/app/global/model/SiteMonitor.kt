@@ -20,17 +20,22 @@ import android.net.Uri
 import android.net.http.SslCertificate
 import androidx.annotation.WorkerThread
 import androidx.core.net.toUri
-import com.duckduckgo.app.global.UriString
-import com.duckduckgo.app.global.isHttps
+import com.duckduckgo.app.browser.UriString
+import com.duckduckgo.app.browser.certificates.BypassedSSLCertificatesRepository
+import com.duckduckgo.app.global.model.PrivacyShield.MALICIOUS
 import com.duckduckgo.app.global.model.PrivacyShield.PROTECTED
 import com.duckduckgo.app.global.model.PrivacyShield.UNKNOWN
 import com.duckduckgo.app.global.model.PrivacyShield.UNPROTECTED
-import com.duckduckgo.app.privacy.db.UserAllowListDao
+import com.duckduckgo.app.privacy.db.UserAllowListRepository
 import com.duckduckgo.app.privacy.model.HttpsStatus
 import com.duckduckgo.app.surrogates.SurrogateResponse
 import com.duckduckgo.app.trackerdetection.model.Entity
 import com.duckduckgo.app.trackerdetection.model.TrackerStatus
 import com.duckduckgo.app.trackerdetection.model.TrackingEvent
+import com.duckduckgo.browser.api.brokensite.BrokenSiteContext
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.isHttps
+import com.duckduckgo.duckplayer.api.DuckPlayer
 import com.duckduckgo.privacy.config.api.ContentBlocking
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
@@ -41,9 +46,14 @@ class SiteMonitor(
     url: String,
     override var title: String?,
     override var upgradedHttps: Boolean = false,
-    private val userAllowListDao: UserAllowListDao,
+    externalLaunch: Boolean,
+    private val userAllowListRepository: UserAllowListRepository,
     private val contentBlocking: ContentBlocking,
-    private val appCoroutineScope: CoroutineScope,
+    private val bypassedSSLCertificatesRepository: BypassedSSLCertificatesRepository,
+    appCoroutineScope: CoroutineScope,
+    dispatcherProvider: DispatcherProvider,
+    brokenSiteContext: BrokenSiteContext,
+    private val duckPlayer: DuckPlayer,
 ) : Site {
 
     override var url: String = url
@@ -66,6 +76,10 @@ class SiteMonitor(
         get() = httpsStatus()
 
     override var hasHttpResources = false
+
+    override var sslError: Boolean = false
+
+    override var isExternalLaunch = externalLaunch
 
     override var entity: Entity? = null
 
@@ -108,7 +122,7 @@ class SiteMonitor(
 
     init {
         // httpsAutoUpgrade is not supported yet; for now, keep it equal to isHttps and don't penalise sites
-        appCoroutineScope.launch {
+        appCoroutineScope.launch(dispatcherProvider.io()) {
             domain?.let { userAllowList = isAllowListed(it) }
         }
     }
@@ -129,6 +143,11 @@ class SiteMonitor(
         return HttpsStatus.NONE
     }
 
+    override fun resetErrors() {
+        errorCodeEvents.clear()
+        httpErrorCodeEvents.clear()
+    }
+
     override fun surrogateDetected(surrogate: SurrogateResponse) {
         surrogates.add(surrogate)
     }
@@ -147,12 +166,20 @@ class SiteMonitor(
 
     override fun privacyProtection(): PrivacyShield {
         userAllowList = domain?.let { isAllowListed(it) } ?: false
+        if (duckPlayer.isDuckPlayerUri(url)) return UNKNOWN
         if (userAllowList || !isHttps) return UNPROTECTED
+        if (maliciousSiteStatus != null) return MALICIOUS
 
         if (!fullSiteDetailsAvailable) {
             Timber.i("Shield: not fullSiteDetailsAvailable for $domain")
             Timber.i("Shield: entity is ${entity?.name} for $domain")
             return UNKNOWN
+        }
+
+        sslError = isSslCertificateBypassed(url)
+        if (sslError) {
+            Timber.i("Shield: site has certificate error")
+            return UNPROTECTED
         }
 
         Timber.i("Shield: isMajor ${entity?.isMajor} prev ${entity?.prevalence} for $domain")
@@ -161,7 +188,11 @@ class SiteMonitor(
 
     @WorkerThread
     private fun isAllowListed(domain: String): Boolean {
-        return userAllowListDao.contains(domain) || contentBlocking.isAnException(domain)
+        return userAllowListRepository.isDomainInUserAllowList(domain) || contentBlocking.isAnException(domain)
+    }
+
+    private fun isSslCertificateBypassed(domain: String): Boolean {
+        return bypassedSSLCertificatesRepository.contains(domain)
     }
 
     override var urlParametersRemoved: Boolean = false
@@ -175,6 +206,12 @@ class SiteMonitor(
     override var consentCosmeticHide: Boolean? = false
 
     override var isDesktopMode: Boolean = false
+
+    override var nextUrl: String = url
+
+    override val realBrokenSiteContext: BrokenSiteContext = brokenSiteContext
+
+    override var maliciousSiteStatus: MaliciousSiteStatus? = null
 
     companion object {
         private val specialDomainTypes = setOf(

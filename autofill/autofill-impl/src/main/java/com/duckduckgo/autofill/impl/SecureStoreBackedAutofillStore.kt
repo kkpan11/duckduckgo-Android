@@ -16,23 +16,28 @@
 
 package com.duckduckgo.autofill.impl
 
-import com.duckduckgo.app.global.DefaultDispatcherProvider
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.autofill.api.AutofillFeature
 import com.duckduckgo.autofill.api.CredentialUpdateExistingCredentialsDialog.CredentialUpdateType
 import com.duckduckgo.autofill.api.CredentialUpdateExistingCredentialsDialog.CredentialUpdateType.Password
 import com.duckduckgo.autofill.api.CredentialUpdateExistingCredentialsDialog.CredentialUpdateType.Username
+import com.duckduckgo.autofill.api.ExistingCredentialMatchDetector.ContainsCredentialsResult
+import com.duckduckgo.autofill.api.ExistingCredentialMatchDetector.ContainsCredentialsResult.NoMatch
+import com.duckduckgo.autofill.api.ExistingCredentialMatchDetector.ContainsCredentialsResult.UsernameMatchDifferentPassword
+import com.duckduckgo.autofill.api.ExistingCredentialMatchDetector.ContainsCredentialsResult.UsernameMatchMissingPassword
 import com.duckduckgo.autofill.api.domain.app.LoginCredentials
-import com.duckduckgo.autofill.api.store.AutofillStore
-import com.duckduckgo.autofill.api.store.AutofillStore.ContainsCredentialsResult
-import com.duckduckgo.autofill.api.store.AutofillStore.ContainsCredentialsResult.NoMatch
+import com.duckduckgo.autofill.impl.securestorage.SecureStorage
+import com.duckduckgo.autofill.impl.securestorage.WebsiteLoginDetails
+import com.duckduckgo.autofill.impl.securestorage.WebsiteLoginDetailsWithCredentials
+import com.duckduckgo.autofill.impl.store.InternalAutofillStore
+import com.duckduckgo.autofill.impl.ui.credential.saving.declines.AutofillDeclineStore
 import com.duckduckgo.autofill.impl.urlmatcher.AutofillUrlMatcher
 import com.duckduckgo.autofill.store.AutofillPrefsStore
 import com.duckduckgo.autofill.store.LastUpdatedTimeProvider
 import com.duckduckgo.autofill.sync.SyncCredentialsListener
+import com.duckduckgo.common.utils.DefaultDispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.di.scopes.AppScope
-import com.duckduckgo.securestorage.api.SecureStorage
-import com.duckduckgo.securestorage.api.WebsiteLoginDetails
-import com.duckduckgo.securestorage.api.WebsiteLoginDetailsWithCredentials
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
 import javax.inject.Inject
@@ -43,7 +48,8 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 @SingleInstanceIn(AppScope::class)
-@ContributesBinding(AppScope::class)
+@ContributesBinding(AppScope::class, AutofillDeclineStore::class)
+@ContributesBinding(AppScope::class, InternalAutofillStore::class)
 class SecureStoreBackedAutofillStore @Inject constructor(
     private val secureStorage: SecureStorage,
     private val lastUpdatedTimeProvider: LastUpdatedTimeProvider,
@@ -51,10 +57,15 @@ class SecureStoreBackedAutofillStore @Inject constructor(
     private val dispatcherProvider: DispatcherProvider = DefaultDispatcherProvider(),
     private val autofillUrlMatcher: AutofillUrlMatcher,
     private val syncCredentialsListener: SyncCredentialsListener,
-) : AutofillStore {
+    private val autofillFeature: AutofillFeature,
+    passwordStoreEventListenersPlugins: PluginPoint<PasswordStoreEventListener>,
+) : InternalAutofillStore, AutofillDeclineStore {
 
-    override val autofillAvailable: Boolean
-        get() = secureStorage.canAccessSecureStorage()
+    private val passwordStoreEventListeners = passwordStoreEventListenersPlugins.getPlugins()
+
+    override suspend fun autofillAvailable(): Boolean {
+        return secureStorage.canAccessSecureStorage()
+    }
 
     override var autofillEnabled: Boolean
         get() = autofillPrefsStore.isEnabled
@@ -71,18 +82,20 @@ class SecureStoreBackedAutofillStore @Inject constructor(
     override var autofillDeclineCount: Int
         get() = autofillPrefsStore.autofillDeclineCount
         set(value) {
+            Timber.i("Autofill: Setting autofillDeclineCount to %d", value)
             autofillPrefsStore.autofillDeclineCount = value
         }
 
     override var monitorDeclineCounts: Boolean
         get() = autofillPrefsStore.monitorDeclineCounts
         set(value) {
+            Timber.i("Autofill: Setting monitorDeclineCounts to %b", value)
             autofillPrefsStore.monitorDeclineCounts = value
         }
 
     override suspend fun getCredentials(rawUrl: String): List<LoginCredentials> {
         return withContext(dispatcherProvider.io()) {
-            return@withContext if (autofillEnabled && autofillAvailable) {
+            return@withContext if (autofillEnabled && autofillAvailable()) {
                 Timber.i("Querying secure store for stored credentials. rawUrl: %s", rawUrl)
 
                 val visitedSite = autofillUrlMatcher.extractUrlPartsForAutofill(rawUrl)
@@ -130,6 +143,9 @@ class SecureStoreBackedAutofillStore @Inject constructor(
         return withContext(dispatcherProvider.io()) {
             secureStorage.addWebsiteLoginDetailsWithCredentials(webSiteLoginCredentials)?.toLoginCredentials().also {
                 syncCredentialsListener.onCredentialAdded(it?.id!!)
+                it.id?.let { newCredentialId ->
+                    passwordStoreEventListeners.forEach { listener -> listener.onCredentialAdded(newCredentialId) }
+                }
             }
         }
     }
@@ -139,7 +155,13 @@ class SecureStoreBackedAutofillStore @Inject constructor(
         credentials: LoginCredentials,
         updateType: CredentialUpdateType,
     ): LoginCredentials? {
-        val url = autofillUrlMatcher.cleanRawUrl(rawUrl)
+        Timber.v("Updating credentials. Update type: %s. for %s", updateType, rawUrl)
+
+        val url = getUrlToCompare(rawUrl)
+        if (url == null) {
+            Timber.w("Cannot update credentials as URL to lookup is null")
+            return null
+        }
 
         val filter = when (updateType) {
             Username -> filterMatchingPassword(credentials)
@@ -147,7 +169,10 @@ class SecureStoreBackedAutofillStore @Inject constructor(
             else -> return null
         }
 
-        val matchingCredentials = secureStorage.websiteLoginDetailsWithCredentialsForDomain(url).firstOrNull()?.filter(filter)
+        val matchingCredentials = secureStorage.websiteLoginDetailsWithCredentialsForDomain(url)
+            .firstOrNull()
+            ?.filter(filter)
+
         if (matchingCredentials.isNullOrEmpty()) {
             Timber.w("Cannot update credentials as no credentials were found for %s", url)
             return null
@@ -193,14 +218,27 @@ class SecureStoreBackedAutofillStore @Inject constructor(
         return existingCredential?.toLoginCredentials()
     }
 
-    override suspend fun updateCredentials(credentials: LoginCredentials): LoginCredentials? {
+    override suspend fun deleteAllCredentials(): List<LoginCredentials> {
+        val savedCredentials = secureStorage.websiteLoginDetailsWithCredentials().firstOrNull() ?: emptyList()
+        val idsToDelete = savedCredentials.mapNotNull { it.details.id }
+        secureStorage.deleteWebSiteLoginDetailsWithCredentials(idsToDelete)
+        Timber.i("Deleted %d credentials", idsToDelete.size)
+        syncCredentialsListener.onCredentialRemoved(idsToDelete)
+        return savedCredentials.map { it.toLoginCredentials() }
+    }
+
+    override suspend fun updateCredentials(
+        credentials: LoginCredentials,
+        refreshLastUpdatedTimestamp: Boolean,
+    ): LoginCredentials? {
         val cleanedDomain: String? = credentials.domain?.let {
             autofillUrlMatcher.cleanRawUrl(it)
         }
 
+        val lastUpdated = if (refreshLastUpdatedTimestamp) lastUpdatedTimeProvider.getInMillis() else credentials.lastUpdatedMillis
+
         return secureStorage.updateWebsiteLoginDetailsWithCredentials(
-            credentials.copy(lastUpdatedMillis = lastUpdatedTimeProvider.getInMillis(), domain = cleanedDomain)
-                .toWebsiteLoginCredentials(),
+            credentials.copy(lastUpdatedMillis = lastUpdated, domain = cleanedDomain).toWebsiteLoginCredentials(),
         )?.toLoginCredentials()?.also {
             syncCredentialsListener.onCredentialUpdated(it.id!!)
         }
@@ -211,11 +249,13 @@ class SecureStoreBackedAutofillStore @Inject constructor(
         username: String?,
         password: String?,
     ): ContainsCredentialsResult {
-        val url = autofillUrlMatcher.cleanRawUrl(rawUrl)
-        val credentials = secureStorage.websiteLoginDetailsWithCredentialsForDomain(url).firstOrNull() ?: return NoMatch
+        val urlToCompare = getUrlToCompare(rawUrl) ?: return NoMatch
+
+        val credentials = secureStorage.websiteLoginDetailsWithCredentialsForDomain(urlToCompare).firstOrNull() ?: return NoMatch
 
         var exactMatchFound = false
         var usernameMatchFound = false
+        var usernameMatchDifferentPasswordFound = false
         var urlMatch = false
         var missingUsername = false
 
@@ -228,6 +268,8 @@ class SecureStoreBackedAutofillStore @Inject constructor(
                 usernameMatchFound = true
                 if (it.password == password) {
                     exactMatchFound = true
+                } else if (!it.password.isNullOrEmpty()) {
+                    usernameMatchDifferentPasswordFound = true
                 }
             }
         }
@@ -235,7 +277,7 @@ class SecureStoreBackedAutofillStore @Inject constructor(
         val matchType = if (exactMatchFound) {
             ContainsCredentialsResult.ExactMatch
         } else if (usernameMatchFound) {
-            ContainsCredentialsResult.UsernameMatch
+            if (usernameMatchDifferentPasswordFound) UsernameMatchDifferentPassword else UsernameMatchMissingPassword
         } else if (missingUsername) {
             ContainsCredentialsResult.UsernameMissing
         } else if (urlMatch) {
@@ -248,23 +290,52 @@ class SecureStoreBackedAutofillStore @Inject constructor(
         return matchType
     }
 
-    override suspend fun reinsertCredentials(credentials: LoginCredentials) {
-        val loginDetails = WebsiteLoginDetails(
-            id = credentials.id,
-            domain = credentials.domain,
-            username = credentials.username,
-            domainTitle = credentials.domainTitle,
-            lastUpdatedMillis = credentials.lastUpdatedMillis,
-        )
-        val webSiteLoginCredentials = WebsiteLoginDetailsWithCredentials(
-            details = loginDetails,
-            password = credentials.password,
-            notes = credentials.notes,
-        )
+    private fun getUrlToCompare(rawUrl: String): String? {
+        return if (autofillFeature.deepDomainComparisonsOnExistingCredentialsChecks().isEnabled()) {
+            autofillUrlMatcher.extractUrlPartsForAutofill(rawUrl).eTldPlus1
+        } else {
+            autofillUrlMatcher.cleanRawUrl(rawUrl)
+        }
+    }
 
+    private fun LoginCredentials.prepareForBulkInsertion(): WebsiteLoginDetailsWithCredentials {
+        val loginDetails = WebsiteLoginDetails(
+            id = id,
+            domain = domain,
+            username = username,
+            domainTitle = domainTitle,
+            lastUpdatedMillis = lastUpdatedMillis,
+        )
+        return WebsiteLoginDetailsWithCredentials(
+            details = loginDetails,
+            password = password,
+            notes = notes,
+        )
+    }
+
+    override suspend fun reinsertCredentials(credentials: LoginCredentials) {
         withContext(dispatcherProvider.io()) {
-            secureStorage.addWebsiteLoginDetailsWithCredentials(webSiteLoginCredentials)?.also {
+            secureStorage.addWebsiteLoginDetailsWithCredentials(credentials.prepareForBulkInsertion())?.also {
                 syncCredentialsListener.onCredentialAdded(it.details.id!!)
+            }
+        }
+    }
+
+    override suspend fun reinsertCredentials(credentials: List<LoginCredentials>) {
+        withContext(dispatcherProvider.io()) {
+            val mappedCredentials = credentials.map { it.prepareForBulkInsertion() }
+            secureStorage.addWebsiteLoginDetailsWithCredentials(mappedCredentials).also {
+                val ids = mappedCredentials.mapNotNull { it.details.id }
+                syncCredentialsListener.onCredentialsAdded(ids)
+            }
+        }
+    }
+
+    override suspend fun bulkInsert(credentials: List<LoginCredentials>): List<Long> {
+        return withContext(dispatcherProvider.io()) {
+            val mappedCredentials = credentials.map { it.prepareForBulkInsertion() }
+            return@withContext secureStorage.addWebsiteLoginDetailsWithCredentials(mappedCredentials).also {
+                syncCredentialsListener.onCredentialsAdded(it)
             }
         }
     }
@@ -296,6 +367,7 @@ class SecureStoreBackedAutofillStore @Inject constructor(
             domainTitle = details.domainTitle,
             notes = notes,
             lastUpdatedMillis = details.lastUpdatedMillis,
+            lastUsedMillis = details.lastUsedInMillis,
         )
     }
 
@@ -307,6 +379,7 @@ class SecureStoreBackedAutofillStore @Inject constructor(
                 id = id,
                 domainTitle = domainTitle,
                 lastUpdatedMillis = lastUpdatedMillis,
+                lastUsedInMillis = lastUsedMillis,
             ),
             password = password,
             notes = notes,

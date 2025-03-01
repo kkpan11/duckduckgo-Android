@@ -1,15 +1,14 @@
 package com.duckduckgo.autofill.impl.email.incontext.availability
 
-import com.duckduckgo.app.CoroutineTestRule
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.autofill.api.InternalTestUserChecker
 import com.duckduckgo.autofill.impl.AutofillGlobalCapabilityChecker
 import com.duckduckgo.autofill.impl.email.incontext.EmailProtectionInContextSignupFeature
 import com.duckduckgo.autofill.impl.email.remoteconfig.EmailProtectionInContextExceptions
-import com.duckduckgo.feature.toggles.api.Toggle
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.feature.toggles.api.FakeFeatureToggleFactory
 import com.duckduckgo.feature.toggles.api.Toggle.State
 import java.util.*
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
@@ -21,14 +20,13 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
-@ExperimentalCoroutinesApi
 class RealEmailProtectionInContextAvailabilityRulesTest {
 
     @get:Rule
     val coroutineTestRule: CoroutineTestRule = CoroutineTestRule()
 
     private val appBuildConfig: AppBuildConfig = mock()
-    private val emailProtectionInContextSignupFeature = EmailProtectionInContextSignupTestFeature()
+    private val emailProtectionInContextSignupFeature = FakeFeatureToggleFactory.create(EmailProtectionInContextSignupFeature::class.java)
     private val internalTestUserChecker: InternalTestUserChecker = mock()
     private val exceptions: EmailProtectionInContextExceptions = mock()
     private val autofillGlobalCapabilityChecker: AutofillGlobalCapabilityChecker = mock()
@@ -51,7 +49,7 @@ class RealEmailProtectionInContextAvailabilityRulesTest {
             configureEnglishLocale()
             configureAsRecentInstall()
 
-            emailProtectionInContextSignupFeature.enabled = true
+            emailProtectionInContextSignupFeature.self().setRawStoredState(State(enable = true))
             whenever(exceptions.isAnException(any())).thenReturn(false)
             whenever(exceptions.isAnException(DISALLOWED_URL)).thenReturn(true)
             whenever(internalTestUserChecker.isInternalTestUser).thenReturn(false)
@@ -85,7 +83,7 @@ class RealEmailProtectionInContextAvailabilityRulesTest {
 
     @Test
     fun whenFeatureDisabledInRemoteConfigThenNotPermitted() = runTest {
-        emailProtectionInContextSignupFeature.enabled = false
+        emailProtectionInContextSignupFeature.self().setRawStoredState(State(enable = false))
         assertFalse(testee.permittedToShow(ALLOWED_URL))
     }
 
@@ -107,18 +105,6 @@ class RealEmailProtectionInContextAvailabilityRulesTest {
 
     private suspend fun configureAsNotRecentInstall() {
         whenever(recentInstallChecker.isRecentInstall()).thenReturn(false)
-    }
-
-    private class EmailProtectionInContextSignupTestFeature : EmailProtectionInContextSignupFeature {
-        var enabled = true
-
-        override fun self(): Toggle = TestToggle(enabled)
-    }
-
-    private open class TestToggle(val enabled: Boolean) : Toggle {
-        override fun getRawStoredState(): State? = null
-        override fun setEnabled(state: State) {}
-        override fun isEnabled() = enabled
     }
 
     companion object {

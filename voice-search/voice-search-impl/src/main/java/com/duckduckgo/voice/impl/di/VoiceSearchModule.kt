@@ -19,12 +19,12 @@ package com.duckduckgo.voice.impl.di
 import android.content.Context
 import androidx.room.Room
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.app.di.IsMainProcess
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.voice.api.VoiceSearchStatusListener
 import com.duckduckgo.voice.impl.remoteconfig.RealVoiceSearchFeatureRepository
 import com.duckduckgo.voice.impl.remoteconfig.VoiceSearchFeatureRepository
-import com.duckduckgo.voice.impl.remoteconfig.VoiceSearchSetting
 import com.duckduckgo.voice.store.ALL_MIGRATIONS
 import com.duckduckgo.voice.store.RealVoiceSearchRepository
 import com.duckduckgo.voice.store.SharedPreferencesVoiceSearchDataStore
@@ -32,9 +32,6 @@ import com.duckduckgo.voice.store.VoiceSearchDataStore
 import com.duckduckgo.voice.store.VoiceSearchDatabase
 import com.duckduckgo.voice.store.VoiceSearchRepository
 import com.squareup.anvil.annotations.ContributesTo
-import com.squareup.moshi.JsonAdapter
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.SingleInstanceIn
@@ -68,16 +65,10 @@ object VoiceSearchModule {
     @Provides
     fun provideVoiceSearchFeatureRepository(
         database: VoiceSearchDatabase,
-        @AppCoroutineScope coroutineScope: CoroutineScope,
+        @AppCoroutineScope appCoroutineScope: CoroutineScope,
         dispatcherProvider: DispatcherProvider,
+        @IsMainProcess isMainProcess: Boolean,
     ): VoiceSearchFeatureRepository {
-        return RealVoiceSearchFeatureRepository(database, coroutineScope, dispatcherProvider)
-    }
-
-    @SingleInstanceIn(AppScope::class)
-    @Provides
-    fun provideVoiceSearchJsonAdapter(): JsonAdapter<VoiceSearchSetting> {
-        val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-        return moshi.adapter(VoiceSearchSetting::class.java)
+        return RealVoiceSearchFeatureRepository(database, appCoroutineScope, dispatcherProvider, isMainProcess)
     }
 }

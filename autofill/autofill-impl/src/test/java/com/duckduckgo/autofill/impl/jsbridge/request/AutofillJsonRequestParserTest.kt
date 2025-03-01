@@ -16,18 +16,22 @@
 
 package com.duckduckgo.autofill.impl.jsbridge.request
 
-import com.duckduckgo.app.FileUtilities
-import com.squareup.moshi.Moshi
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.duckduckgo.autofill.impl.jsbridge.request.FormSubmissionTriggerType.FORM_SUBMISSION
+import com.duckduckgo.autofill.impl.jsbridge.request.FormSubmissionTriggerType.PARTIAL_SAVE
+import com.duckduckgo.autofill.impl.jsbridge.request.FormSubmissionTriggerType.UNKNOWN
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.common.test.FileUtilities
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
 
-@ExperimentalCoroutinesApi
 class AutofillJsonRequestParserTest {
 
-    private val moshi = Moshi.Builder().build()
-    private val testee = AutofillJsonRequestParser(moshi)
+    @get:Rule
+    val coroutineTestRule: CoroutineTestRule = CoroutineTestRule()
+
+    private val testee = AutofillJsonRequestParser(dispatchers = coroutineTestRule.testDispatcherProvider)
 
     @Test
     fun whenUsernameAndPasswordBothProvidedThenBothInResponse() = runTest {
@@ -72,15 +76,59 @@ class AutofillJsonRequestParserTest {
     }
 
     @Test
+    fun whenPasswordMissingAndIsPartialSaveThenUsernamePopulatedAndPartialSaveFlagSet() = runTest {
+        val parsed = "storeFormData_passwordMissing_partialSave".parseStoreFormDataJson()
+        assertEquals("dax@duck.com", parsed.credentials!!.username)
+        assertNull(parsed.credentials!!.password)
+        assertEquals(PARTIAL_SAVE, parsed.trigger)
+    }
+
+    @Test
     fun whenTopLevelCredentialsObjectMissingThenParsesWithoutError() = runTest {
         val parsed = "storeFormData_topLevelDataMissing".parseStoreFormDataJson()
         assertNull(parsed.credentials)
     }
 
+    @Test
+    fun whenStoreFormDataRequestIsEmptyThenExceptionThrown() = runTest {
+        val result = testee.parseStoreFormDataRequest("")
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun whenStoreFormDataRequestIsMalformedJSONThenExceptionThrown() = runTest {
+        val result = testee.parseStoreFormDataRequest("invalid json")
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun whenStoreFormDataRequestMissingTriggerThenIsUnknown() = runTest {
+        val parsed = "storeFormData_trigger_missing".parseStoreFormDataJson()
+        assertEquals(UNKNOWN, parsed.trigger)
+    }
+
+    @Test
+    fun whenStoreFormDataRequestUnknownTriggerThenIsUnknown() = runTest {
+        val parsed = "storeFormData_trigger_unknown".parseStoreFormDataJson()
+        assertEquals(UNKNOWN, parsed.trigger)
+    }
+
+    @Test
+    fun whenStoreFormDataRequestHasFormSubmissionTriggerThenIsPopulated() = runTest {
+        val parsed = "storeFormData_trigger_formSubmission".parseStoreFormDataJson()
+        assertEquals(FORM_SUBMISSION, parsed.trigger)
+    }
+
+    @Test
+    fun whenStoreFormDataRequestHasPartialSaveTriggerThenIsPopulated() = runTest {
+        val parsed = "storeFormData_trigger_partialSave".parseStoreFormDataJson()
+        assertEquals(PARTIAL_SAVE, parsed.trigger)
+    }
+
     private suspend fun String.parseStoreFormDataJson(): AutofillStoreFormDataRequest {
         val json = this.loadJsonFile()
         assertNotNull("Failed to load specified JSON file: $this")
-        return testee.parseStoreFormDataRequest(json)
+        return testee.parseStoreFormDataRequest(json).getOrThrow()
     }
 
     private fun String.loadJsonFile(): String {

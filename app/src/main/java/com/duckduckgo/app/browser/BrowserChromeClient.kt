@@ -17,24 +17,31 @@
 package com.duckduckgo.app.browser
 
 import android.graphics.Bitmap
+import android.graphics.Bitmap.Config.ARGB_8888
+import android.graphics.Color
 import android.net.Uri
 import android.os.Message
 import android.view.View
-import android.webkit.*
+import android.webkit.GeolocationPermissions
+import android.webkit.JsPromptResult
+import android.webkit.JsResult
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebView
 import com.duckduckgo.app.browser.navigation.safeCopyBackForwardList
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.DefaultDispatcherProvider
-import com.duckduckgo.app.global.DispatcherProvider
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
-import com.duckduckgo.privacy.config.api.Drm
+import com.duckduckgo.common.utils.DefaultDispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.site.permissions.api.SitePermissionsManager
+import com.duckduckgo.site.permissions.api.SitePermissionsManager.LocationPermissionRequest
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class BrowserChromeClient @Inject constructor(
-    private val drm: Drm,
     private val appBuildConfig: AppBuildConfig,
     @AppCoroutineScope private val appCoroutineScope: CoroutineScope,
     private val coroutineDispatcher: DispatcherProvider = DefaultDispatcherProvider(),
@@ -138,20 +145,24 @@ class BrowserChromeClient @Inject constructor(
     }
 
     override fun onPermissionRequest(request: PermissionRequest) {
-        if (request.resources.contains(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID)) {
-            if (drm.isDrmAllowedForUrl(request.origin.toString())) {
-                request.grant(arrayOf(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID))
-            } else {
-                request.deny()
+        Timber.d("Permissions: permission requested ${request.resources.asList()}")
+        webViewClientListener?.getCurrentTabId()?.let { tabId ->
+            appCoroutineScope.launch(coroutineDispatcher.io()) {
+                val permissionsAllowedToAsk = sitePermissionsManager.getSitePermissions(tabId, request)
+                if (permissionsAllowedToAsk.userHandled.isNotEmpty()) {
+                    Timber.d("Permissions: permission requested not user handled")
+                    webViewClientListener?.onSitePermissionRequested(request, permissionsAllowedToAsk)
+                }
             }
         }
+    }
 
-        appCoroutineScope.launch(coroutineDispatcher.io()) {
-            val permissionsAllowedToAsk = sitePermissionsManager.getSitePermissionsAllowedToAsk(request.origin.toString(), request.resources)
-            if (permissionsAllowedToAsk.isNotEmpty()) {
-                webViewClientListener?.onSitePermissionRequested(request, permissionsAllowedToAsk)
-            }
-        }
+    override fun onGeolocationPermissionsShowPrompt(
+        origin: String,
+        callback: GeolocationPermissions.Callback,
+    ) {
+        Timber.d("Permissions: location permission requested $origin")
+        onPermissionRequest(LocationPermissionRequest(origin, callback))
     }
 
     override fun onCloseWindow(window: WebView?) {
@@ -208,10 +219,7 @@ class BrowserChromeClient @Inject constructor(
         return true
     }
 
-    override fun onGeolocationPermissionsShowPrompt(
-        origin: String,
-        callback: GeolocationPermissions.Callback,
-    ) {
-        webViewClientListener?.onSiteLocationPermissionRequested(origin, callback)
+    override fun getDefaultVideoPoster(): Bitmap {
+        return Bitmap.createBitmap(intArrayOf(Color.TRANSPARENT), 1, 1, ARGB_8888)
     }
 }

@@ -24,10 +24,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.*
 import androidx.work.impl.utils.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
-import com.duckduckgo.app.CoroutineTestRule
-import com.duckduckgo.app.global.plugins.PluginPoint
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.mobile.android.app.tracking.AppTrackingProtection
-import com.duckduckgo.mobile.android.vpn.R
 import com.duckduckgo.mobile.android.vpn.feature.removal.VpnFeatureRemover
 import com.duckduckgo.mobile.android.vpn.service.VpnReminderNotificationContentPlugin
 import com.duckduckgo.mobile.android.vpn.service.VpnReminderNotificationContentPlugin.NotificationContent
@@ -41,7 +40,6 @@ import com.duckduckgo.mobile.android.vpn.service.notification.getHighestPriority
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason.REVOKED
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason.SELF_STOP
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.*
 import org.junit.runner.RunWith
@@ -51,11 +49,9 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 
-@ExperimentalCoroutinesApi
 @RunWith(AndroidJUnit4::class)
 class AppTPReminderNotificationSchedulerTest {
 
-    @ExperimentalCoroutinesApi
     @get:Rule
     var coroutinesTestRule = CoroutineTestRule()
 
@@ -145,6 +141,21 @@ class AppTPReminderNotificationSchedulerTest {
     }
 
     @Test
+    fun whenVPNManuallyStopsDueToSnoozeThenDailyReminderIsNotEnqueued() = runTest {
+        whenever(vpnFeatureRemover.isFeatureRemoved()).thenReturn(false)
+        assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
+        whenever(appTrackingProtection.isEnabled()).thenReturn(true)
+        whenever(appTrackingProtection.isOnboarded()).thenReturn(true)
+
+        testee.onVpnStarted(coroutinesTestRule.testScope)
+
+        whenever(appTrackingProtection.isEnabled()).thenReturn(false)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP(1234L))
+
+        assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
+    }
+
+    @Test
     fun whenVPNManuallyStopsThenDailyReminderIsEnqueued() = runTest {
         whenever(vpnFeatureRemover.isFeatureRemoved()).thenReturn(false)
         assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
@@ -154,7 +165,7 @@ class AppTPReminderNotificationSchedulerTest {
         testee.onVpnStarted(coroutinesTestRule.testScope)
 
         whenever(appTrackingProtection.isEnabled()).thenReturn(false)
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         assertWorkersAreEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
     }
@@ -167,7 +178,7 @@ class AppTPReminderNotificationSchedulerTest {
 
         assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
 
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
     }
@@ -178,7 +189,7 @@ class AppTPReminderNotificationSchedulerTest {
 
         assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
 
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
     }
@@ -189,7 +200,7 @@ class AppTPReminderNotificationSchedulerTest {
         enqueueDailyReminderNotificationWorker()
         assertWorkersAreEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
 
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         assertWorkersAreEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_DAILY_TAG)
     }
@@ -197,7 +208,7 @@ class AppTPReminderNotificationSchedulerTest {
     @Test
     fun whenVPNManuallyStopsThenUndesiredReminderIsNotScheduled() = runTest {
         whenever(vpnFeatureRemover.isFeatureRemoved()).thenReturn(false)
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_UNDESIRED_TAG)
     }
@@ -213,7 +224,7 @@ class AppTPReminderNotificationSchedulerTest {
         testee.onVpnStarted(coroutinesTestRule.testScope)
 
         whenever(appTrackingProtection.isEnabled()).thenReturn(false)
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         assertWorkersAreNotEnqueued(VpnReminderNotificationWorker.WORKER_VPN_REMINDER_UNDESIRED_TAG)
     }
@@ -224,7 +235,7 @@ class AppTPReminderNotificationSchedulerTest {
         whenever(vpnFeatureRemover.isFeatureRemoved()).thenReturn(false)
         whenever(mockPluginPoint.getHighestPriorityPluginForType(DISABLED)).thenReturn(null)
 
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         verifyNoInteractions(vpnReminderNotificationBuilder)
     }
@@ -237,7 +248,7 @@ class AppTPReminderNotificationSchedulerTest {
         whenever(appTrackingProtection.isOnboarded()).thenReturn(true)
         testee.onVpnStarted(coroutinesTestRule.testScope)
 
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         verify(vpnReminderNotificationBuilder).buildReminderNotification(fakeDisabledPlugin.getContent())
     }
@@ -250,7 +261,7 @@ class AppTPReminderNotificationSchedulerTest {
         whenever(appTrackingProtection.isOnboarded()).thenReturn(false)
         testee.onVpnStarted(coroutinesTestRule.testScope)
 
-        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP)
+        testee.onVpnStopped(coroutinesTestRule.testScope, SELF_STOP())
 
         verifyNoInteractions(vpnReminderNotificationBuilder)
     }
@@ -421,7 +432,7 @@ class AppTPReminderNotificationSchedulerTest {
         override fun getContent(): NotificationContent = NotificationContent(
             isSilent = false,
             shouldAutoCancel = false,
-            customViewLayout = R.layout.notification_device_shield_revoked,
+            title = "",
             onNotificationPressIntent = null,
             notificationAction = emptyList(),
         )
@@ -434,7 +445,7 @@ class AppTPReminderNotificationSchedulerTest {
         override fun getContent(): NotificationContent = NotificationContent(
             isSilent = false,
             shouldAutoCancel = false,
-            customViewLayout = R.layout.notification_device_shield_disabled,
+            title = "",
             onNotificationPressIntent = null,
             notificationAction = emptyList(),
         )

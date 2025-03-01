@@ -26,6 +26,10 @@ android {
     anvil {
         generateDaggerFactories = true // default is false
     }
+    lintOptions {
+        baseline file("lint-baseline.xml")
+    }
+    namespace 'com.duckduckgo.privacy.config.internal'
 }
 
 dependencies {
@@ -38,8 +42,6 @@ dependencies {
     implementation project(path: ':common-utils')
     implementation project(path: ':common-ui')
     implementation project(path: ':browser-api')
-
-    implementation Kotlin.stdlib.jdk7
 
     implementation AndroidX.core.ktx
 

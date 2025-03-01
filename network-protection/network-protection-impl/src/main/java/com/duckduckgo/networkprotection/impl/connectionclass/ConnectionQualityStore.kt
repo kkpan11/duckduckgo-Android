@@ -18,13 +18,13 @@ package com.duckduckgo.networkprotection.impl.connectionclass
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.mobile.android.vpn.prefs.VpnSharedPreferencesProvider
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.data.store.api.SharedPreferencesProvider
 import javax.inject.Inject
 import kotlinx.coroutines.withContext
 
 class ConnectionQualityStore @Inject constructor(
-    private val sharedPreferencesProvider: VpnSharedPreferencesProvider,
+    private val sharedPreferencesProvider: SharedPreferencesProvider,
     private val dispatcherProvider: DispatcherProvider,
 ) {
 

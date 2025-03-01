@@ -46,17 +46,17 @@
                 android:layout_marginEnd="@dimen/keyline_4"
                 android:orientation="vertical">
 
-                <com.duckduckgo.mobile.android.ui.view.text.DaxTextView
+                <com.duckduckgo.common.ui.view.text.DaxTextView
                     app:typography="h1"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textAlignment="viewStart"
+                    android:gravity="start"
                     android:paddingTop="@dimen/keyline_4"
-                    android:text="App Components"
+                    android:text="@string/ads_demo_header_title"
                     app:drawableStartCompat="@drawable/ic_dax_icon"
                     android:drawablePadding="@dimen/keyline_2"/>
 
-                <com.duckduckgo.mobile.android.ui.view.listitem.OneLineListItem
+                <com.duckduckgo.common.ui.view.listitem.OneLineListItem
                     android:id="@+id/dark_theme_switch"
                     android:layout_marginTop="@dimen/keyline_5"
                     android:layout_width="match_parent"

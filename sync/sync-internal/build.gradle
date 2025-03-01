@@ -33,8 +33,7 @@ dependencies {
     implementation project(':sync-impl')
     implementation project(':di')
     implementation project(':internal-features-api')
-
-    implementation Kotlin.stdlib.jdk7
+    implementation project(':anvil-annotations')
 
     // Dagger
     implementation Google.dagger

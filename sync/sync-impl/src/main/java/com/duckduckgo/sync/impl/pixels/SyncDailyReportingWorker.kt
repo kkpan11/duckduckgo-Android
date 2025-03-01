@@ -25,8 +25,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.duckduckgo.anvil.annotations.ContributesWorker
-import com.duckduckgo.app.global.DispatcherProvider
 import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.sync.impl.SyncAccountRepository
 import com.squareup.anvil.annotations.ContributesMultibinding
@@ -54,7 +54,7 @@ class SyncDailyReportingWorker(
     override suspend fun doWork(): Result {
         return withContext(dispatchers.io()) {
             if (syncAccountRepository.isSignedIn()) {
-                syncPixels.fireStatsPixel()
+                syncPixels.fireDailySuccessRatePixel()
             }
             return@withContext Result.success()
         }

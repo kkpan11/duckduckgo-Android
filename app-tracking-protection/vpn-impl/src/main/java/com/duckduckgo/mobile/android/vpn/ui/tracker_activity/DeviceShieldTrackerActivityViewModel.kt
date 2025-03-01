@@ -21,8 +21,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.duckduckgo.anvil.annotations.ContributesViewModel
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.app.global.formatters.time.model.dateOfLastWeek
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.formatters.time.model.dateOfLastWeek
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.mobile.android.vpn.AppTpVpnFeature
 import com.duckduckgo.mobile.android.vpn.feature.removal.VpnFeatureRemover
@@ -193,23 +193,9 @@ class DeviceShieldTrackerActivityViewModel @Inject constructor(
         }
     }
 
-    fun bannerState(): BannerState {
-        return if (vpnStore.getAndSetOnboardingSession()) {
-            BannerState.OnboardingBanner
-        } else {
-            BannerState.NextSessionBanner
-        }
-    }
-
-    sealed class BannerState {
-        object OnboardingBanner : BannerState()
-        object NextSessionBanner : BannerState()
-    }
-
     internal data class TrackerActivityViewState(
         val trackerCountInfo: TrackerCountInfo,
         val runningState: VpnState,
-        val bannerState: BannerState,
     )
 
     internal data class TrackerCountInfo(

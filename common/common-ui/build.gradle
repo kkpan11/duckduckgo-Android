@@ -23,6 +23,10 @@ plugins {
 apply from: "$rootProject.projectDir/gradle/android-library.gradle"
 
 android {
+    namespace 'com.duckduckgo.mobile.android'
+}
+
+android {
     anvil {
         generateDaggerFactories = true // default is false
     }
@@ -39,11 +43,10 @@ dependencies {
     implementation project(path: ':anvil-annotations')
     implementation project(path: ':app-build-config-api')
 
-    implementation Kotlin.stdlib.jdk7
-
     implementation AndroidX.appCompat
     implementation Google.android.material
     implementation AndroidX.constraintLayout
+    implementation AndroidX.core.splashscreen
     implementation AndroidX.recyclerView
     implementation AndroidX.lifecycle.viewModelKtx
     // just to get the dagger annotations

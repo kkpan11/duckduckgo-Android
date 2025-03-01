@@ -16,7 +16,7 @@
 
 package com.duckduckgo.autofill.store.feature.email.incontext
 
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -30,13 +30,18 @@ class RealEmailProtectionInContextFeatureRepository(
     val database: EmailProtectionInContextDatabase,
     coroutineScope: CoroutineScope,
     dispatcherProvider: DispatcherProvider,
+    isMainProcess: Boolean,
 ) : EmailProtectionInContextFeatureRepository {
 
     private val dao = database.emailInContextDao()
     override val exceptions = CopyOnWriteArrayList<String>()
 
     init {
-        coroutineScope.launch(dispatcherProvider.io()) { loadToMemory() }
+        coroutineScope.launch(dispatcherProvider.io()) {
+            if (isMainProcess) {
+                loadToMemory()
+            }
+        }
     }
 
     override fun updateAllExceptions(exceptions: List<EmailInContextExceptionEntity>) {

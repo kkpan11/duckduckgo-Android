@@ -22,6 +22,10 @@ plugins {
 
 apply from: "$rootProject.projectDir/gradle/android-library.gradle"
 
+android {
+    namespace 'com.duckduckgo.macos.impl'
+}
+
 dependencies {
     anvil project(path: ':anvil-compiler')
     implementation project(path: ':anvil-annotations')
@@ -31,11 +35,10 @@ dependencies {
     implementation project(path: ':common-ui')
     implementation project(path: ':macos-api')
     implementation project(path: ':browser-api')
-    implementation project(path: ':statistics')
+    implementation project(path: ':statistics-api')
     implementation project(path: ':windows-api')
     implementation project(path: ':navigation-api')
 
-    implementation Kotlin.stdlib.jdk7
     implementation AndroidX.appCompat
     implementation Google.android.material
     implementation AndroidX.constraintLayout
@@ -72,6 +75,9 @@ dependencies {
     testImplementation "androidx.test:runner:_"
     testImplementation Testing.robolectric
     testImplementation CashApp.turbine
+    testImplementation project(':feature-toggles-test')
+
+    coreLibraryDesugaring Android.tools.desugarJdkLibs
 }
 
 android {
@@ -82,6 +88,12 @@ android {
         unitTests {
             includeAndroidResources = true
         }
+    }
+    lint {
+        baseline = file("lint-baseline.xml")
+    }
+    compileOptions {
+        coreLibraryDesugaringEnabled = true
     }
 }
 

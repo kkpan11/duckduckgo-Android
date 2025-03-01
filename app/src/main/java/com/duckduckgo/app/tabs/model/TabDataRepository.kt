@@ -23,16 +23,20 @@ import androidx.lifecycle.distinctUntilChanged
 import com.duckduckgo.app.browser.favicon.FaviconManager
 import com.duckduckgo.app.browser.tabpreview.WebViewPreviewPersister
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.DispatcherProvider
 import com.duckduckgo.app.global.model.Site
 import com.duckduckgo.app.global.model.SiteFactory
 import com.duckduckgo.app.tabs.db.TabsDao
-import com.duckduckgo.app.utils.ConflatedJob
+import com.duckduckgo.app.tabs.model.TabSwitcherData.LayoutType
+import com.duckduckgo.app.tabs.model.TabSwitcherData.UserState
+import com.duckduckgo.app.tabs.store.TabSwitcherDataStore
+import com.duckduckgo.common.utils.ConflatedJob
+import com.duckduckgo.common.utils.CurrentTimeProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import dagger.SingleInstanceIn
 import io.reactivex.Scheduler
 import io.reactivex.schedulers.Schedulers
-import java.util.*
+import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +44,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -50,13 +55,15 @@ class TabDataRepository @Inject constructor(
     private val siteFactory: SiteFactory,
     private val webViewPreviewPersister: WebViewPreviewPersister,
     private val faviconManager: FaviconManager,
+    private val tabSwitcherDataStore: TabSwitcherDataStore,
+    private val timeProvider: CurrentTimeProvider,
     @AppCoroutineScope private val appCoroutineScope: CoroutineScope,
     private val dispatchers: DispatcherProvider,
 ) : TabRepository {
 
     override val liveTabs: LiveData<List<TabEntity>> = tabsDao.liveTabs().distinctUntilChanged()
 
-    override val flowTabs: Flow<List<TabEntity>> = tabsDao.flowTabs()
+    override val flowTabs: Flow<List<TabEntity>> = tabsDao.flowTabs().distinctUntilChanged()
 
     private val childTabClosedSharedFlow = MutableSharedFlow<String>()
 
@@ -70,6 +77,10 @@ class TabDataRepository @Inject constructor(
 
     override val liveSelectedTab: LiveData<TabEntity> = tabsDao.liveSelectedTab()
 
+    override val flowSelectedTab: Flow<TabEntity?> = tabsDao.flowSelectedTab().distinctUntilChanged()
+
+    override val tabSwitcherData: Flow<TabSwitcherData> = tabSwitcherDataStore.data
+
     private val siteData: LinkedHashMap<String, MutableLiveData<Site>> = LinkedHashMap()
 
     private var purgeDeletableTabsJob = ConflatedJob()
@@ -77,49 +88,49 @@ class TabDataRepository @Inject constructor(
     override suspend fun add(
         url: String?,
         skipHome: Boolean,
-    ): String {
+    ): String = withContext(dispatchers.io()) {
         val tabId = generateTabId()
-        add(tabId, buildSiteData(url), skipHome = skipHome, isDefaultTab = false)
-        return tabId
+        add(tabId, buildSiteData(url, tabId), skipHome = skipHome, isDefaultTab = false)
+        return@withContext tabId
     }
 
     override suspend fun addFromSourceTab(
         url: String?,
         skipHome: Boolean,
         sourceTabId: String,
-    ): String {
+    ): String = withContext(dispatchers.io()) {
         val tabId = generateTabId()
 
         add(
             tabId = tabId,
-            data = buildSiteData(url),
+            data = buildSiteData(url, tabId),
             skipHome = skipHome,
             isDefaultTab = false,
             sourceTabId = sourceTabId,
         )
 
-        return tabId
+        return@withContext tabId
     }
 
-    override suspend fun addDefaultTab(): String {
+    override suspend fun addDefaultTab(): String = withContext(dispatchers.io()) {
         val tabId = generateTabId()
 
         add(
             tabId = tabId,
-            data = buildSiteData(null),
+            data = buildSiteData(url = null, tabId = tabId),
             skipHome = false,
             isDefaultTab = true,
         )
 
-        return tabId
+        return@withContext tabId
     }
 
     private fun generateTabId() = UUID.randomUUID().toString()
 
-    private fun buildSiteData(url: String?): MutableLiveData<Site> {
+    private fun buildSiteData(url: String?, tabId: String): MutableLiveData<Site> {
         val data = MutableLiveData<Site>()
         url?.let {
-            val siteMonitor = siteFactory.buildSite(it)
+            val siteMonitor = siteFactory.buildSite(url = it, tabId = tabId)
             data.postValue(siteMonitor)
         }
         return data
@@ -172,6 +183,32 @@ class TabDataRepository @Inject constructor(
         }
     }
 
+    override suspend fun getTabId(url: String): String? = tabsDao.selectTabByUrl(url)
+
+    override suspend fun setIsUserNew(isUserNew: Boolean) {
+        if (tabSwitcherDataStore.data.first().userState == UserState.UNKNOWN) {
+            val userState = if (isUserNew) UserState.NEW else UserState.EXISTING
+            tabSwitcherDataStore.setUserState(userState)
+        }
+    }
+
+    override suspend fun setTabLayoutType(layoutType: LayoutType) {
+        tabSwitcherDataStore.setTabLayoutType(layoutType)
+    }
+
+    override fun getOpenTabCount(): Int {
+        return tabsDao.tabs().size
+    }
+
+    override fun countTabsAccessedWithinRange(accessOlderThan: Long, accessNotMoreThan: Long?): Int {
+        val now = timeProvider.localDateTimeNow()
+        val start = now.minusDays(accessOlderThan)
+        val end = accessNotMoreThan?.let { now.minusDays(it).minusSeconds(1) } // subtracted a second to make the end limit inclusive
+        return tabsDao.tabs().filter {
+            it.lastAccessTime?.isBefore(start) == true && (end == null || it.lastAccessTime?.isAfter(end) == true)
+        }.size
+    }
+
     override suspend fun addNewTabAfterExistingTab(
         url: String?,
         tabId: String,
@@ -199,6 +236,18 @@ class TabDataRepository @Inject constructor(
     ) {
         databaseExecutor().scheduleDirect {
             tabsDao.updateUrlAndTitle(tabId, site?.url, site?.title, viewed = true)
+        }
+    }
+
+    override suspend fun updateTabPosition(from: Int, to: Int) {
+        databaseExecutor().scheduleDirect {
+            tabsDao.updateTabsOrder(from, to)
+        }
+    }
+
+    override suspend fun updateTabLastAccess(tabId: String) {
+        databaseExecutor().scheduleDirect {
+            tabsDao.updateTabLastAccess(tabId, timeProvider.localDateTimeNow())
         }
     }
 
@@ -235,10 +284,14 @@ class TabDataRepository @Inject constructor(
     }
 
     override suspend fun purgeDeletableTabs() = withContext(dispatchers.io()) {
-        purgeDeletableTabsJob += appCoroutineScope.launch {
+        purgeDeletableTabsJob += appCoroutineScope.launch(dispatchers.io()) {
             tabsDao.purgeDeletableTabsAndUpdateSelection()
         }
         purgeDeletableTabsJob.join()
+    }
+
+    override suspend fun getDeletableTabIds(): List<String> = withContext(dispatchers.io()) {
+        return@withContext tabsDao.getDeletableTabIds()
     }
 
     override suspend fun deleteTabAndSelectSource(tabId: String) {
@@ -255,7 +308,7 @@ class TabDataRepository @Inject constructor(
             siteData.remove(tabToDelete.tabId)
 
             tabToSelect?.let {
-                appCoroutineScope.launch {
+                appCoroutineScope.launch(dispatchers.io()) {
                     childTabClosedSharedFlow.emit(tabToSelect.tabId)
                 }
             }
@@ -270,11 +323,18 @@ class TabDataRepository @Inject constructor(
         siteData.clear()
     }
 
+    override suspend fun getSelectedTab(): TabEntity? =
+        withContext(dispatchers.io()) { tabsDao.selectedTab() }
+
     override suspend fun select(tabId: String) {
         databaseExecutor().scheduleDirect {
             val selection = TabSelectionEntity(tabId = tabId)
             tabsDao.insertTabSelection(selection)
         }
+    }
+
+    override suspend fun getTab(tabId: String): TabEntity? {
+        return withContext(dispatchers.io()) { tabsDao.tab(tabId) }
     }
 
     override fun updateTabFavicon(
@@ -302,8 +362,7 @@ class TabDataRepository @Inject constructor(
                 Timber.w("Cannot find tab for tab ID")
                 return@scheduleDirect
             }
-            tab.tabPreviewFile = fileName
-            tabsDao.updateTab(tab)
+            tabsDao.updateTab(tab.copy(tabPreviewFile = fileName))
 
             Timber.i("Updated tab preview image. $tabId now uses $fileName")
             deleteOldPreviewImages(tabId, fileName)
@@ -315,7 +374,7 @@ class TabDataRepository @Inject constructor(
         currentFavicon: String? = null,
     ) {
         Timber.i("Deleting old favicon for $tabId. Current favicon is $currentFavicon")
-        appCoroutineScope.launch { faviconManager.deleteOldTempFavicon(tabId, currentFavicon) }
+        appCoroutineScope.launch(dispatchers.io()) { faviconManager.deleteOldTempFavicon(tabId, currentFavicon) }
     }
 
     private fun deleteOldPreviewImages(
@@ -323,7 +382,7 @@ class TabDataRepository @Inject constructor(
         currentPreviewImage: String? = null,
     ) {
         Timber.i("Deleting old preview image for $tabId. Current image is $currentPreviewImage")
-        appCoroutineScope.launch { webViewPreviewPersister.deletePreviewsForTab(tabId, currentPreviewImage) }
+        appCoroutineScope.launch(dispatchers.io()) { webViewPreviewPersister.deletePreviewsForTab(tabId, currentPreviewImage) }
     }
 
     /**

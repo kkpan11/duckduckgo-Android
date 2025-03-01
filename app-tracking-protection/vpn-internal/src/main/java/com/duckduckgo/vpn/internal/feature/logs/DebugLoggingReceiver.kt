@@ -18,7 +18,7 @@ package com.duckduckgo.vpn.internal.feature.logs
 
 import android.content.Context
 import android.content.Intent
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.VpnScope
 import com.duckduckgo.feature.toggles.api.Toggle
 import com.duckduckgo.mobile.android.vpn.feature.AppTpLocalFeature
@@ -77,7 +77,7 @@ class DebugLoggingReceiverRegister @Inject constructor(
         receiver = DebugLoggingReceiver(context) { intent ->
             when {
                 DebugLoggingReceiver.isLoggingOnIntent(intent) -> {
-                    appTpLocalFeature.verboseLogging().setEnabled(Toggle.State(enable = true))
+                    appTpLocalFeature.verboseLogging().setRawStoredState(Toggle.State(enable = true))
                     TimberExtensions.enableLogging()
 
                     // To propagate changes to NetGuard, reconfigure the VPN
@@ -88,7 +88,7 @@ class DebugLoggingReceiverRegister @Inject constructor(
                     }
                 }
                 DebugLoggingReceiver.isLoggingOffIntent(intent) -> {
-                    appTpLocalFeature.verboseLogging().setEnabled(Toggle.State(enable = false))
+                    appTpLocalFeature.verboseLogging().setRawStoredState(Toggle.State(enable = false))
                     TimberExtensions.disableLogging()
 
                     // To propagate changes to NetGuard, reconfigure the VPN

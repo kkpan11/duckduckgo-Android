@@ -132,7 +132,7 @@
     <!-- Exclusion List -->
     <string name="atp_ExclusionListActivityTitle">All Apps</string>
     <string name="atp_ExcludedAppsFeature">App Tracking Protection detects and blocks app trackers from other companies, like when Facebook tries to track you in a health app. Companies may still track you in apps they own.\n\nIf an app isn\'t working as expected, try disabling protection for that app.</string>
-    <string name="atp_ExcludedAppsEnabledLabel">During beta, DuckDuckGo may disable protection for some apps to resolve known content loading issues. Your custom settings won’t change unless you restore to default settings.</string>
+    <string name="atp_ExcludedAppsEnabledLabel">DuckDuckGo may disable protection for some apps to resolve known content loading issues. Your custom settings won’t change unless you restore to default settings.</string>
     <string name="atp_ExcludedAppsDisabledLabel"><b>App Tracking Protection is disabled</b> Did App Tracking Protection cause a problem with your apps <annotation type="report_issues_link">Report Issues</annotation></string>
     <string name="atp_ExcludedAppsReport">Report Problem With Another App</string>
     <string name="atp_ExcludedReasonManuallyDisabled">Manually disabled</string>
@@ -191,7 +191,8 @@
     <string name="atp_ActivityAppTrackersFAQ">What are app trackers?</string>
     <string name="atp_ActivityReportProblem">Report a problem With an App</string>
     <string name="atp_ActivityBetaInstructions">Beta Instructions</string>
-    <string name="atp_ActivityManageProtection">Having Issues with an app?</string>
+    <string name="atp_ActivityManageProtection">Having Issues?</string>
+    <string name="atp_RecentAppActivity">Recent App Activity</string>
 
     <string name="atp_ActivityTrackersCompanyBlockedOnetimeOneCompany"
         instruction="Placeholder %1$s is the name of the app doing the tracking. Example: 1 tracking attempt blocked from 1 company in Venmo app.">
@@ -221,7 +222,6 @@
         <item quantity="one">App</item>
         <item quantity="other">Apps</item>
     </plurals>
-    <string name="atp_ActivityEnabledLabel">This feature is in beta. Notice a problem with an app? <annotation type="app_settings_link">Please report an issue.</annotation></string>
     <string name="atp_ActivityDisabledLabel"><b>App Tracking Protection is disabled</b>\nDid App Tracking Protection cause a problem with your apps? <annotation type="report_issues_link">Report Issues</annotation></string>
     <string name="atp_ActivityDisabledBySystemLabel"><b>Android disabled App Tracking Protection</b>. Want to prevent this happening again? <annotation type="re_enable_link">Re-enable</annotation></string>
     <string name="atp_ActivityRevokedLabel"><b>App Tracking Protection is disabled.</b>\nA VPN app on your device may have disabled it. Use the toggle above to re-enable.</string>
@@ -358,10 +358,17 @@
     <string name="atp_VpnConflictDialogGotIt">Got it</string>
 
     <!-- Manage Recent Apps Protection -->
-    <string name="atp_ManageRecentAppsProtectionReportIssues">If you’re having problems with an app (such as content not loading), try disabling protection for that app and <annotation type="report_issues_link">submit a report.</annotation></string>
-    <string name="atp_ManageRecentAppsProtectionActivityTitle">Recent App Activity</string>
+    <string name="atp_ManageRecentAppsProtectionReportIssues">If you still have issues with a specific app, disable protection for that app and <annotation type="report_issues_link">submit a report.</annotation></string>
+    <string name="atp_ManageRecentAppsProtectionActivityTitle">Having Issues?</string>
     <string name="atp_ManageRecentAppsProtectionShowAll">Show All Apps</string>
     <string name="atp_ManageRecentAppsProtectionEmpty">Apps with recently blocked tracking attempts will appear here</string>
+    <string name="atp_ManageRecentAppsProtectionSectionTitle">Recommended System Settings</string>
+    <string name="atp_ManageRecentAppsProtectionAlwaysOnTitle">Make Sure VPN Is Always ON</string>
+    <string name="atp_ManageRecentAppsProtectionAlwaysOnByline">In Android Settings, allow Always On to automatically re-enable App Tracking Protection after VPN connection interruptions</string>
+    <string name="atp_ManageRecentAppsProtectionAllowUnrestrictedBattTitle">Allow Unrestricted App Battery Usage</string>
+    <string name="atp_ManageRecentAppsProtectionAllowUnrestrictedBattByline">In App Battery Settings, allow Unrestricted usage to prevent Android from disabling App Tracking Protection in the background</string>
+    <string name="atp_ManageRecentAppsProtectionUnrestrictedBattTitle">App Battery Usage Is Unrestricted</string>
+    <string name="atp_ManageRecentAppsProtectionUnrestrictedBattByline">In App Battery Settings, this prevents Android from disabling App Tracking Protection in the background</string>
 
     <!--  App Tracking Protection Remove Feature Dialog -->
     <string name="atp_RemoveFeatureDialogTitle">Disable and delete data?</string>
@@ -389,8 +396,8 @@
     <string name="atp_ExcludeAppsManuallyCTAReportIssue">Report Issue</string>
     <string name="atp_ExcludeAppsManuallyCTANotNow">Not Now</string>
     <string name="atp_ActivityRecentActivityHeader">Activity</string>
-    <string name="atp_ActivityManageProtectionLabel">Having issues with an app?</string>
-    <string name="atp_ActivityEnabledBannerLabel">During beta, protection for some apps is automatically disabled. <annotation type="app_settings_link">View apps</annotation></string>
+    <string name="atp_ActivityManageProtectionLabel">Having Issues?</string>
+    <string name="atp_ActivityEnabledBannerLabel">Protection for some apps is automatically disabled. <annotation type="app_settings_link">View apps</annotation></string>
     <string name="atp_ActivityDescription">Blocked tracking attempts will appear here</string>
     <plurals name="atp_ActivityProtectedApps" instruction="Placeholder is the number of apps that are protected">
         <item quantity="one">%1$s of your apps is protected from hidden trackers we find trying to access your personal info</item>
@@ -409,7 +416,7 @@
     <string name="atp_ExcludedAppsFilterMenuUnprotectedLabel">Protection Disabled</string>
     <string name="atp_ExcludedAppsFilterMenuAllLabel">All</string>
     <string name="atp_ActivityViewAppsLabel">View Apps</string>
-    <string name="atp_ActivityEnabledMoreThanADayLabel">This feature is in beta. Having issues with an app? <annotation type="app_settings_link">Help us improve</annotation></string>
+    <string name="atp_ActivityEnabledMoreThanADayLabel">Having issues with an app? <annotation type="app_settings_link">Help us improve</annotation></string>
     <string name="atp_ExcludedAppsEnabledLearnWhyLabel">Some apps may experience issues when App Tracking Protection is enabled. <annotation type="learn_why_link">Learn why</annotation></string>
     <string name="atp_ExcludedAppsDisabledLearnWhyLabel">Protection is disabled for apps with known issues. You can enable these apps, but they may not work as expected. <annotation type="learn_why_link">Learn why</annotation></string>
 

@@ -21,6 +21,7 @@ import androidx.room.*
 import androidx.test.ext.junit.runners.*
 import androidx.test.platform.app.*
 import com.duckduckgo.app.*
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.sync.api.*
 import com.duckduckgo.sync.api.engine.*
 import com.duckduckgo.sync.api.engine.ModifiedSince.FirstSync
@@ -35,7 +36,6 @@ import org.junit.Assert.*
 import org.junit.Ignore
 import org.junit.runner.*
 
-@ExperimentalCoroutinesApi
 @RunWith(AndroidJUnit4::class)
 class SettingsSyncDataProviderTest {
 

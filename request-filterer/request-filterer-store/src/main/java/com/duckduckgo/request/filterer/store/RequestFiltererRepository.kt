@@ -16,7 +16,7 @@
 
 package com.duckduckgo.request.filterer.store
 
-import com.duckduckgo.app.global.DispatcherProvider
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.feature.toggles.api.FeatureExceptions.FeatureException
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +32,7 @@ class RealRequestFiltererRepository(
     val database: RequestFiltererDatabase,
     coroutineScope: CoroutineScope,
     dispatcherProvider: DispatcherProvider,
+    isMainProcess: Boolean,
 ) : RequestFiltererRepository {
 
     private val requestFiltererDao: RequestFiltererDao = database.requestFiltererDao()
@@ -41,7 +42,9 @@ class RealRequestFiltererRepository(
 
     init {
         coroutineScope.launch(dispatcherProvider.io()) {
-            loadToMemory()
+            if (isMainProcess) {
+                loadToMemory()
+            }
         }
     }
 

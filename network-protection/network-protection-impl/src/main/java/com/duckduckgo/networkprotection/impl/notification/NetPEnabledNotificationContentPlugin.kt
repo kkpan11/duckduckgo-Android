@@ -26,10 +26,11 @@ import androidx.core.text.HtmlCompat.FROM_HTML_MODE_LEGACY
 import com.duckduckgo.di.scopes.VpnScope
 import com.duckduckgo.mobile.android.app.tracking.AppTrackingProtection
 import com.duckduckgo.mobile.android.vpn.service.VpnEnabledNotificationContentPlugin
+import com.duckduckgo.mobile.android.vpn.service.VpnEnabledNotificationContentPlugin.NotificationActions
 import com.duckduckgo.mobile.android.vpn.service.VpnEnabledNotificationContentPlugin.VpnEnabledNotificationContent
 import com.duckduckgo.mobile.android.vpn.service.VpnEnabledNotificationContentPlugin.VpnEnabledNotificationPriority
 import com.duckduckgo.navigation.api.GlobalActivityStarter
-import com.duckduckgo.networkprotection.api.NetworkProtectionManagementScreenNoParams
+import com.duckduckgo.networkprotection.api.NetworkProtectionScreens.NetworkProtectionManagementScreenNoParams
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
 import com.duckduckgo.networkprotection.impl.R
 import com.squareup.anvil.annotations.ContributesBinding
@@ -43,25 +44,32 @@ import kotlinx.coroutines.runBlocking
 @ContributesMultibinding(VpnScope::class)
 @SingleInstanceIn(VpnScope::class)
 class NetPEnabledNotificationContentPlugin @Inject constructor(
-    private val context: Context,
     private val resources: Resources,
     private val networkProtectionState: NetworkProtectionState,
     private val appTrackingProtection: AppTrackingProtection,
-    private val netPNotificationActions: NetPNotificationActions,
     netPIntentProvider: IntentProvider,
 ) : VpnEnabledNotificationContentPlugin {
 
     private val onPressIntent by lazy { netPIntentProvider.getOnPressNotificationIntent() }
+
+    override val uuid: String = "d0c6aa7b-16dc-4d35-a4c6-35c6dfcb8309"
+
     override fun getInitialContent(): VpnEnabledNotificationContent? {
         return if (isActive()) {
-            val title = networkProtectionState.serverLocation()?.run {
+            val text = networkProtectionState.serverLocation()?.run {
                 HtmlCompat.fromHtml(resources.getString(R.string.netpEnabledNotificationTitle, this), FROM_HTML_MODE_LEGACY)
             } ?: resources.getString(R.string.netpEnabledNotificationInitialTitle)
 
+            /**
+             * deleteIntent is set to null here since we decided that we don't need to reshow the notification for NetP on the event that
+             * the user dismissed it. This is applicable to Android 14 and up. More info: https://app.asana.com/0/0/1206344475728481/f
+             */
             return VpnEnabledNotificationContent(
-                title = SpannableStringBuilder(title),
+                title = resources.getString(R.string.netp_name),
+                text = SpannableStringBuilder(text),
                 onNotificationPressIntent = onPressIntent,
-                notificationAction = netPNotificationActions.getReportIssueNotificationAction(context),
+                notificationActions = NotificationActions.VPNActions,
+                deleteIntent = null,
             )
         } else {
             null

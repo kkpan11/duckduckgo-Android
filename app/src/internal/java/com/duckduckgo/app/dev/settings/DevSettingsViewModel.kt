@@ -21,11 +21,11 @@ import androidx.lifecycle.viewModelScope
 import com.duckduckgo.anvil.annotations.ContributesViewModel
 import com.duckduckgo.app.dev.settings.db.DevSettingsDataStore
 import com.duckduckgo.app.dev.settings.db.UAOverride
-import com.duckduckgo.app.global.DispatcherProvider
 import com.duckduckgo.app.survey.api.SurveyEndpointDataStore
-import com.duckduckgo.app.traces.api.StartupTraces
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.savedsites.api.SavedSitesRepository
+import com.duckduckgo.traces.api.StartupTraces
 import com.duckduckgo.user.agent.api.UserAgentProvider
 import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow
@@ -48,7 +48,6 @@ class DevSettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     data class ViewState(
-        val nextTdsEnabled: Boolean = false,
         val startupTraceEnabled: Boolean = false,
         val overrideUA: Boolean = false,
         val userAgent: String = "",
@@ -60,6 +59,9 @@ class DevSettingsViewModel @Inject constructor(
         object OpenUASelector : Command()
         object ShowSavedSitesClearedConfirmation : Command()
         object ChangePrivacyConfigUrl : Command()
+        object CustomTabs : Command()
+        data object Notifications : Command()
+        data object Tabs : Command()
     }
 
     private val viewState = MutableStateFlow(ViewState())
@@ -69,7 +71,6 @@ class DevSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             viewState.emit(
                 currentViewState().copy(
-                    nextTdsEnabled = devSettingsDataStore.nextTdsEnabled,
                     startupTraceEnabled = startupTraces.isTraceEnabled,
                     overrideUA = devSettingsDataStore.overrideUA,
                     userAgent = userAgentProvider.userAgent("", false),
@@ -85,15 +86,6 @@ class DevSettingsViewModel @Inject constructor(
 
     fun commands(): Flow<Command> {
         return command.receiveAsFlow()
-    }
-
-    fun onNextTdsToggled(nextTds: Boolean) {
-        Timber.i("User toggled next tds, is now enabled: $nextTds")
-        devSettingsDataStore.nextTdsEnabled = nextTds
-        viewModelScope.launch {
-            viewState.emit(currentViewState().copy(nextTdsEnabled = nextTds))
-            command.send(Command.SendTdsIntent)
-        }
     }
 
     fun onStartupTraceToggled(value: Boolean) {
@@ -130,6 +122,10 @@ class DevSettingsViewModel @Inject constructor(
         viewModelScope.launch { command.send(Command.ChangePrivacyConfigUrl) }
     }
 
+    fun customTabsClicked() {
+        viewModelScope.launch { command.send(Command.CustomTabs) }
+    }
+
     fun onUserAgentSelected(userAgent: UAOverride) {
         devSettingsDataStore.selectedUA = userAgent
         viewModelScope.launch {
@@ -142,5 +138,13 @@ class DevSettingsViewModel @Inject constructor(
             savedSitesRepository.deleteAll()
             command.send(Command.ShowSavedSitesClearedConfirmation)
         }
+    }
+
+    fun notificationsClicked() {
+        viewModelScope.launch { command.send(Command.Notifications) }
+    }
+
+    fun tabsClicked() {
+        viewModelScope.launch { command.send(Command.Tabs) }
     }
 }

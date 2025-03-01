@@ -16,7 +16,7 @@
 
 package com.duckduckgo.httpsupgrade.impl
 
-import com.duckduckgo.app.global.store.BinaryDataStore
+import com.duckduckgo.common.utils.store.BinaryDataStore
 import com.duckduckgo.httpsupgrade.store.HttpsBloomFilterSpec
 import com.duckduckgo.httpsupgrade.store.HttpsBloomFilterSpecDao
 import com.duckduckgo.httpsupgrade.store.HttpsFalsePositiveDomain
@@ -37,9 +37,11 @@ class HttpsDataPersister constructor(
         bytes: ByteArray,
         falsePositives: List<HttpsFalsePositiveDomain>,
     ) {
-        httpsUpgradeDatabase.runInTransaction {
-            persistBloomFilter(specification, bytes)
-            persistFalsePositives(falsePositives)
+        runCatching {
+            httpsUpgradeDatabase.runInTransaction {
+                persistBloomFilter(specification, bytes)
+                persistFalsePositives(falsePositives)
+            }
         }
     }
 

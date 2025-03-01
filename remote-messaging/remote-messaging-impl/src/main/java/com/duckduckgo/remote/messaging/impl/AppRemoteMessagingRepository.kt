@@ -16,10 +16,7 @@
 
 package com.duckduckgo.remote.messaging.impl
 
-import com.duckduckgo.app.global.DispatcherProvider
-import com.duckduckgo.app.statistics.VariantManager
-import com.duckduckgo.app.statistics.isAskForDefaultBrowserMoreThanOnceExperimentEnabled
-import com.duckduckgo.browser.api.UserBrowserProperties
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.remote.messaging.api.RemoteMessage
 import com.duckduckgo.remote.messaging.api.RemoteMessagingRepository
 import com.duckduckgo.remote.messaging.impl.mappers.MessageMapper
@@ -38,16 +35,20 @@ class AppRemoteMessagingRepository(
     private val remoteMessagesDao: RemoteMessagesDao,
     private val dispatchers: DispatcherProvider,
     private val messageMapper: MessageMapper,
-    private val userBrowserProperties: UserBrowserProperties,
-    private val variantManager: VariantManager,
 ) : RemoteMessagingRepository {
+
+    override fun getMessageById(id: String): RemoteMessage? {
+        return remoteMessagesDao.messagesById(id)?.let {
+            messageMapper.fromMessage(it.message)
+        }
+    }
 
     override fun activeMessage(message: RemoteMessage?) {
         if (message == null) {
-            remoteMessagesDao.deleteActiveMessages()
+            remoteMessagesDao.updateActiveMessageStateAndDeleteNeverShownMessages()
         } else {
             val stringMessage = messageMapper.toString(message)
-            remoteMessagesDao.newMessage(RemoteMessageEntity(id = message.id, message = stringMessage, status = SCHEDULED))
+            remoteMessagesDao.addOrUpdateActiveMessage(RemoteMessageEntity(id = message.id, message = stringMessage, status = SCHEDULED))
         }
     }
 
@@ -58,17 +59,22 @@ class AppRemoteMessagingRepository(
         remoteMessagesDao.insert(message.copy(shown = true))
     }
 
+    override fun message(): RemoteMessage? {
+        val message = remoteMessagesDao.message()
+        if (message == null || message.message.isEmpty()) return null
+
+        val remoteMessage = messageMapper.fromMessage(message.message) ?: return null
+        RemoteMessage(
+            id = message.id,
+            content = remoteMessage.content,
+            emptyList(),
+            emptyList(),
+        )
+        return remoteMessage
+    }
+
     override fun messageFlow(): Flow<RemoteMessage?> {
-        // Experiment: Ask for Default Browser More Than Once
-        val daysSinceInstalled = userBrowserProperties.daysSinceInstalled()
-        val isDefaultBrowser = userBrowserProperties.defaultBrowser()
-        val isDefaultBrowserExperiment = variantManager.isAskForDefaultBrowserMoreThanOnceExperimentEnabled()
         return remoteMessagesDao.messagesFlow().distinctUntilChanged().map {
-            if (
-                isDefaultBrowserExperiment && (daysSinceInstalled != 0L && daysSinceInstalled != 1L && daysSinceInstalled != 2L || isDefaultBrowser)
-            ) {
-                return@map null
-            }
             if (it == null || it.message.isEmpty()) return@map null
 
             val message = messageMapper.fromMessage(it.message) ?: return@map null

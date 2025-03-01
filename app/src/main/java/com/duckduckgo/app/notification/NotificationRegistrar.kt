@@ -16,17 +16,14 @@
 
 package com.duckduckgo.app.notification
 
-import android.annotation.TargetApi
 import android.app.NotificationChannel
 import android.app.NotificationManager.IMPORTANCE_NONE
 import android.content.Context
-import android.os.Build.VERSION_CODES.O
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.LifecycleOwner
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.di.AppCoroutineScope
-import com.duckduckgo.app.global.plugins.PluginPoint
 import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
 import com.duckduckgo.app.notification.model.Channel
 import com.duckduckgo.app.notification.model.NotificationPlugin
@@ -35,12 +32,13 @@ import com.duckduckgo.app.pixels.AppPixelName
 import com.duckduckgo.app.settings.db.SettingsDataStore
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -55,6 +53,7 @@ class NotificationRegistrar @Inject constructor(
     private val schedulableNotificationPluginPoint: PluginPoint<SchedulableNotificationPlugin>,
     private val notificationPluginPoint: PluginPoint<NotificationPlugin>,
     private val appBuildConfig: AppBuildConfig,
+    private val dispatcherProvider: DispatcherProvider,
 ) : MainProcessLifecycleObserver {
 
     object NotificationId {
@@ -76,7 +75,7 @@ class NotificationRegistrar @Inject constructor(
     }
 
     override fun onCreate(owner: LifecycleOwner) {
-        appCoroutineScope.launch { registerApp() }
+        appCoroutineScope.launch(dispatcherProvider.io()) { registerApp() }
     }
 
     @Suppress("NewApi") // we use NotificationCompatManager to retrieve channels
@@ -91,14 +90,9 @@ class NotificationRegistrar @Inject constructor(
     )
 
     private fun registerApp() {
-        if (appBuildConfig.sdkInt < O) {
-            Timber.d("No need to register for notification channels on this SDK version")
-            return
-        }
         configureNotificationChannels()
     }
 
-    @TargetApi(O)
     private fun configureNotificationChannels() {
         val notificationChannels = channels.map {
             NotificationChannel(it.id, context.getString(it.name), it.priority)

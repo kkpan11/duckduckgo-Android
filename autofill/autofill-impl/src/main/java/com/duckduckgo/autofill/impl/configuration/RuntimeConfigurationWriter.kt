@@ -38,6 +38,8 @@ interface RuntimeConfigurationWriter {
         passwordGeneration: Boolean,
         showInlineKeyIcon: Boolean,
         showInContextEmailProtectionSignup: Boolean,
+        unknownUsernameCategorization: Boolean,
+        partialFormSaves: Boolean,
     ): String
 }
 
@@ -86,6 +88,8 @@ class RealRuntimeConfigurationWriter @Inject constructor(val moshi: Moshi) : Run
         passwordGeneration: Boolean,
         showInlineKeyIcon: Boolean,
         showInContextEmailProtectionSignup: Boolean,
+        unknownUsernameCategorization: Boolean,
+        partialFormSaves: Boolean,
     ): String {
         return """
             userPreferences = {
@@ -104,7 +108,9 @@ class RealRuntimeConfigurationWriter @Inject constructor(val moshi: Moshi) : Run
                       "password_generation": $passwordGeneration,
                       "credentials_saving": $credentialSaving,
                       "inlineIcon_credentials": $showInlineKeyIcon,
-                      "emailProtection_incontext_signup": $showInContextEmailProtectionSignup
+                      "emailProtection_incontext_signup": $showInContextEmailProtectionSignup,
+                      "unknown_username_categorization": $unknownUsernameCategorization,
+                      "partial_form_saves": $partialFormSaves
                     }
                   }
                 }

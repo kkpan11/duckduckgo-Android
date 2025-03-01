@@ -17,10 +17,9 @@
 package com.duckduckgo.remote.messaging.impl.matchers
 
 import com.duckduckgo.browser.api.UserBrowserProperties
-import com.duckduckgo.mobile.android.ui.DuckDuckGoTheme
+import com.duckduckgo.common.ui.DuckDuckGoTheme
 import com.duckduckgo.remote.messaging.impl.models.*
 import java.util.*
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -28,7 +27,6 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class UserAttributeMatcherTest {
 
     private val userBrowserProperties: UserBrowserProperties = mock()
@@ -482,42 +480,6 @@ class UserAttributeMatcherTest {
         assertEquals(false, result)
     }
 
-    @Test
-    fun whenAppTPOnboardedNotMatchThenReturnFail() = runTest {
-        givenBrowserProperties(appTpOnboarded = false)
-        assertEquals(false, testee.evaluate(AppTpOnboarded(true)))
-
-        givenBrowserProperties(appTpOnboarded = true)
-        assertEquals(false, testee.evaluate(AppTpOnboarded(false)))
-    }
-
-    @Test
-    fun whenAppTPOnboardedMatchThenReturnMatch() = runTest {
-        givenBrowserProperties(appTpOnboarded = true)
-        assertEquals(true, testee.evaluate(AppTpOnboarded(true)))
-
-        givenBrowserProperties(appTpOnboarded = false)
-        assertEquals(true, testee.evaluate(AppTpOnboarded(false)))
-    }
-
-    @Test
-    fun whenNetPOnboardedNotMatchThenReturnFail() = runTest {
-        givenBrowserProperties(netpOnboarded = false)
-        assertEquals(false, testee.evaluate(NetPOnboarded(true)))
-
-        givenBrowserProperties(netpOnboarded = true)
-        assertEquals(false, testee.evaluate(NetPOnboarded(false)))
-    }
-
-    @Test
-    fun whenNetPOnboardedMatchThenReturnMatch() = runTest {
-        givenBrowserProperties(netpOnboarded = true)
-        assertEquals(true, testee.evaluate(NetPOnboarded(true)))
-
-        givenBrowserProperties(netpOnboarded = false)
-        assertEquals(true, testee.evaluate(NetPOnboarded(false)))
-    }
-
     private suspend fun givenBrowserProperties(
         appTheme: DuckDuckGoTheme = DuckDuckGoTheme.SYSTEM_DEFAULT,
         bookmarks: Long = 8L,
@@ -528,8 +490,6 @@ class UserAttributeMatcherTest {
         emailEnabled: Boolean = true,
         searchCount: Long = 8L,
         widgetAdded: Boolean = true,
-        appTpOnboarded: Boolean = false,
-        netpOnboarded: Boolean = false,
     ) {
         whenever(userBrowserProperties.appTheme()).thenReturn(appTheme)
         whenever(userBrowserProperties.bookmarks()).thenReturn(bookmarks)
@@ -540,7 +500,5 @@ class UserAttributeMatcherTest {
         whenever(userBrowserProperties.favorites()).thenReturn(favorites)
         whenever(userBrowserProperties.searchCount()).thenReturn(searchCount)
         whenever(userBrowserProperties.widgetAdded()).thenReturn(widgetAdded)
-        whenever(userBrowserProperties.appTpOnboarded()).thenReturn(appTpOnboarded)
-        whenever(userBrowserProperties.networkProtectionOnboarded()).thenReturn(netpOnboarded)
     }
 }

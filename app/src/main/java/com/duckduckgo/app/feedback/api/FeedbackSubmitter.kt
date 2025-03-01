@@ -18,15 +18,21 @@ package com.duckduckgo.app.feedback.api
 
 import android.os.Build
 import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason
-import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason.*
+import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason.APP_IS_SLOW_OR_BUGGY
+import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason.MISSING_BROWSING_FEATURES
+import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason.NOT_ENOUGH_CUSTOMIZATIONS
+import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason.OTHER
+import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason.SEARCH_NOT_GOOD_ENOUGH
+import com.duckduckgo.app.feedback.ui.negative.FeedbackType.MainReason.WEBSITES_NOT_LOADING
 import com.duckduckgo.app.feedback.ui.negative.FeedbackType.SubReason
 import com.duckduckgo.app.pixels.AppPixelName
 import com.duckduckgo.app.pixels.AppPixelName.FEEDBACK_NEGATIVE_SUBMISSION
-import com.duckduckgo.app.statistics.VariantManager
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.app.statistics.store.StatisticsDataStore
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
-import java.util.*
+import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.experiments.api.VariantManager
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -56,6 +62,7 @@ class FireAndForgetFeedbackSubmitter(
     private val pixel: Pixel,
     private val appCoroutineScope: CoroutineScope,
     private val appBuildConfig: AppBuildConfig,
+    private val dispatcherProvider: DispatcherProvider,
 ) : FeedbackSubmitter {
     override suspend fun sendNegativeFeedback(
         mainReason: MainReason,
@@ -69,7 +76,7 @@ class FireAndForgetFeedbackSubmitter(
 
         sendPixel(pixelForNegativeFeedback(category, subcategory))
 
-        appCoroutineScope.launch {
+        appCoroutineScope.launch(dispatcherProvider.io()) {
             runCatching {
                 submitFeedback(
                     openEnded = openEnded,
@@ -89,7 +96,7 @@ class FireAndForgetFeedbackSubmitter(
         sendPixel(pixelForPositiveFeedback())
 
         if (openEnded != null) {
-            appCoroutineScope.launch {
+            appCoroutineScope.launch(dispatcherProvider.io()) {
                 runCatching { submitFeedback(openEnded = openEnded, rating = POSITIVE_FEEDBACK) }
                     .onSuccess { Timber.i("Successfully submitted feedback") }
                     .onFailure { Timber.w(it, "Failed to send feedback") }
@@ -107,7 +114,7 @@ class FireAndForgetFeedbackSubmitter(
         val subcategory = apiKeyMapper.apiKeyFromSubReason(null)
         sendPixel(pixelForNegativeFeedback(category, subcategory))
 
-        appCoroutineScope.launch {
+        appCoroutineScope.launch(dispatcherProvider.io()) {
             runCatching {
                 submitFeedback(
                     rating = NEGATIVE_FEEDBACK,
@@ -181,7 +188,7 @@ class FireAndForgetFeedbackSubmitter(
     }
 
     private fun atbWithVariant(): String {
-        return statisticsDataStore.atb?.formatWithVariant(variantManager.getVariant()) ?: ""
+        return statisticsDataStore.atb?.formatWithVariant(variantManager.getVariantKey()) ?: ""
     }
 
     companion object {

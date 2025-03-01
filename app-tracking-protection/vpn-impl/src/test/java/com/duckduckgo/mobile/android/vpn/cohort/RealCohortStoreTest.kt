@@ -16,15 +16,15 @@
 
 package com.duckduckgo.mobile.android.vpn.cohort
 
-import com.duckduckgo.app.CoroutineTestRule
-import com.duckduckgo.app.global.api.InMemorySharedPreferences
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.appbuildconfig.api.BuildFlavor
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.common.test.api.InMemorySharedPreferences
+import com.duckduckgo.data.store.api.SharedPreferencesProvider
 import com.duckduckgo.mobile.android.vpn.AppTpVpnFeature
 import com.duckduckgo.mobile.android.vpn.FakeVpnFeaturesRegistry
 import com.duckduckgo.mobile.android.vpn.VpnFeaturesRegistry
-import com.duckduckgo.mobile.android.vpn.prefs.VpnSharedPreferencesProvider
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import java.time.LocalDate
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -36,9 +36,7 @@ import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import org.threeten.bp.LocalDate
 
-@ExperimentalCoroutinesApi
 class RealCohortStoreTest {
     @get:Rule
     @Suppress("unused")
@@ -49,7 +47,7 @@ class RealCohortStoreTest {
     @Mock
     private lateinit var appBuildConfig: AppBuildConfig
 
-    private val sharedPreferencesProvider = mock<VpnSharedPreferencesProvider>()
+    private val sharedPreferencesProvider = mock<SharedPreferencesProvider>()
 
     private lateinit var cohortStore: CohortStore
 
@@ -104,5 +102,13 @@ class RealCohortStoreTest {
         (cohortStore as RealCohortStore).onVpnStarted(TestScope())
 
         assertNull(cohortStore.getCohortStoredLocalDate())
+    }
+
+    @Test
+    fun whenVpnReconfiguredCalledThenStoreInitialCohort() = runTest {
+        vpnFeaturesRegistry.registerFeature(AppTpVpnFeature.APPTP_VPN)
+        (cohortStore as RealCohortStore).onVpnReconfigured(TestScope())
+
+        assertEquals(LocalDate.now(), cohortStore.getCohortStoredLocalDate())
     }
 }

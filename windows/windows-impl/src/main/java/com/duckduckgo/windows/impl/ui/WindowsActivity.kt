@@ -25,10 +25,10 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.duckduckgo.anvil.annotations.ContributeToActivityStarter
 import com.duckduckgo.anvil.annotations.InjectWith
-import com.duckduckgo.app.global.DuckDuckGoActivity
+import com.duckduckgo.common.ui.DuckDuckGoActivity
+import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.macos.api.MacOsScreenWithEmptyParams
-import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.duckduckgo.windows.api.ui.WindowsScreenWithEmptyParams
 import com.duckduckgo.windows.impl.R
@@ -78,15 +78,17 @@ class WindowsActivity : DuckDuckGoActivity() {
 
     private fun executeCommand(command: Command) {
         when (command) {
-            is ShareLink -> launchSharePageChooser()
+            is ShareLink -> launchSharePageChooser(command.originEnabled)
             is GoToMacClientSettings -> launchMacClientSettings()
         }
     }
 
-    private fun launchSharePageChooser() {
+    private fun launchSharePageChooser(addOrigin: Boolean) {
+        var shareText = getString(R.string.windows_share_text)
+        if (!addOrigin) { shareText = shareText.replace(ORIGIN_URL_PATH, "") }
         val share = Intent(Intent.ACTION_SEND).apply {
             type = "text/html"
-            putExtra(Intent.EXTRA_TEXT, getString(R.string.windows_share_text))
+            putExtra(Intent.EXTRA_TEXT, shareText)
             putExtra(Intent.EXTRA_TITLE, getString(R.string.windows_share_title))
         }
 
@@ -106,5 +108,9 @@ class WindowsActivity : DuckDuckGoActivity() {
     private fun launchMacClientSettings() {
         globalActivityStarter.start(this, MacOsScreenWithEmptyParams)
         finish()
+    }
+
+    companion object {
+        const val ORIGIN_URL_PATH = "?origin=funnel_browser_android_settings"
     }
 }

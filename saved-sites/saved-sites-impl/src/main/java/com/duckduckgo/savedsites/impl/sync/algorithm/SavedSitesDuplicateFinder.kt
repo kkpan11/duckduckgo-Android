@@ -20,11 +20,11 @@ import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.savedsites.api.SavedSitesRepository
 import com.duckduckgo.savedsites.api.models.BookmarkFolder
 import com.duckduckgo.savedsites.api.models.SavedSite.Bookmark
-import com.duckduckgo.savedsites.api.models.SavedSite.Favorite
 import com.duckduckgo.savedsites.impl.sync.algorithm.SavedSitesDuplicateResult.Duplicate
 import com.duckduckgo.savedsites.impl.sync.algorithm.SavedSitesDuplicateResult.NotDuplicate
 import com.squareup.anvil.annotations.ContributesBinding
 import javax.inject.Inject
+import timber.log.*
 
 interface SavedSitesDuplicateFinder {
 
@@ -32,7 +32,6 @@ interface SavedSitesDuplicateFinder {
         bookmarkFolder: BookmarkFolder,
     ): SavedSitesDuplicateResult
 
-    fun findFavouriteDuplicate(favorite: Favorite): SavedSitesDuplicateResult
     fun findBookmarkDuplicate(bookmark: Bookmark): SavedSitesDuplicateResult
 }
 
@@ -42,25 +41,14 @@ sealed class SavedSitesDuplicateResult {
 }
 
 @ContributesBinding(AppScope::class)
-class RealSavedSitesDuplicateFinder @Inject constructor(val repository: SavedSitesRepository) : SavedSitesDuplicateFinder {
+class RealSavedSitesDuplicateFinder @Inject constructor(
+    val repository: SavedSitesRepository,
+) : SavedSitesDuplicateFinder {
     override fun findFolderDuplicate(bookmarkFolder: BookmarkFolder): SavedSitesDuplicateResult {
         val existingFolder = repository.getFolderByName(bookmarkFolder.name)
         return if (existingFolder != null) {
             if (existingFolder.parentId == bookmarkFolder.parentId) {
                 Duplicate(existingFolder.id)
-            } else {
-                NotDuplicate
-            }
-        } else {
-            NotDuplicate
-        }
-    }
-
-    override fun findFavouriteDuplicate(favorite: Favorite): SavedSitesDuplicateResult {
-        val presentUrl = repository.getFavorite(favorite.url)
-        return if (presentUrl != null) {
-            if (presentUrl.title == favorite.title) {
-                Duplicate(presentUrl.id)
             } else {
                 NotDuplicate
             }
