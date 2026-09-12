@@ -25,8 +25,9 @@ import com.duckduckgo.sync.api.engine.FeatureSyncError.COLLECTION_LIMIT_REACHED
 import com.duckduckgo.sync.api.engine.FeatureSyncError.INVALID_REQUEST
 import com.duckduckgo.sync.api.engine.SyncChangesResponse
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.INFO
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface SavedSitesSyncFeatureListener {
     fun onSuccess(changes: SyncChangesResponse)
@@ -53,13 +54,13 @@ class AppSavedSitesSyncFeatureListener @Inject constructor(
     }
 
     override fun onError(syncError: FeatureSyncError) {
-        Timber.d("Sync-Bookmarks: $syncError received, current state isPaused:${savedSitesSyncStore.isSyncPaused}")
+        logcat { "Sync-Bookmarks: $syncError received, current state isPaused:${savedSitesSyncStore.isSyncPaused}" }
         when (syncError) {
             COLLECTION_LIMIT_REACHED,
             INVALID_REQUEST,
             -> {
                 if (!savedSitesSyncStore.isSyncPaused || savedSitesSyncStore.syncPausedReason != syncError.name) {
-                    Timber.i("Sync-Bookmarks: should trigger notification for $syncError")
+                    logcat(INFO) { "Sync-Bookmarks: should trigger notification for $syncError" }
                     triggerNotification(syncError)
                 }
                 savedSitesSyncStore.isSyncPaused = true

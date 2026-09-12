@@ -16,6 +16,7 @@
 
 package com.duckduckgo.app.buildconfig
 
+import android.content.Context
 import android.os.Build
 import android.os.Environment
 import androidx.core.content.edit
@@ -29,18 +30,22 @@ import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.experiments.api.VariantManager
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.Lazy
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.ERROR
+import logcat.LogPriority.INFO
+import logcat.LogPriority.WARN
+import logcat.logcat
 import java.io.File
 import java.lang.IllegalStateException
 import java.util.*
 import javax.inject.Inject
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 @ContributesBinding(AppScope::class)
 class RealAppBuildConfig @Inject constructor(
     private val variantManager: Lazy<VariantManager>, // break any possible DI dependency cycle
     private val dispatcherProvider: DispatcherProvider,
     private val sharedPreferencesProvider: SharedPreferencesProvider,
+    private val context: Context,
 ) : AppBuildConfig {
     private val preferences by lazy {
         sharedPreferencesProvider.getSharedPreferences("com.duckduckgo.app.buildconfig.cache", false, false)
@@ -50,7 +55,12 @@ class RealAppBuildConfig @Inject constructor(
     override val applicationId: String = BuildConfig.APPLICATION_ID
     override val buildType: String = BuildConfig.BUILD_TYPE
     override val versionCode: Int = BuildConfig.VERSION_CODE
-    override val versionName: String = BuildConfig.VERSION_NAME
+    override val versionName: String
+        get() = if (isInternalBuild() || isDebug) {
+            "${BuildConfig.VERSION_NAME}-$diFramework"
+        } else {
+            BuildConfig.VERSION_NAME
+        }
     override val flavor: BuildFlavor
         get() = when (BuildConfig.FLAVOR) {
             "internal" -> BuildFlavor.INTERNAL
@@ -70,6 +80,11 @@ class RealAppBuildConfig @Inject constructor(
         }
     }
     override val isPerformanceTest: Boolean = BuildConfig.IS_PERFORMANCE_TEST
+    private val diFramework: String = if (BuildConfig.DEBUG || BuildConfig.FLAVOR == "internal") {
+        BuildConfig.DI_FRAMEWORK
+    } else {
+        ""
+    }
 
     override val isDefaultVariantForced: Boolean = BuildConfig.FORCE_DEFAULT_VARIANT
 
@@ -103,6 +118,11 @@ class RealAppBuildConfig @Inject constructor(
         }.getOrDefault(false)
     }
 
+    override fun isNewInstall(): Boolean {
+        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        return packageInfo.firstInstallTime == packageInfo.lastUpdateTime
+    }
+
     override val buildDateTimeMillis: Long
         get() = BuildConfig.BUILD_DATE_MILLIS
 
@@ -112,7 +132,7 @@ class RealAppBuildConfig @Inject constructor(
     private fun getDownloadsDirectory(): File {
         val downloadDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         if (!downloadDirectory.exists()) {
-            Timber.i("Download directory doesn't exist; trying to create it. %s", downloadDirectory.absolutePath)
+            logcat(INFO) { "Download directory doesn't exist; trying to create it. ${downloadDirectory.absolutePath}" }
             downloadDirectory.mkdirs()
         }
         return downloadDirectory
@@ -121,14 +141,14 @@ class RealAppBuildConfig @Inject constructor(
     private fun createNewDirectory(directoryName: String) {
         val directory = File(getDownloadsDirectory(), directoryName)
         val success = directory.mkdirs()
-        Timber.i("Directory creation success: %s", success)
+        logcat(INFO) { "Directory creation success: $success" }
         if (!success) {
-            Timber.e("Directory creation failed")
+            logcat(ERROR) { "Directory creation failed" }
             kotlin.runCatching {
                 val directoryCreationSuccess = directory.createNewFile()
-                Timber.i("File creation success: %s", directoryCreationSuccess)
+                logcat(INFO) { "File creation success: $directoryCreationSuccess" }
             }.onFailure {
-                Timber.w("Failed to create file: %s", it.message)
+                logcat(WARN) { "Failed to create file: ${it.message}" }
             }
         }
     }

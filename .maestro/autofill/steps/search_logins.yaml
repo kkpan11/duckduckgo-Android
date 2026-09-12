@@ -16,13 +16,23 @@ name: "Autofill: Search credentials"
     commands:
       - tapOn: "No thanks"
 
+- runFlow:
+    when:
+      visible: "Bring your passwords from
+
+        Google to DuckDuckGo"
+    commands:
+        - tapOn:
+            id: "com.duckduckgo.mobile.android:id/close"
+
+
 - tapOn:
     id: searchLogins
 
 - assertVisible: user
 
 - tapOn:
-    id: omnibarTextInput
+    id: "omnibarTextInput|inputField"
 - inputText: "no match"
 
 - assertVisible: "No results for.*"
@@ -30,7 +40,7 @@ name: "Autofill: Search credentials"
 - eraseText
 
 - tapOn:
-      id: omnibarTextInput
+      id: "omnibarTextInput|inputField"
 - inputText: "192"
 
 - assertVisible: 192.168.0.100

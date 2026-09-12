@@ -21,8 +21,8 @@ import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -35,7 +35,7 @@ class AutofillGracePeriodLifecycleObserver @Inject constructor(
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
-        Timber.d("App in background, invalidating autofill grace period")
+        logcat { "App in background, invalidating autofill grace period" }
         gracePeriod.invalidate()
     }
 }

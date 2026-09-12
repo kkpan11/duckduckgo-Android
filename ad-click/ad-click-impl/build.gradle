@@ -38,7 +38,7 @@ android {
 }
 
 dependencies {
-    anvil project(path: ':anvil-compiler')
+    ksp project(':anvil-ksp')
     implementation project(path: ':anvil-annotations')
     implementation project(path: ':browser-api')
     implementation project(path: ':ad-click-api')
@@ -48,6 +48,7 @@ dependencies {
     implementation project(path: ':privacy-config-api')
     implementation project(path: ':feature-toggles-api')
     implementation project(path: ':app-build-config-api')
+    implementation project(path: ':attributed-metrics-api')
 
     implementation AndroidX.core.ktx
 
@@ -68,7 +69,6 @@ dependencies {
     // Room
     implementation AndroidX.room.runtime
     implementation AndroidX.room.rxJava2
-    implementation AndroidX.room.ktx
     ksp AndroidX.room.compiler
     testImplementation AndroidX.room.testing
 
@@ -83,7 +83,7 @@ dependencies {
         exclude group: "org.jetbrains.kotlinx", module: "kotlinx-coroutines-debug"
     }
 
-    implementation JakeWharton.timber
+    implementation "com.squareup.logcat:logcat:_"
 
     implementation Square.retrofit2.converter.moshi
     implementation Square.okHttp3.okHttp
@@ -97,6 +97,7 @@ dependencies {
     testImplementation Testing.robolectric
 
     testImplementation project(path: ':common-test')
+    testImplementation project(path: ':feature-toggles-test')
 
     coreLibraryDesugaring Android.tools.desugarJdkLibs
 }

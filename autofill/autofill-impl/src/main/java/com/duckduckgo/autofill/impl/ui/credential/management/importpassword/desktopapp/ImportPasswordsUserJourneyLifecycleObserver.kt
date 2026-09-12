@@ -26,14 +26,15 @@ import com.duckduckgo.sync.api.DeviceSyncState.SyncAccountState.SignedIn
 import com.duckduckgo.sync.api.DeviceSyncState.Type.DESKTOP
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
 import kotlin.time.Duration
 import kotlin.time.DurationUnit.HOURS
 import kotlin.time.DurationUnit.MILLISECONDS
 import kotlin.time.toDuration
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import timber.log.Timber
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -68,17 +69,17 @@ class ImportPasswordsUserJourneyLifecycleObserver @Inject constructor(
         if (deviceState is SignedIn && deviceState.isSyncedWithDesktopDevice()) {
             userHasNowSyncedWithDesktopDevice()
         } else {
-            Timber.v("Import Passwords user-journey; user has not yet synced with desktop device. time remaining: %s", timeRemaining)
+            logcat(VERBOSE) { "Import Passwords user-journey; user has not yet synced with desktop device. time remaining: $timeRemaining" }
         }
     }
 
     private suspend fun userHasNowSyncedWithDesktopDevice() {
-        Timber.v("Import Passwords user-journey successful; now synced with desktop device")
+        logcat(VERBOSE) { "Import Passwords user-journey successful; now synced with desktop device" }
         userJourneyEndRecorder.recordSuccessfulJourney()
     }
 
     private suspend fun userJourneyWindowHasExpired() {
-        Timber.v("Import Passwords user-journey expired")
+        logcat(VERBOSE) { "Import Passwords user-journey expired" }
         userJourneyEndRecorder.recordUnsuccessfulJourney()
     }
 

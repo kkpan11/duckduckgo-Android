@@ -42,6 +42,43 @@ class SyncPixelParamRemovalPlugin @Inject constructor() : PixelParamRemovalPlugi
             SyncPixelName.SYNC_USER_SWITCHED_ACCOUNT.pixelName to PixelParameter.removeAtb(),
             SyncPixelName.SYNC_USER_SWITCHED_LOGOUT_ERROR.pixelName to PixelParameter.removeAtb(),
             SyncPixelName.SYNC_USER_SWITCHED_LOGIN_ERROR.pixelName to PixelParameter.removeAtb(),
+
+            SyncPixelName.SYNC_SETUP_DEEP_LINK_TIMEOUT.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_DEEP_LINK_FLOW_STARTED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_DEEP_LINK_FLOW_SUCCESS.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_DEEP_LINK_FLOW_ABANDONED.pixelName to PixelParameter.removeAtb(),
+
+            SyncPixelName.SYNC_SETUP_BARCODE_SCREEN_SHOWN.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_BARCODE_SCANNER_SUCCESS.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_BARCODE_SCANNER_FAILED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_BARCODE_CODE_COPIED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_MANUAL_CODE_ENTRY_SCREEN_SHOWN.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_MANUAL_CODE_ENTERED_FAILED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_MANUAL_CODE_ENTERED_SUCCESS.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_ENDED_ABANDONED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_ENDED_SUCCESS.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_ENDED_FAILED.pixelName to PixelParameter.removeAtb(),
+
+            SyncPixelName.SYNC_SETUP_JOINER_RECOVERY_CODE_DONE_SUCCESS.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_JOINER_RECOVERY_CODE_DONE_SUCCESS_DAILY.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_JOINER_RECOVERY_CODE_DONE_FAILED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_SETUP_JOINER_RECOVERY_CODE_DONE_FAILED_DAILY.pixelName to PixelParameter.removeAtb(),
+
+            SyncPixelName.SYNC_AUTO_RESTORE_TOGGLE_SHOWN.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_TOGGLE_OPTED_OUT.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SETTINGS_READY_SHOWN.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SETTINGS_RESTORE_TAPPED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SETTINGS_SKIP_RESTORE_TAPPED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SETTINGS_CANCELLED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SETTINGS_MANUAL_RECOVERY_SHOWN.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SETTINGS_PAGE_SHOWN.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SETTINGS_PAGE_TOGGLE_ENABLED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SETTINGS_PAGE_TOGGLE_DISABLED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_SUCCESS.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_FAILURE.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_PRESERVED_ACCOUNT_CLEARED.pixelName to PixelParameter.removeAtb(),
+            SyncPixelName.SYNC_AUTO_RESTORE_PRESERVED_ACCOUNT_CLEAR_FAILED.pixelName to PixelParameter.removeAtb(),
+
         )
     }
 }

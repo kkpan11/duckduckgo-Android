@@ -20,6 +20,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup.MarginLayoutParams
 import androidx.coordinatorlayout.widget.CoordinatorLayout
@@ -44,15 +45,51 @@ class TopAppBarBehavior(
         )
     }
 
+    override fun onInterceptTouchEvent(
+        parent: CoordinatorLayout,
+        child: AppBarLayout,
+        ev: MotionEvent,
+    ): Boolean {
+        if (!omnibar.isOmnibarScrollingEnabled()) return false
+        return super.onInterceptTouchEvent(parent, child, ev)
+    }
+
+    override fun onTouchEvent(
+        parent: CoordinatorLayout,
+        child: AppBarLayout,
+        ev: MotionEvent,
+    ): Boolean {
+        if (!omnibar.isOmnibarScrollingEnabled()) return false
+        return super.onTouchEvent(parent, child, ev)
+    }
+
     @SuppressLint("RestrictedApi")
-    override fun layoutDependsOn(parent: CoordinatorLayout, child: AppBarLayout, dependency: View): Boolean {
+    override fun layoutDependsOn(
+        parent: CoordinatorLayout,
+        child: AppBarLayout,
+        dependency: View,
+    ): Boolean {
         if (dependency is Snackbar.SnackbarLayout) {
-            updateSnackbar(child, dependency)
+            if (omnibar.isBottomNavEnabled()) {
+                updateSnackbar(child, dependency)
+            }
         } else if (!viewsExemptedFromOffset.contains(dependency.id)) {
             offsetBottomByToolbar(dependency)
         }
 
         return super.layoutDependsOn(parent, child, dependency)
+    }
+
+    override fun onStartNestedScroll(
+        parent: CoordinatorLayout,
+        child: AppBarLayout,
+        directTargetChild: View,
+        target: View,
+        nestedScrollAxes: Int,
+        type: Int,
+    ): Boolean {
+        if (!omnibar.isOmnibarScrollingEnabled()) return false
+        return super.onStartNestedScroll(parent, child, directTargetChild, target, nestedScrollAxes, type)
     }
 
     override fun onNestedPreScroll(
@@ -72,11 +109,14 @@ class TopAppBarBehavior(
     }
 
     @SuppressLint("RestrictedApi")
-    private fun updateSnackbar(child: View, snackbarLayout: Snackbar.SnackbarLayout) {
+    private fun updateSnackbar(
+        child: View,
+        snackbarLayout: Snackbar.SnackbarLayout,
+    ) {
         if (snackbarLayout.layoutParams is CoordinatorLayout.LayoutParams) {
             val params = snackbarLayout.layoutParams as CoordinatorLayout.LayoutParams
 
-            params.anchorId = R.id.navigationBar
+            params.anchorId = child.id
             params.anchorGravity = Gravity.TOP
             params.gravity = Gravity.TOP
             snackbarLayout.layoutParams = params

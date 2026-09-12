@@ -33,12 +33,13 @@ import com.duckduckgo.sync.api.DeviceSyncState
 import com.duckduckgo.sync.api.engine.SyncEngine
 import com.duckduckgo.sync.api.engine.SyncEngine.SyncTrigger.BACKGROUND_SYNC
 import com.squareup.anvil.annotations.ContributesMultibinding
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 @ContributesWorker(AppScope::class)
 class SyncBackgroundWorker(
@@ -89,7 +90,7 @@ class SyncBackgroundWorkerScheduler @Inject constructor(
     }
 
     private fun scheduleBackgroundSync() {
-        Timber.v("Scheduling background sync worker")
+        logcat(VERBOSE) { "Scheduling background sync worker" }
         val workerRequest = PeriodicWorkRequestBuilder<SyncBackgroundWorker>(3, TimeUnit.HOURS)
             .addTag(BACKGROUND_SYNC_WORKER_TAG)
             .setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.MINUTES)

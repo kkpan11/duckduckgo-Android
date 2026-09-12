@@ -19,7 +19,6 @@ package com.duckduckgo.networkprotection.internal.feature.system_apps
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import androidx.core.view.isVisible
@@ -28,13 +27,15 @@ import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.extensions.safeGetInstalledApplications
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
 import com.duckduckgo.networkprotection.internal.databinding.ActivityNetpInternalSystemAppsExclusionBinding
 import com.duckduckgo.networkprotection.internal.network.NetPInternalExclusionListProvider
-import javax.inject.Inject
 import kotlinx.coroutines.flow.*
 import logcat.logcat
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 class NetPSystemAppsExclusionListActivity : DuckDuckGoActivity(), SystemAppView.SystemAppListener {
@@ -48,17 +49,22 @@ class NetPSystemAppsExclusionListActivity : DuckDuckGoActivity(), SystemAppView.
     @Inject
     lateinit var networkProtectionState: NetworkProtectionState
 
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
+
     private var initialExclusionList: Int? = null
 
     private val binding: ActivityNetpInternalSystemAppsExclusionBinding by viewBinding()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableTransparentEdgeToEdge()
         setContentView(binding.root)
+        configureEdgeToEdgeInsets()
 
         binding.progress.isVisible = true
 
-        packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+        packageManager.safeGetInstalledApplications(this.applicationContext)
             .asSequence()
             .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) != 0 }
             .sortedBy { it.packageName }
@@ -92,6 +98,10 @@ class NetPSystemAppsExclusionListActivity : DuckDuckGoActivity(), SystemAppView.
         if (initialExclusionList != exclusionListProvider.getExclusionList().hashCode()) {
             networkProtectionState.restart()
         }
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applySystemBarInsets(binding.root)
     }
 
     companion object {

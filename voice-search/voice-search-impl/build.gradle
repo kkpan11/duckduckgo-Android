@@ -18,6 +18,7 @@ plugins {
     id 'com.android.library'
     id 'com.squareup.anvil'
     id 'kotlin-android'
+    id 'com.google.devtools.ksp'
 }
 
 apply from: "$rootProject.projectDir/gradle/android-library.gradle"
@@ -30,33 +31,35 @@ android {
 }
 
 dependencies {
+    ksp project(':anvil-ksp')
     implementation project(path: ':app-build-config-api')
     implementation project(path: ':common-utils')
-    implementation project(path: ':common-ui')
+    implementation project(path: ':design-system')
     implementation project(path: ':di')
+    implementation project(path: ':duckchat-api')
     implementation project(path: ':feature-toggles-api')
     implementation project(path: ':privacy-config-api')
     implementation project(path: ':statistics-api')
     implementation project(path: ':voice-search-api')
     implementation project(path: ':voice-search-store')
     implementation project(path: ':remote-messaging-api')
+    implementation project(path: ':browser-ui')
 
-    anvil project(path: ':anvil-compiler')
     implementation project(path: ':anvil-annotations')
 
     implementation AndroidX.appCompat
+    implementation AndroidX.room.runtime
     implementation Google.android.material
     implementation AndroidX.constraintLayout
     implementation AndroidX.core.ktx
     implementation AndroidX.lifecycle.runtime.ktx
     implementation AndroidX.lifecycle.viewModelKtx
     implementation Google.dagger
-    implementation JakeWharton.timber
+    implementation "com.squareup.logcat:logcat:_"
     implementation Square.moshi
     implementation "com.squareup.moshi:moshi-kotlin:_"
     implementation "com.squareup.moshi:moshi-adapters:_"
 
-    implementation AndroidX.room.ktx
 
     testImplementation project(path: ':common-test')
     testImplementation project(path: ':feature-toggles-test')

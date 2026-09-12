@@ -27,6 +27,7 @@ import com.duckduckgo.app.trackerdetection.model.TrackingEvent
 import com.duckduckgo.browser.api.brokensite.BrokenSiteContext
 import com.duckduckgo.common.utils.baseHost
 import com.duckduckgo.common.utils.domain
+import com.duckduckgo.feature.toggles.api.Toggle
 
 interface Site {
 
@@ -76,6 +77,8 @@ interface Site {
     var consentOptOutFailed: Boolean
     var consentSelfTestFailed: Boolean
     var consentCosmeticHide: Boolean?
+    var consentRule: String?
+    var consentReloadLoop: Boolean
     var isDesktopMode: Boolean
     var nextUrl: String
 
@@ -84,6 +87,10 @@ interface Site {
     var maliciousSiteStatus: MaliciousSiteStatus?
 
     var previousNumberOfBlockedTrackers: Int?
+
+    var activeContentScopeExperiments: List<Toggle>?
+
+    var debugFlags: List<String>?
 }
 
 enum class MaliciousSiteStatus {

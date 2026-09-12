@@ -18,12 +18,13 @@ plugins {
     id 'com.android.library'
     id 'kotlin-android'
     id 'com.squareup.anvil'
+    id 'com.google.devtools.ksp'
 }
 
 apply from: "$rootProject.projectDir/gradle/android-library.gradle"
 
 dependencies {
-    anvil project(':anvil-compiler')
+    ksp project(':anvil-ksp')
     implementation project(':anvil-annotations')
 
     implementation project(':di')
@@ -37,11 +38,10 @@ dependencies {
     implementation AndroidX.appCompat
     implementation Google.android.material
     implementation AndroidX.constraintLayout
-    implementation JakeWharton.timber
+    implementation "com.squareup.logcat:logcat:_"
     implementation Google.dagger
     implementation AndroidX.core.ktx
     implementation Square.okHttp3.okHttp
-    implementation "com.squareup.logcat:logcat:_"
 
     // Testing dependencies
     testImplementation project(':feature-toggles-test')
@@ -53,10 +53,20 @@ dependencies {
     testImplementation project(':data-store-test')
     testImplementation "org.mockito.kotlin:mockito-kotlin:_"
     testImplementation "com.squareup.moshi:moshi-kotlin:_"
+    testImplementation CashApp.turbine
     testImplementation Testing.robolectric
     testImplementation AndroidX.test.ext.junit
     testImplementation Square.retrofit2.converter.moshi
     testImplementation Testing.junit4
+    androidTestImplementation AndroidX.test.runner
+    androidTestImplementation AndroidX.test.ext.junit
+    androidTestImplementation Square.retrofit2.converter.moshi
+
+    coreLibraryDesugaring Android.tools.desugarJdkLibs
+}
+
+tasks.register('androidTestsBuild') {
+    dependsOn 'assembleDebugAndroidTest'
 }
 
 anvil {
@@ -68,5 +78,8 @@ android {
   namespace 'com.duckduckgo.feature.impl'
   lintOptions {
       baseline file("lint-baseline.xml")
+  }
+  compileOptions {
+    coreLibraryDesugaringEnabled = true
   }
 }

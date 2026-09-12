@@ -16,10 +16,6 @@
 
 package com.duckduckgo.pir.internal.settings
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
@@ -28,16 +24,22 @@ import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.duckduckgo.navigation.api.GlobalActivityStarter.ActivityParams
+import com.duckduckgo.pir.impl.checker.PirWorkHandler
+import com.duckduckgo.pir.impl.checker.isEnabled
+import com.duckduckgo.pir.impl.dashboard.PirDashboardUrlProvider
+import com.duckduckgo.pir.impl.dashboard.messaging.PirDashboardWebConstants
+import com.duckduckgo.pir.impl.notifications.PirNotificationManager
+import com.duckduckgo.pir.impl.store.PirRepository
+import com.duckduckgo.pir.internal.R
 import com.duckduckgo.pir.internal.databinding.ActivityPirInternalSettingsBinding
 import com.duckduckgo.pir.internal.settings.PirResultsScreenParams.PirEventsResultsScreen
-import com.duckduckgo.pir.internal.store.PirRepository
-import com.duckduckgo.pir.internal.store.PitTestingStore
-import javax.inject.Inject
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(PirSettingsScreenNoParams::class)
@@ -49,20 +51,40 @@ class PirDevSettingsActivity : DuckDuckGoActivity() {
     lateinit var repository: PirRepository
 
     @Inject
-    lateinit var testingStore: PitTestingStore
+    lateinit var dispatcherProvider: DispatcherProvider
 
     @Inject
-    lateinit var dispatcherProvider: DispatcherProvider
+    lateinit var pirWorkHandler: PirWorkHandler
+
+    @Inject
+    lateinit var pirNotificationManager: PirNotificationManager
+
+    @Inject
+    lateinit var pirInternalSettingsDataStore: PirInternalSettingsDataStore
+
+    @Inject
+    lateinit var pirDashboardUrlProvider: PirDashboardUrlProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private val binding: ActivityPirInternalSettingsBinding by viewBinding()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableTransparentEdgeToEdge()
         setContentView(binding.root)
+        configureEdgeToEdgeInsets()
         setupToolbar(binding.toolbar)
         setupViews()
-        createNotificationChannel()
         bindViews()
+        pirNotificationManager.createNotificationChannel()
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.appBar)
+        edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.contentScrollView)
     }
 
     private fun setupViews() {
@@ -74,55 +96,45 @@ class PirDevSettingsActivity : DuckDuckGoActivity() {
             globalActivityStarter.start(this, PirDevOptOutScreenNoParams)
         }
 
+        binding.pirDebugEmail.setOnClickListener {
+            globalActivityStarter.start(this, PirDevEmailScreenNoParams)
+        }
+
         binding.viewRunEvents.setOnClickListener {
             globalActivityStarter.start(this, PirEventsResultsScreen)
         }
 
-        binding.testerInfo.setSecondaryText(testingStore.testerId)
-        if (testingStore.testerId != null) {
-            binding.testerInfo.setLongClickListener {
-                copyDataToClipboard()
-            }
+        binding.brokerConfig.setOnClickListener {
+            globalActivityStarter.start(this, PirBrokerConfigScreenNoParams)
         }
-    }
 
-    private fun copyDataToClipboard() {
-        val clipboardManager = getSystemService(ClipboardManager::class.java)
+        binding.pirCustomUrlInput.text = pirDashboardUrlProvider.getUrl()
 
-        lifecycleScope.launch(dispatcherProvider.io()) {
-            clipboardManager.setPrimaryClip(ClipData.newPlainText("", testingStore.testerId))
-
-            withContext(dispatcherProvider.main()) {
-                Toast.makeText(this@PirDevSettingsActivity, "Testing ID copied to clipboard", Toast.LENGTH_SHORT).show()
+        binding.pirSetCustomUrl.setOnClickListener {
+            val url = binding.pirCustomUrlInput.text
+            if (url.isBlank()) {
+                Toast.makeText(this, getString(R.string.pirDevCustomUrlEmpty), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
+            pirInternalSettingsDataStore.customDashboardUrl = url
+            Toast.makeText(this, getString(R.string.pirDevCustomUrlSet), Toast.LENGTH_SHORT).show()
+        }
+
+        binding.pirResetCustomUrl.setOnClickListener {
+            pirInternalSettingsDataStore.customDashboardUrl = null
+            binding.pirCustomUrlInput.text = PirDashboardWebConstants.DEFAULT_WEB_UI_URL
+            Toast.makeText(this, getString(R.string.pirDevCustomUrlReset), Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun bindViews() {
         lifecycleScope.launch {
-            binding.pirDebugOptOut.isEnabled = repository.getBrokersForOptOut(true).isNotEmpty()
+            pirWorkHandler.canRunPir().collectLatest { eligibility ->
+                val canRunPir = eligibility.isEnabled
+                binding.pirDebugScan.isEnabled = canRunPir
+                binding.pirDebugOptOut.isEnabled = canRunPir && repository.getBrokersForOptOut(true).isNotEmpty()
+            }
         }
-    }
-
-    private fun createNotificationChannel() {
-        // Define the importance level of the notification channel
-        val importance = NotificationManager.IMPORTANCE_DEFAULT
-
-        // Create the NotificationChannel with a unique ID, name, and importance level
-        val channel =
-            NotificationChannel(NOTIF_CHANNEL_ID, "Pir Dev Notifications", importance)
-        channel.description = "Notifications for Pir Dev"
-
-        // Register the channel with the system
-        val notificationManager = getSystemService(
-            NotificationManager::class.java,
-        )
-        notificationManager?.createNotificationChannel(channel)
-    }
-
-    companion object {
-        const val NOTIF_CHANNEL_ID = "PirDevNotificationChannel"
-        const val NOTIF_ID_STATUS_COMPLETE = 987
     }
 }
 

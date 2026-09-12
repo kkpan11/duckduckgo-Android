@@ -34,8 +34,9 @@ import com.duckduckgo.autofill.impl.deviceauth.DeviceAuthenticator.AuthResult.Us
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_DEVICE_AUTH_ERROR_HARDWARE_UNAVAILABLE
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface AuthLauncher {
     fun launch(
@@ -99,7 +100,7 @@ class RealAuthLauncher @Inject constructor(
             errString: CharSequence,
         ) {
             super.onAuthenticationError(errorCode, errString)
-            Timber.d("onAuthenticationError: (%d) %s", errorCode, errString)
+            logcat { "onAuthenticationError: ($errorCode) $errString" }
 
             if (errorCode == BiometricPrompt.ERROR_USER_CANCELED) {
                 onResult(UserCancelled)
@@ -111,14 +112,14 @@ class RealAuthLauncher @Inject constructor(
 
         override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
             super.onAuthenticationSucceeded(result)
-            Timber.d("onAuthenticationSucceeded ${result.authenticationType}")
+            logcat { "onAuthenticationSucceeded ${result.authenticationType}" }
             autofillAuthorizationGracePeriod.recordSuccessfulAuthorization()
             onResult(Success)
         }
 
         override fun onAuthenticationFailed() {
             super.onAuthenticationFailed()
-            Timber.v("onAuthenticationFailed")
+            logcat(VERBOSE) { "onAuthenticationFailed" }
         }
 
         private fun sendErrorPixel(errorCode: Int) {

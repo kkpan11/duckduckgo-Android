@@ -16,25 +16,31 @@
 
 package com.duckduckgo.cookies.impl
 
+import com.duckduckgo.browsermode.api.BrowserMode
 import com.duckduckgo.common.utils.AppUrl
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.cookies.api.CookieManagerProvider
 import com.duckduckgo.cookies.api.DuckDuckGoCookieManager
 import com.duckduckgo.cookies.api.RemoveCookiesStrategy
 import com.duckduckgo.di.scopes.AppScope
+import com.duckduckgo.duckchat.api.DuckAiHostProvider
 import com.squareup.anvil.annotations.ContributesBinding
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 @ContributesBinding(AppScope::class)
 class WebViewCookieManager @Inject constructor(
     private val cookieManager: CookieManagerProvider,
     private val removeCookies: RemoveCookiesStrategy,
     private val dispatcher: DispatcherProvider,
+    duckAiHostProvider: DuckAiHostProvider,
 ) : DuckDuckGoCookieManager {
+    // Regular mode used here because this is Regular mode-only data-clearing
+    private val browserMode = BrowserMode.REGULAR
 
     override suspend fun removeExternalCookies() {
         withContext(dispatcher.io()) {
@@ -48,7 +54,7 @@ class WebViewCookieManager @Inject constructor(
         // These cookies are not stored in a personally identifiable way. For example, the large size setting is stored as 's=l.'
         // More info in https://duckduckgo.com/privacy
         val ddgCookies = getDuckDuckGoCookies()
-        if (cookieManager.get()?.hasCookies() == true) {
+        if (cookieManager.forMode(browserMode)?.hasCookies() == true) {
             removeCookies.removeCookies()
             storeDuckDuckGoCookies(ddgCookies)
         }
@@ -61,7 +67,7 @@ class WebViewCookieManager @Inject constructor(
         cookies.keys.forEach { host ->
             cookies[host]?.forEach {
                 val cookie = it.trim()
-                Timber.d("Restoring DDB cookie: $cookie")
+                logcat { "Restoring DDB cookie: $cookie" }
                 storeCookie(cookie, host)
             }
         }
@@ -69,8 +75,8 @@ class WebViewCookieManager @Inject constructor(
 
     private suspend fun storeCookie(cookie: String, host: String) {
         suspendCoroutine { continuation ->
-            cookieManager.get()?.setCookie(host, cookie) { success ->
-                Timber.v("Cookie $cookie stored successfully: $success")
+            cookieManager.forMode(browserMode)?.setCookie(host, cookie) { success ->
+                logcat(VERBOSE) { "Cookie $cookie stored successfully: $success" }
                 continuation.resume(Unit)
             }
         }
@@ -78,17 +84,15 @@ class WebViewCookieManager @Inject constructor(
 
     private fun getDuckDuckGoCookies(): Map<String, List<String>> {
         val map = mutableMapOf<String, List<String>>()
-        DDG_COOKIE_DOMAINS.forEach { host ->
-            map[host] = cookieManager.get()?.getCookie(host)?.split(";").orEmpty()
+        ddgCookieDomains.forEach { host ->
+            map[host] = cookieManager.forMode(browserMode)?.getCookie(host)?.split(";").orEmpty()
         }
         return map
     }
 
     override fun flush() {
-        cookieManager.get()?.flush()
+        cookieManager.forMode(browserMode)?.flush()
     }
 
-    companion object {
-        val DDG_COOKIE_DOMAINS = listOf(AppUrl.Url.COOKIES, AppUrl.Url.SURVEY_COOKIES)
-    }
+    private val ddgCookieDomains: List<String> = listOf(AppUrl.Url.COOKIES, AppUrl.Url.SURVEY_COOKIES, "https://${duckAiHostProvider.getHost()}")
 }

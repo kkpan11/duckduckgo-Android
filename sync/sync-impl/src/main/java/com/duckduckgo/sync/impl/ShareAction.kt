@@ -24,15 +24,30 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import logcat.LogPriority.ERROR
+import logcat.logcat
 import java.io.File
 import javax.inject.*
-import timber.log.Timber
 
 class ShareAction @Inject constructor(private val appBuildConfig: AppBuildConfig) {
 
     fun shareFile(applicationContext: Context, file: File): Boolean {
         val intent = createShareIntent(applicationContext, file)
         return if (intent != null) startActivity(applicationContext, intent) else false
+    }
+
+    fun shareText(applicationContext: Context, text: String): Boolean {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        val chooser = Intent.createChooser(
+            intent,
+            applicationContext.getString(R.string.sync_share_title),
+        ).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        return startActivity(applicationContext, chooser)
     }
 
     private fun createShareIntent(applicationContext: Context, file: File): Intent? {
@@ -66,7 +81,7 @@ class ShareAction @Inject constructor(private val appBuildConfig: AppBuildConfig
             applicationContext.startActivity(intent)
             true
         } catch (error: ActivityNotFoundException) {
-            Timber.e("No suitable activity found to satisfy intent $intent")
+            logcat(ERROR) { "No suitable activity found to satisfy intent $intent" }
             false
         }
     }

@@ -21,14 +21,13 @@ import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.feature.toggles.api.Toggle
 import com.duckduckgo.feature.toggles.api.Toggle.DefaultFeatureValue
 
-@ContributesRemoteFeature(
-    scope = AppScope::class,
-    featureName = "autoconsent",
-    settingsStore = AutoconsentFeatureSettingsStore::class,
-)
 /**
  * This is the class that represents the autoconsent feature flags
  */
+@ContributesRemoteFeature(
+    scope = AppScope::class,
+    featureName = "autoconsent",
+)
 interface AutoconsentFeature {
     /**
      * @return `true` when the remote config has the global "voiceSearch" feature flag enabled
@@ -39,4 +38,49 @@ interface AutoconsentFeature {
 
     @Toggle.DefaultValue(DefaultFeatureValue.FALSE)
     fun onByDefault(): Toggle
+
+    /**
+     * Kill switch for autoconsent rule filtering
+     * @return `true` when the remote config has the global "ruleFiltering" autoconsent
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `true`
+     */
+    @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
+    fun ruleFiltering(): Toggle
+
+    /**
+     * Kill switch for autoconsent CPM pixels
+     * @return `true` when the remote config has the global "cpmPixels" autoconsent
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `true`
+     */
+    @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
+    fun cpmPixels(): Toggle
+
+    @Toggle.DefaultValue(DefaultFeatureValue.FALSE)
+    fun heuristicAction(): Toggle
+
+    /**
+     * Gate for the new Cookie Pop-up Preference settings UI and behavior.
+     */
+    @Toggle.DefaultValue(DefaultFeatureValue.FALSE)
+    fun cookiePopUpPreferenceSetting(): Toggle
+
+    /**
+     * Gate for the Cookie Pop-up Protection opt-in prompt shown through the prompts coordinator.
+     */
+    @Toggle.DefaultValue(DefaultFeatureValue.INTERNAL)
+    fun cookiePopUpOptInPrompt(): Toggle
+
+    /**
+     * Allows the Cookie Pop-up Protection opt-in prompt to be dismissed with the back button.
+     */
+    @Toggle.DefaultValue(DefaultFeatureValue.FALSE)
+    fun cookiePopUpOptInPromptDismissible(): Toggle
+
+    /**
+     * Shows a close button on the Cookie Pop-up Protection opt-in prompt.
+     */
+    @Toggle.DefaultValue(DefaultFeatureValue.FALSE)
+    fun cookiePopUpOptInPromptCloseButton(): Toggle
 }

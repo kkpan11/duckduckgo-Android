@@ -2,14 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.duckduckgo.autofill.impl">
 
+    <uses-permission android:name="android.permission.CREDENTIAL_MANAGER_SET_ORIGIN" />
+
     <application>
         <activity
             android:name=".ui.credential.management.importpassword.ImportPasswordsActivity"
             android:label="@string/autofillManagementHowToSyncDesktopPasswords"
-            android:exported="false" />
-        <activity
-            android:name=".ui.credential.management.importpassword.desktopapp.ImportPasswordsGetDesktopAppActivity"
-            android:label="@string/autofillManagementImportPasswordsGetDesktopAppTitle"
             android:exported="false" />
         <activity
             android:name=".email.incontext.EmailProtectionInContextSignupActivity"
@@ -17,6 +15,10 @@
             android:exported="false" />
         <activity
             android:name=".importing.gpm.webflow.ImportGooglePasswordsWebFlowActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|navigation|keyboard"
+            android:exported="false" />
+        <activity
+            android:name=".importing.takeout.webflow.ImportGoogleBookmarksWebFlowActivity"
             android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|navigation|keyboard"
             android:exported="false" />
         <activity

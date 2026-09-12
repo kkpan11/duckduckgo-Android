@@ -30,6 +30,23 @@ interface RemoteMessagingFeatureToggles {
     @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
     fun self(): Toggle
 
-    @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
+    @Toggle.DefaultValue(DefaultFeatureValue.FALSE)
     fun invalidateRMFAfterPrivacyConfigDownloaded(): Toggle
+
+    @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
+    fun alwaysProcessRemoteConfig(): Toggle
+
+    @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
+    fun scheduleEveryHour(): Toggle
+
+    @Toggle.DefaultValue(DefaultFeatureValue.TRUE)
+    fun canScheduleOnPrivacyConfigUpdates(): Toggle
+
+    /**
+     * @return `true` when the remote config has the global "remoteMessageModalSurface" remoteMessaging
+     * sub-feature flag enabled
+     * If the remote feature is not present defaults to `false`
+     */
+    @Toggle.DefaultValue(DefaultFeatureValue.FALSE)
+    fun remoteMessageModalSurface(): Toggle
 }

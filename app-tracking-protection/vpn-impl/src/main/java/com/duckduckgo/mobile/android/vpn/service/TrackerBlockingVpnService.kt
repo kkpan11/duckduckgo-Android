@@ -18,6 +18,7 @@ package com.duckduckgo.mobile.android.vpn.service
 
 import android.annotation.SuppressLint
 import android.app.ActivityManager
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.Service
 import android.content.ComponentName
 import android.content.Context
@@ -45,6 +46,7 @@ import com.duckduckgo.di.scopes.VpnScope
 import com.duckduckgo.library.loader.LibraryLoader
 import com.duckduckgo.mobile.android.vpn.dao.VpnServiceStateStatsDao
 import com.duckduckgo.mobile.android.vpn.feature.AppTpRemoteFeatures
+import com.duckduckgo.mobile.android.vpn.integration.NgVpnNetworkStack
 import com.duckduckgo.mobile.android.vpn.integration.VpnNetworkStackProvider
 import com.duckduckgo.mobile.android.vpn.model.AlwaysOnState
 import com.duckduckgo.mobile.android.vpn.model.VpnServiceState
@@ -57,6 +59,7 @@ import com.duckduckgo.mobile.android.vpn.network.VpnNetworkStack.VpnTunnelConfig
 import com.duckduckgo.mobile.android.vpn.network.util.asRoute
 import com.duckduckgo.mobile.android.vpn.network.util.getUnderlyingNetworks
 import com.duckduckgo.mobile.android.vpn.pixels.DeviceShieldPixels
+import com.duckduckgo.mobile.android.vpn.pixels.VpnEnableWideEvent
 import com.duckduckgo.mobile.android.vpn.service.state.VpnStateMonitorService
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason
 import com.duckduckgo.mobile.android.vpn.ui.notification.VpnEnabledNotificationBuilder
@@ -64,13 +67,6 @@ import com.squareup.anvil.annotations.ContributesTo
 import dagger.Binds
 import dagger.Module
 import dagger.android.AndroidInjection
-import java.net.Inet4Address
-import java.net.Inet6Address
-import java.net.InetAddress
-import java.util.concurrent.Executors
-import javax.inject.Inject
-import kotlin.properties.Delegates
-import kotlin.system.exitProcess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -83,8 +79,13 @@ import logcat.LogPriority.ERROR
 import logcat.LogPriority.WARN
 import logcat.asLog
 import logcat.logcat
-
-private const val DDG_VPN_SESSION = "DuckDuckGo"
+import java.net.Inet4Address
+import java.net.Inet6Address
+import java.net.InetAddress
+import java.util.concurrent.Executors
+import javax.inject.Inject
+import kotlin.properties.Delegates
+import kotlin.system.exitProcess
 
 @InjectWith(
     scope = VpnScope::class,
@@ -154,6 +155,8 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
     @Inject lateinit var dnsChangeCallback: DnsChangeCallback
 
     @Inject lateinit var appTpRemoteFeatures: AppTpRemoteFeatures
+
+    @Inject lateinit var vpnEnableWideEvent: VpnEnableWideEvent
 
     private val serviceDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
@@ -238,11 +241,12 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
         when (val action = intent?.action) {
             null, ACTION_START_VPN, ACTION_ALWAYS_ON_START -> {
                 if (notifyVpnStart()) {
+                    vpnEnableWideEvent.onNotifyVpnStartSuccess()
                     synchronized(this) {
                         launch(serviceDispatcher) {
                             // Give Android a moment to complete foreground transition
                             // You might think this is a hack (and it kind of is)
-                            // but it’s a workaround to avoid early establish() binding failures
+                            // but it's a workaround to avoid early establish() binding failures
                             delay(100)
                             async {
                                 startVpn(intent.alwaysOnTriggered())
@@ -251,6 +255,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
                     }
                 } else {
                     logcat(ERROR) { "notifyStart return error, aborting" }
+                    vpnEnableWideEvent.onNotifyVpnStartFailed()
                     deviceShieldPixels.notifyStartFailed()
                     // remove the notification and stop service
                     stopForeground(true)
@@ -339,6 +344,8 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             return@withContext
         }
 
+        vpnEnableWideEvent.onNullTunnelCreated()
+
         activeTun?.let {
             logcat { "VPN log: restarting the tunnel" }
             updateNetworkStackUponRestart()
@@ -367,6 +374,8 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             stopVpn(VpnStopReason.ERROR, false)
             return@withContext
         }
+
+        vpnEnableWideEvent.onVpnPrepared()
 
         // set underlying networks
         // configureUnderlyingNetworks()
@@ -401,14 +410,14 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
         }
 
         deviceShieldPixels.reportVpnStartAttemptSuccess()
+        vpnEnableWideEvent.onVpnStarted()
 
         // This is something temporary while we confirm whether we're able to fix the moto g issues with appTP
         // see https://app.asana.com/0/488551667048375/1203410036713941/f for more info
         tunnelConfig?.let { config ->
             // TODO this is temporary hack until we know this approach works for moto g. If it does we'll spend time making it better/more permanent
-            if (config.dns.map { it.hostAddress }.contains("10.11.12.1")) {
-                // noop whenever NetP is enabled
-            } else if (config.dns.isNotEmpty()) {
+            if (vpnNetworkStack is NgVpnNetworkStack && config.dns.isNotEmpty()) {
+                // This solution is only relevant for AppTP
                 // just temporary pixel to know quantify how many users would be impacted
                 deviceShieldPixels.reportMotoGFix()
                 dnsChangeCallback.register()
@@ -449,7 +458,6 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
                 // TODO should we protect all comms with our controller BE? other VPNs do that
                 safelyAddDisallowedApps(listOf(this@TrackerBlockingVpnService.packageName))
                 setBlocking(true)
-                setSession(DDG_VPN_SESSION)
                 setMtu(1280)
                 try {
                     prepare(this@TrackerBlockingVpnService)
@@ -530,9 +538,6 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             }
 
             setBlocking(true)
-            // optional in docs but apparently some OEMs may expect to have a session
-            setSession(DDG_VPN_SESSION)
-
             // Cap the max MTU value to avoid backpressure issues in the socket
             // This is effectively capping the max segment size too
             setMtu(tunnelConfig.mtu)
@@ -620,6 +625,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
         activeTun = null
 
         sendStopPixels(reason)
+        vpnEnableWideEvent.onVpnStop(reason)
 
         // If VPN has been started, then onVpnStopped must be called. Else, an error might have occurred before start so we call onVpnStartFailed
         if (hasVpnAlreadyStarted) {
@@ -715,12 +721,17 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             }
         }
 
-        ServiceCompat.startForeground(
-            this,
-            VPN_FOREGROUND_SERVICE_ID,
-            VpnEnabledNotificationBuilder.buildVpnEnabledNotification(applicationContext, vpnNotification),
-            FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-        )
+        try {
+            ServiceCompat.startForeground(
+                this,
+                VPN_FOREGROUND_SERVICE_ID,
+                VpnEnabledNotificationBuilder.buildVpnEnabledNotification(applicationContext, vpnNotification),
+                FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } catch (_: Throwable) {
+            // signal the error
+            return false
+        }
 
         return vpnNotification != emptyNotification
     }
@@ -821,7 +832,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             if (!isServiceRunning(appContext)) return
 
             snoozeIntent(appContext, triggerAtMillis).run {
-                ContextCompat.startForegroundService(appContext, this)
+                appContext.startForegroundServiceWithFallback(this)
             }
         }
 
@@ -837,7 +848,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
 //                }
 //            }.onFailure {
 //                // fallback for when both browser and vpn processes are not up, as we can't start a non-foreground service in the background
-//                Timber.w(it, "VPN log: Failed to start trampoline service")
+//                logcat(WARN) { "VPN log: Failed to start trampoline service: ${it.asLog()} }
 //                startVpnService(applicationContext)
 //            }
 //        }
@@ -848,7 +859,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             if (isServiceRunning(applicationContext)) return
 
             startIntent(applicationContext).run {
-                ContextCompat.startForegroundService(applicationContext, this)
+                applicationContext.startForegroundServiceWithFallback(this)
             }
         }
 
@@ -858,7 +869,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             if (!isServiceRunning(applicationContext)) return
 
             stopIntent(applicationContext).run {
-                ContextCompat.startForegroundService(applicationContext, this)
+                applicationContext.startForegroundServiceWithFallback(this)
             }
         }
 
@@ -866,7 +877,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             val applicationContext = context.applicationContext
 
             restartIntent(applicationContext).run {
-                ContextCompat.startForegroundService(applicationContext, this)
+                applicationContext.startForegroundServiceWithFallback(this)
             }
         }
 
@@ -886,6 +897,23 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             } else if (forceRestart) {
                 logcat { "VPN log: starting service" }
                 startVpnService(applicationContext)
+            }
+        }
+
+        @SuppressLint("DenyListedApi") // static private method
+        private fun Context.startForegroundServiceWithFallback(intent: Intent) {
+            try {
+                ContextCompat.startForegroundService(this, intent)
+            } catch (ex: ForegroundServiceStartNotAllowedException) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    try {
+                        this.startService(intent)
+                    } catch (_: Throwable) {
+                        // no-op
+                    }
+                } else {
+                    throw ex
+                }
             }
         }
 

@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<issues format="6" by="lint 8.7.3" type="baseline" client="gradle" dependencies="false" name="AGP (8.7.3)" variant="all" version="8.7.3">
+<issues format="6" by="lint 8.8.2" type="baseline" client="gradle" dependencies="false" name="AGP (8.7.3)" variant="all" version="8.8.2">
 
     <issue
-        id="SetJavaScriptEnabled"
-        message="Using `setJavaScriptEnabled` can introduce XSS vulnerabilities into your application, review carefully"
-        errorLine1="                javaScriptEnabled = true"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~">
+        id="NestedWeights"
+        message="Nested weights are bad for performance"
+        errorLine1="            android:layout_weight=&quot;1&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/com/duckduckgo/pir/internal/common/PirDetachedWebViewProvider.kt"
-            line="154"
-            column="17"/>
+            file="src/main/res/layout/activity_pir_internal_broker_config.xml"
+            line="68"
+            column="13"/>
     </issue>
 
     <issue
@@ -19,7 +19,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_pir_internal_scan.xml"
-            line="63"
+            line="75"
             column="17"/>
     </issue>
 
@@ -30,7 +30,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_pir_internal_scan.xml"
-            line="72"
+            line="84"
             column="17"/>
     </issue>
 
@@ -41,7 +41,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_pir_internal_scan.xml"
-            line="81"
+            line="93"
             column="17"/>
     </issue>
 
@@ -52,7 +52,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_pir_internal_scan.xml"
-            line="90"
+            line="102"
             column="17"/>
     </issue>
 
@@ -63,7 +63,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_pir_internal_scan.xml"
-            line="99"
+            line="111"
             column="17"/>
     </issue>
 
@@ -74,7 +74,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/layout/activity_pir_internal_scan.xml"
-            line="109"
+            line="121"
             column="17"/>
     </issue>
 

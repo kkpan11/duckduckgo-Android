@@ -41,10 +41,10 @@ import com.duckduckgo.di.scopes.ViewScope
 import com.duckduckgo.newtabpage.api.NewTabPageSection
 import com.duckduckgo.newtabpage.api.NewTabPageSectionPlugin
 import dagger.android.support.AndroidSupportInjection
-import javax.inject.Inject
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ViewScope::class)
 class IndonesiaNewTabSectionView @JvmOverloads constructor(
@@ -95,7 +95,7 @@ class IndonesiaNewTabSectionView @JvmOverloads constructor(
         with(binding.newTabIndonesiaMessage) {
             setMessage(
                 Message(
-                    topIllustration = com.duckduckgo.mobile.android.R.drawable.ic_announce,
+                    topIllustration = com.duckduckgo.mobile.android.R.drawable.announcement_96,
                     title = context.getString(R.string.newTabPageIndonesiaMessageHeading),
                     subtitle = context.getString(R.string.newTabPageIndonesiaMessageBody),
                     action = context.getString(R.string.newTabPageIndonesiaMessageCta),
@@ -118,6 +118,8 @@ class IndonesiaNewTabSectionView @JvmOverloads constructor(
     AppScope::class,
     boundType = NewTabPageSectionPlugin::class,
     priority = NewTabPageSectionPlugin.PRIORITY_INDONESIA_MESSAGE,
+    featureName = "pluginIndonesiaNewTabSectionPlugin",
+    parentFeatureName = "pluginPointNewTabPageSectionPlugin",
 )
 class IndonesiaNewTabSectionPlugin @Inject constructor() : NewTabPageSectionPlugin {
 

@@ -27,6 +27,7 @@ import androidx.test.filters.FlakyTest
 import androidx.test.filters.SdkSuppress
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.onboarding.ui.OnboardingActivity
+import org.hamcrest.Matchers.allOf
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,7 +46,7 @@ class DaxDialogsJourneyTest {
     @Test
     @UserJourney
     @FlakyTest
-    @SdkSuppress(minSdkVersion = Build.VERSION_CODES.O, maxSdkVersion = Build.VERSION_CODES.P)
+    @SdkSuppress(maxSdkVersion = Build.VERSION_CODES.P)
     fun daxDialogs_supports_default_browser_journey() {
         onView(isRoot()).perform(waitForView(withId(R.id.primaryCta)))
         onView(withId(R.id.primaryCta)).perform(click())
@@ -54,8 +55,8 @@ class DaxDialogsJourneyTest {
         onView(withId(R.id.continueButton)).perform(click())
 
         onView(isRoot()).perform(waitForView(withId(R.id.browserMenu)))
-        onView(withId(R.id.browserMenu)).perform(click())
+        onView(allOf(withId(R.id.browserMenu), isClickable())).perform(click())
 
-        onView(withId(R.id.forwardMenuItem)).check(matches(isDisplayed()))
+        onView(withContentDescription("Forward")).check(matches(isDisplayed()))
     }
 }

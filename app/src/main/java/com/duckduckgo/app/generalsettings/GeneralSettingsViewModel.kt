@@ -27,33 +27,43 @@ import com.duckduckgo.app.pixels.AppPixelName.AUTOCOMPLETE_GENERAL_SETTINGS_TOGG
 import com.duckduckgo.app.pixels.AppPixelName.AUTOCOMPLETE_GENERAL_SETTINGS_TOGGLED_ON
 import com.duckduckgo.app.pixels.AppPixelName.AUTOCOMPLETE_RECENT_SITES_GENERAL_SETTINGS_TOGGLED_OFF
 import com.duckduckgo.app.pixels.AppPixelName.AUTOCOMPLETE_RECENT_SITES_GENERAL_SETTINGS_TOGGLED_ON
-import com.duckduckgo.app.pixels.remoteconfig.AndroidBrowserConfigFeature
+import com.duckduckgo.app.pixels.AppPixelName.CHAT_SUGGESTIONS_GENERAL_SETTINGS_TOGGLED_OFF_COUNT
+import com.duckduckgo.app.pixels.AppPixelName.CHAT_SUGGESTIONS_GENERAL_SETTINGS_TOGGLED_OFF_DAILY
+import com.duckduckgo.app.pixels.AppPixelName.CHAT_SUGGESTIONS_GENERAL_SETTINGS_TOGGLED_ON_COUNT
+import com.duckduckgo.app.pixels.AppPixelName.CHAT_SUGGESTIONS_GENERAL_SETTINGS_TOGGLED_ON_DAILY
 import com.duckduckgo.app.settings.db.SettingsDataStore
 import com.duckduckgo.app.statistics.pixels.Pixel
+import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Daily
+import com.duckduckgo.browser.api.autocomplete.AutoCompleteSettings
+import com.duckduckgo.browser.feature.toggles.AndroidBrowserConfigFeature
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.ActivityScope
+import com.duckduckgo.duckchat.api.DuckChat
 import com.duckduckgo.history.api.NavigationHistory
 import com.duckduckgo.malicioussiteprotection.api.MaliciousSiteProtection
 import com.duckduckgo.voice.api.VoiceSearchAvailability
 import com.duckduckgo.voice.impl.VoiceSearchPixelNames.VOICE_SEARCH_GENERAL_SETTINGS_OFF
 import com.duckduckgo.voice.impl.VoiceSearchPixelNames.VOICE_SEARCH_GENERAL_SETTINGS_ON
 import com.duckduckgo.voice.store.VoiceSearchRepository
-import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.INFO
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class GeneralSettingsViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
+    private val autoCompleteSettings: AutoCompleteSettings,
     private val pixel: Pixel,
     private val history: NavigationHistory,
     private val voiceSearchAvailability: VoiceSearchAvailability,
@@ -63,6 +73,7 @@ class GeneralSettingsViewModel @Inject constructor(
     private val showOnAppLaunchOptionDataStore: ShowOnAppLaunchOptionDataStore,
     private val androidBrowserConfigFeature: AndroidBrowserConfigFeature,
     private val maliciousSiteProtection: MaliciousSiteProtection,
+    private val duckChat: DuckChat,
 ) : ViewModel() {
 
     data class ViewState(
@@ -75,6 +86,9 @@ class GeneralSettingsViewModel @Inject constructor(
         val showOnAppLaunchSelectedOption: ShowOnAppLaunchOption,
         val maliciousSiteProtectionEnabled: Boolean,
         val maliciousSiteProtectionFeatureAvailable: Boolean,
+        val showChatSuggestionsToggle: Boolean = false,
+        val chatSuggestionsEnabled: Boolean = true,
+        val showNTPAfterIdleReturn: Boolean = false,
     )
 
     sealed class Command {
@@ -90,21 +104,28 @@ class GeneralSettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(dispatcherProvider.io()) {
-            val autoCompleteEnabled = settingsDataStore.autoCompleteSuggestionsEnabled
+            val autoCompleteEnabled = autoCompleteSettings.autoCompleteSuggestionsEnabled
             if (!autoCompleteEnabled) {
                 history.setHistoryUserEnabled(false)
             }
             _viewState.value = ViewState(
-                autoCompleteSuggestionsEnabled = settingsDataStore.autoCompleteSuggestionsEnabled,
+                autoCompleteSuggestionsEnabled = autoCompleteSettings.autoCompleteSuggestionsEnabled,
                 autoCompleteRecentlyVisitedSitesSuggestionsUserEnabled = history.isHistoryUserEnabled(),
                 storeHistoryEnabled = history.isHistoryFeatureAvailable(),
                 showVoiceSearch = voiceSearchAvailability.isVoiceSearchSupported,
                 voiceSearchEnabled = voiceSearchAvailability.isVoiceSearchAvailable,
-                isShowOnAppLaunchOptionVisible = showOnAppLaunchFeature.self().isEnabled(),
+                isShowOnAppLaunchOptionVisible = showOnAppLaunchFeature.self().isEnabled() ||
+                    androidBrowserConfigFeature.showNTPAfterIdleReturn().isEnabled(),
                 showOnAppLaunchSelectedOption = showOnAppLaunchOptionDataStore.optionFlow.first(),
                 maliciousSiteProtectionEnabled = settingsDataStore.maliciousSiteProtectionEnabled,
                 maliciousSiteProtectionFeatureAvailable =
-                androidBrowserConfigFeature.enableMaliciousSiteProtection().isEnabled() && maliciousSiteProtection.isFeatureEnabled(),
+                androidBrowserConfigFeature.enableMaliciousSiteProtection().isEnabled() &&
+                    maliciousSiteProtection.isFeatureEnabled() &&
+                    !androidBrowserConfigFeature.newThreatProtectionSettings().isEnabled(),
+                showChatSuggestionsToggle = duckChat.isEnabled() &&
+                    duckChat.observeInputScreenUserSettingEnabled().firstOrNull() == true,
+                chatSuggestionsEnabled = duckChat.observeChatSuggestionsUserSettingEnabled().firstOrNull() ?: true,
+                showNTPAfterIdleReturn = androidBrowserConfigFeature.showNTPAfterIdleReturn().isEnabled(),
             )
         }
 
@@ -112,9 +133,9 @@ class GeneralSettingsViewModel @Inject constructor(
     }
 
     fun onAutocompleteSettingChanged(enabled: Boolean) {
-        Timber.i("User changed autocomplete setting, is now enabled: $enabled")
+        logcat(INFO) { "User changed autocomplete setting, is now enabled: $enabled" }
         viewModelScope.launch(dispatcherProvider.io()) {
-            settingsDataStore.autoCompleteSuggestionsEnabled = enabled
+            autoCompleteSettings.autoCompleteSuggestionsEnabled = enabled
             if (!enabled) {
                 history.setHistoryUserEnabled(false)
             }
@@ -131,7 +152,7 @@ class GeneralSettingsViewModel @Inject constructor(
     }
 
     fun onAutocompleteRecentlyVisitedSitesSettingChanged(enabled: Boolean) {
-        Timber.i("User changed autocomplete recently visited sites setting, is now enabled: $enabled")
+        logcat(INFO) { "User changed autocomplete recently visited sites setting, is now enabled: $enabled" }
         viewModelScope.launch(dispatcherProvider.io()) {
             history.setHistoryUserEnabled(enabled)
             if (enabled) {
@@ -147,7 +168,6 @@ class GeneralSettingsViewModel @Inject constructor(
         viewModelScope.launch(dispatcherProvider.io()) {
             voiceSearchRepository.setVoiceSearchUserEnabled(checked)
             if (checked) {
-                voiceSearchRepository.resetVoiceSearchDismissed()
                 pixel.fire(VOICE_SEARCH_GENERAL_SETTINGS_ON)
             } else {
                 pixel.fire(VOICE_SEARCH_GENERAL_SETTINGS_OFF)
@@ -162,7 +182,7 @@ class GeneralSettingsViewModel @Inject constructor(
     }
 
     fun onMaliciousSiteProtectionSettingChanged(enabled: Boolean) {
-        Timber.i("User changed malicious site setting, is now enabled: $enabled")
+        logcat(INFO) { "User changed malicious site setting, is now enabled: $enabled" }
         viewModelScope.launch(dispatcherProvider.io()) {
             settingsDataStore.maliciousSiteProtectionEnabled = enabled
             pixel.fire(
@@ -177,6 +197,21 @@ class GeneralSettingsViewModel @Inject constructor(
 
     fun maliciousSiteLearnMoreClicked() {
         sendCommand(Command.OpenMaliciousLearnMore)
+    }
+
+    fun onChatSuggestionsSettingChanged(enabled: Boolean) {
+        logcat(INFO) { "User changed chat suggestions setting, is now enabled: $enabled" }
+        viewModelScope.launch(dispatcherProvider.io()) {
+            duckChat.setChatSuggestionsUserSetting(enabled)
+            if (enabled) {
+                pixel.fire(CHAT_SUGGESTIONS_GENERAL_SETTINGS_TOGGLED_ON_COUNT)
+                pixel.fire(CHAT_SUGGESTIONS_GENERAL_SETTINGS_TOGGLED_ON_DAILY, type = Daily())
+            } else {
+                pixel.fire(CHAT_SUGGESTIONS_GENERAL_SETTINGS_TOGGLED_OFF_COUNT)
+                pixel.fire(CHAT_SUGGESTIONS_GENERAL_SETTINGS_TOGGLED_OFF_DAILY, type = Daily())
+            }
+            _viewState.value = _viewState.value?.copy(chatSuggestionsEnabled = enabled)
+        }
     }
 
     private fun observeShowOnAppLaunchOption() {

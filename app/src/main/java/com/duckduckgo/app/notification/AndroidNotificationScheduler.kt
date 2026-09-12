@@ -25,9 +25,11 @@ import com.duckduckgo.app.notification.model.ClearDataNotification
 import com.duckduckgo.app.notification.model.PrivacyProtectionNotification
 import com.duckduckgo.app.notification.model.SchedulableNotification
 import com.duckduckgo.di.scopes.AppScope
+import dev.zacsweers.metro.HasMemberInjections
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-import timber.log.Timber
 
 // Please don't rename any Worker class name or class path
 // More information: https://craigrussell.io/2019/04/a-workmanager-pitfall-modifying-a-scheduled-worker/
@@ -80,7 +82,7 @@ class NotificationScheduler(
         unit: TimeUnit,
         tag: String,
     ) {
-        Timber.v("Scheduling notification for $duration")
+        logcat(VERBOSE) { "Scheduling notification for $duration" }
         val request = builder
             .addTag(tag)
             .setInitialDelay(duration, unit)
@@ -110,6 +112,7 @@ class ShowClearDataNotification(
     override lateinit var notification: ClearDataNotification
 }
 
+@HasMemberInjections
 @ContributesWorker(AppScope::class)
 open class ClearDataNotificationWorker(
     context: Context,

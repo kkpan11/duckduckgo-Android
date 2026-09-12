@@ -16,21 +16,24 @@
 
 package com.duckduckgo.app.tabs.ui
 
+import androidx.core.net.toUri
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.duckduckgo.anvil.annotations.ContributesViewModel
+import com.duckduckgo.app.browser.api.OmnibarRepository
 import com.duckduckgo.app.browser.favicon.FaviconManager
-import com.duckduckgo.app.browser.senseofprotection.SenseOfProtectionExperiment
+import com.duckduckgo.app.browser.omnibar.OmnibarType
+import com.duckduckgo.app.di.AppCoroutineScope
+import com.duckduckgo.app.fire.promo.FireTabsPromos
 import com.duckduckgo.app.pixels.AppPixelName
 import com.duckduckgo.app.pixels.AppPixelName.TAB_MANAGER_GRID_VIEW_BUTTON_CLICKED
-import com.duckduckgo.app.pixels.AppPixelName.TAB_MANAGER_INFO_PANEL_DISMISSED
-import com.duckduckgo.app.pixels.AppPixelName.TAB_MANAGER_INFO_PANEL_TAPPED
 import com.duckduckgo.app.pixels.AppPixelName.TAB_MANAGER_LIST_VIEW_BUTTON_CLICKED
+import com.duckduckgo.app.pixels.BrowserModeSwitchSource
+import com.duckduckgo.app.pixels.duckchat.createWasUsedBeforePixelParams
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Daily
-import com.duckduckgo.app.tabs.TabManagerFeatureFlags
 import com.duckduckgo.app.tabs.model.TabEntity
 import com.duckduckgo.app.tabs.model.TabRepository
 import com.duckduckgo.app.tabs.model.TabSwitcherData.LayoutType
@@ -38,120 +41,179 @@ import com.duckduckgo.app.tabs.model.TabSwitcherData.LayoutType.GRID
 import com.duckduckgo.app.tabs.model.TabSwitcherData.LayoutType.LIST
 import com.duckduckgo.app.tabs.store.TabSwitcherDataStore
 import com.duckduckgo.app.tabs.ui.TabSwitcherItem.Tab
+import com.duckduckgo.app.tabs.ui.TabSwitcherItem.Tab.DuckAiTab
 import com.duckduckgo.app.tabs.ui.TabSwitcherItem.Tab.NormalTab
 import com.duckduckgo.app.tabs.ui.TabSwitcherItem.Tab.SelectableTab
-import com.duckduckgo.app.tabs.ui.TabSwitcherItem.TrackerAnimationInfoPanel
-import com.duckduckgo.app.tabs.ui.TabSwitcherItem.TrackerAnimationInfoPanel.Companion.TRACKER_ANIMATION_PANEL_ID
+import com.duckduckgo.app.tabs.ui.TabSwitcherItem.TrackersAnimationInfoPanel
+import com.duckduckgo.app.tabs.ui.TabSwitcherItem.TrackersAnimationInfoPanel.Companion.TRACKER_ANIMATION_PANEL_ID
 import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.Command.BookmarkTabsRequest
 import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.Command.DismissAnimatedTileDismissalDialog
 import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.Command.ShareLink
 import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.Command.ShareLinks
 import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.Command.ShowAnimatedTileDismissalDialog
 import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.Command.ShowUndoBookmarkMessage
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.BackButtonType.ARROW
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.BackButtonType.CLOSE
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.FabType
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.Mode
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.Mode.Normal
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.Mode.Selection
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.Mode
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.Mode.Normal
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.Mode.Selection
 import com.duckduckgo.app.trackerdetection.api.WebTrackersBlockedAppRepository
-import com.duckduckgo.common.ui.experiments.visual.store.VisualDesignExperimentDataStore
+import com.duckduckgo.browsermode.api.BrowserMode
+import com.duckduckgo.browsermode.api.BrowserModeDataProvider
+import com.duckduckgo.browsermode.api.BrowserModeStateHolder
+import com.duckduckgo.browsermode.api.FireModeAvailability
 import com.duckduckgo.common.ui.tabs.SwipingTabsFeatureProvider
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.SingleLiveEvent
-import com.duckduckgo.common.utils.extensions.toBinaryString
+import com.duckduckgo.common.utils.extensions.combine
 import com.duckduckgo.di.scopes.ActivityScope
+import com.duckduckgo.duckchat.api.DuckAiFeatureState
+import com.duckduckgo.duckchat.api.DuckAiSessionCallback
+import com.duckduckgo.duckchat.api.DuckAiSessionExitTrigger
 import com.duckduckgo.duckchat.api.DuckChat
+import com.duckduckgo.duckchat.api.DuckChatEntryPoint
 import com.duckduckgo.duckchat.impl.pixel.DuckChatPixelName
+import com.duckduckgo.remote.messaging.api.RemoteMessageModel
 import com.duckduckgo.savedsites.api.SavedSitesRepository
 import com.duckduckgo.savedsites.api.models.SavedSite.Bookmark
-import javax.inject.Inject
-import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @ContributesViewModel(ActivityScope::class)
 class TabSwitcherViewModel @Inject constructor(
-    private val tabRepository: TabRepository,
+    private val tabRepositoryProvider: BrowserModeDataProvider<TabRepository>,
+    private val browserModeStateHolder: BrowserModeStateHolder,
+    private val fireModeAvailability: FireModeAvailability,
     private val dispatcherProvider: DispatcherProvider,
     private val pixel: Pixel,
     private val swipingTabsFeature: SwipingTabsFeatureProvider,
     private val duckChat: DuckChat,
-    private val tabManagerFeatureFlags: TabManagerFeatureFlags,
-    private val senseOfProtectionExperiment: SenseOfProtectionExperiment,
+    private val duckAiFeatureState: DuckAiFeatureState,
     private val webTrackersBlockedAppRepository: WebTrackersBlockedAppRepository,
     private val tabSwitcherDataStore: TabSwitcherDataStore,
     private val faviconManager: FaviconManager,
     private val savedSitesRepository: SavedSitesRepository,
-    visualDesignExperimentDataStore: VisualDesignExperimentDataStore,
+    private val trackersAnimationInfoPanelPixels: TrackersAnimationInfoPanelPixels,
+    private val omnibarRepository: OmnibarRepository,
+    private val tabTitleResolver: TabTitleResolver,
+    private val duckAiSessionCallback: DuckAiSessionCallback,
+    @param:AppCoroutineScope private val appCoroutineScope: CoroutineScope,
+    private val fireTabsPromos: FireTabsPromos,
+    private val remoteMessageModel: RemoteMessageModel,
 ) : ViewModel() {
 
-    val activeTab = tabRepository.liveSelectedTab
-    val deletableTabs: LiveData<List<TabEntity>> = tabRepository.flowDeletableTabs.asLiveData(
-        context = viewModelScope.coroutineContext,
+    private val fireModeAvailable = fireModeAvailability.isAvailable()
+
+    // Mode-switch orchestrator: observes the mode it also writes via switchTo().
+    @Suppress("DenyListedApi")
+    val currentMode: StateFlow<BrowserMode> =
+        if (fireModeAvailable) {
+            browserModeStateHolder.currentMode
+        } else {
+            MutableStateFlow(BrowserMode.REGULAR)
+        }
+
+    private val tabRepositoryFlow = currentMode.mapLatest {
+        tabRepositoryProvider.forMode(it)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(),
+        tabRepositoryProvider.forMode(currentMode.value),
     )
+
+    private val tabRepository: TabRepository
+        get() = tabRepositoryFlow.value
 
     val command: SingleLiveEvent<Command> = SingleLiveEvent()
 
-    private val tabSwitcherItemsFlow = tabRepository.flowTabs
-        .debounce(100.milliseconds)
-        .conflate()
-        .flatMapLatest { tabEntities ->
-            combine(
-                tabRepository.flowSelectedTab,
-                _selectionViewState,
-                tabSwitcherDataStore.isAnimationTileDismissed(),
-            ) { activeTab, viewState, isAnimationTileDismissed ->
-                getTabItems(tabEntities, activeTab, isAnimationTileDismissed, viewState.mode)
+    private val _viewState = MutableStateFlow(
+        ViewState(
+            isSplitOmnibarEnabled = omnibarRepository.omnibarType == OmnibarType.SPLIT,
+            isBrowserModeToggleVisible = fireModeAvailable,
+            browserMode = currentMode.value,
+        ),
+    )
+
+    private var tabSwitcherPromoHandled = false
+
+    init {
+        viewModelScope.launch {
+            val showPromo = withContext(dispatcherProvider.io()) {
+                val activeMessage = remoteMessageModel.getActiveMessage()
+                val isFireTabsCampaign = activeMessage?.id == FireTabsPromos.FIRE_TABS_PROMO_MESSAGE_ID
+                isFireTabsCampaign &&
+                    currentMode.value == BrowserMode.REGULAR &&
+                    fireTabsPromos.canShowTabSwitcherPromo()
+            }
+            // Re-check the dismiss flag after the suspending read: the user may have toggled modes meanwhile.
+            if (showPromo && !tabSwitcherPromoHandled) {
+                tabSwitcherPromoHandled = true
+                fireTabsPromos.onTabSwitcherPromoShown()
+                pixel.fire(AppPixelName.FIRE_TABS_PROMO_TAB_SWITCHER_SHOWN)
+                _viewState.update { it.copy(isFireTabsPromoVisible = true) }
             }
         }
+    }
 
-    val tabSwitcherItemsLiveData: LiveData<List<TabSwitcherItem>> = tabSwitcherItemsFlow.asLiveData()
+    private val tabSwitcherItemsFlow: Flow<TabItems> = tabRepositoryFlow.flatMapLatest { repo ->
+        combine(
+            repo.flowTabs.debounce(100.milliseconds),
+            repo.flowSelectedTab,
+            _viewState,
+            tabSwitcherDataStore.isTrackersAnimationInfoTileHidden(),
+            currentMode,
+        ) { tabEntities, activeTab, viewState, isAnimationTileDismissed, browserMode ->
+            getTabItems(tabEntities, activeTab, isAnimationTileDismissed, viewState.mode, browserMode)
+        }
+            .map<List<TabSwitcherItem>, TabItems> { TabItems.Loaded(it) }
+            .onStart { emit(TabItems.NotInitialized) }
+    }
 
-    private val _selectionViewState = MutableStateFlow(SelectionViewState())
-    val selectionViewState = combine(
-        _selectionViewState,
+    val tabSwitcherItemsLiveData: LiveData<List<TabSwitcherItem>> = tabSwitcherItemsFlow.map { it.itemsOrEmpty }.asLiveData()
+
+    val viewState = combine(
+        _viewState,
         tabSwitcherItemsFlow,
-        tabRepository.tabSwitcherData,
-        visualDesignExperimentDataStore.isExperimentEnabled,
-        duckChat.showInBrowserMenu,
-    ) { viewState, tabSwitcherItems, tabSwitcherData, isVisualDesignExperimentEnabled, showInBrowserMenu ->
+        tabRepositoryFlow.flatMapLatest { it.tabSwitcherData },
+        duckAiFeatureState.showOmnibarShortcutOnNtpAndOnFocus,
+        currentMode,
+        tabRepositoryProvider.forMode(BrowserMode.REGULAR).flowTabs.map { it.size },
+    ) { viewState, tabItems, tabSwitcherData, showDuckAiButton, browserMode, regularTabCount ->
         viewState.copy(
-            tabSwitcherItems = tabSwitcherItems,
+            tabItems = tabItems,
             layoutType = tabSwitcherData.layoutType,
-            isNewVisualDesignEnabled = isVisualDesignExperimentEnabled,
-            isDuckChatEnabled = duckChat.isEnabled() && showInBrowserMenu,
+            isDuckAIButtonVisible = showDuckAiButton,
+            browserMode = browserMode,
+            regularTabCount = regularTabCount,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), SelectionViewState())
-
-    val layoutType = tabRepository.tabSwitcherData
-        .map { it.layoutType }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(),
+        initialValue = _viewState.value,
+    )
 
     // all tab items, including the animated tile
     val tabSwitcherItems: List<TabSwitcherItem>
-        get() {
-            return if (tabManagerFeatureFlags.multiSelection().isEnabled()) {
-                selectionViewState.value.tabSwitcherItems
-            } else {
-                tabSwitcherItemsLiveData.value.orEmpty()
-            }
-        }
+        get() = viewState.value.tabSwitcherItems
 
     // only the actual browser tabs
     val tabs: List<Tab>
@@ -161,25 +223,41 @@ class TabSwitcherViewModel @Inject constructor(
 
     // to be used in places where selection mode is required
     private val selectionMode: Selection
-        get() = requireNotNull(selectionViewState.value.mode as Selection)
+        get() = requireNotNull(viewState.value.mode as Selection)
 
     sealed class Command {
         data object Close : Command()
         data class CloseAndShowUndoMessage(val deletedTabIds: List<String>) : Command()
-        data class CloseTabsRequest(val tabIds: List<String>, val isClosingOtherTabs: Boolean = false) : Command()
+        data class CloseTabsRequest(
+            val tabIds: List<String>,
+            val isClosingOtherTabs: Boolean = false,
+        ) : Command()
+
         data class CloseAllTabsRequest(val numTabs: Int) : Command()
         data object ShowAnimatedTileDismissalDialog : Command()
         data object DismissAnimatedTileDismissalDialog : Command()
-        data class ShareLink(val link: String, val title: String) : Command()
+        data class ShareLink(
+            val link: String,
+            val title: String,
+        ) : Command()
+
         data class ShareLinks(val links: List<String>) : Command()
         data class BookmarkTabsRequest(val tabIds: List<String>) : Command()
         data class ShowUndoBookmarkMessage(val numBookmarks: Int) : Command()
         data class ShowUndoDeleteTabsMessage(val tabIds: List<String>) : Command()
+        data object ShowFireBottomSheet : Command()
+        data object DismissSnackbar : Command()
+        data object SwitchToRegularModeAndClose : Command()
     }
 
     fun onNewTabRequested(fromOverflowMenu: Boolean = false) = viewModelScope.launch {
+        tabRepository.getSelectedTab()?.tabId?.let { tabId ->
+            duckAiSessionCallback.onExitIntent(tabId, DuckAiSessionExitTrigger.NEW_TAB_OPENED)
+        }
         if (swipingTabsFeature.isEnabled) {
-            val newTab = tabs.firstOrNull { tabItem -> tabItem.isNewTabPage }
+            val newTab = tabs.firstOrNull { tabItem ->
+                tabItem.isNewTabPage && !tabItem.hasSourceTab
+            }
             if (newTab != null) {
                 tabRepository.select(tabId = newTab.id)
             } else {
@@ -190,16 +268,47 @@ class TabSwitcherViewModel @Inject constructor(
         }
 
         command.value = Command.Close
+        val browserModeParam = mapOf(Pixel.PixelParameter.BROWSER_MODE to currentMode.value.name.lowercase())
         if (fromOverflowMenu) {
-            pixel.fire(AppPixelName.TAB_MANAGER_MENU_NEW_TAB_PRESSED)
+            pixel.fire(AppPixelName.TAB_MANAGER_MENU_NEW_TAB_PRESSED, browserModeParam)
         } else {
-            pixel.fire(AppPixelName.TAB_MANAGER_NEW_TAB_CLICKED)
+            pixel.fire(AppPixelName.TAB_MANAGER_NEW_TAB_CLICKED, browserModeParam)
         }
     }
 
+    fun onFireButtonTapped() {
+        val params = mapOf(Pixel.PixelParameter.BROWSER_MODE to currentMode.value.name.lowercase())
+        pixel.fire(AppPixelName.FORGET_ALL_PRESSED_TABSWITCHING, params)
+        pixel.fire(AppPixelName.FORGET_ALL_PRESSED_TABSWITCHING_DAILY, params, type = Daily())
+        command.value = Command.ShowFireBottomSheet
+    }
+
+    fun onBrowserModeToggled(mode: BrowserMode, source: BrowserModeSwitchSource) {
+        val previousMode = currentMode.value
+        if (!fireModeAvailable || mode == previousMode) return
+
+        val repo = tabRepository
+        appCoroutineScope.launch { repo.purgeDeletableTabs() }
+
+        command.value = Command.DismissSnackbar
+
+        browserModeStateHolder.switchTo(mode)
+
+        val browserModeParam = mapOf(Pixel.PixelParameter.BROWSER_MODE to mode.name.lowercase())
+        pixel.fire(
+            pixel = AppPixelName.BROWSER_MODE_SWITCHED,
+            parameters = browserModeParam + (Pixel.PixelParameter.SOURCE to source.value),
+        )
+
+        // The promo banner has served its purpose once the user toggles modes; dismiss it so it does not
+        // reappear when returning to regular mode (this ViewModel survives the toggle-triggered recreate).
+        tabSwitcherPromoHandled = true
+        _viewState.update { it.copy(isFireTabsPromoVisible = false) }
+    }
+
     suspend fun onTabSelected(tabId: String) {
-        val mode = selectionViewState.value.mode as? Selection ?: Normal
-        if (tabManagerFeatureFlags.multiSelection().isEnabled() && mode is Selection) {
+        val mode = viewState.value.mode as? Selection ?: Normal
+        if (mode is Selection) {
             if (tabId in mode.selectedTabs) {
                 pixel.fire(AppPixelName.TAB_MANAGER_TAB_DESELECTED)
                 unselectTab(tabId)
@@ -208,9 +317,15 @@ class TabSwitcherViewModel @Inject constructor(
                 selectTab(tabId)
             }
         } else {
+            if (viewState.value.tabSwitcherItems.find { it.id == tabId } is DuckAiTab) {
+                duckChat.reportDuckChatEntry(DuckChatEntryPoint.TAB_SWITCHER_EXISTING_CHAT, opensNewTab = false, hasPrompt = false)
+            }
             tabRepository.select(tabId)
             command.value = Command.Close
-            pixel.fire(AppPixelName.TAB_MANAGER_SWITCH_TABS)
+            pixel.fire(
+                AppPixelName.TAB_MANAGER_SWITCH_TABS,
+                mapOf(Pixel.PixelParameter.BROWSER_MODE to currentMode.value.name.lowercase()),
+            )
         }
     }
 
@@ -224,18 +339,18 @@ class TabSwitcherViewModel @Inject constructor(
     }
 
     private fun triggerEmptySelectionMode() {
-        _selectionViewState.update { it.copy(mode = Selection(emptyList())) }
+        _viewState.update { it.copy(mode = Selection(emptyList())) }
     }
 
     private fun triggerNormalMode() {
-        _selectionViewState.update { it.copy(mode = Normal) }
+        _viewState.update { it.copy(mode = Normal) }
     }
 
     fun onSelectAllTabs() {
         pixel.fire(AppPixelName.TAB_MANAGER_SELECT_MODE_MENU_SELECT_ALL)
         pixel.fire(AppPixelName.TAB_MANAGER_SELECT_MODE_MENU_SELECT_ALL_DAILY, type = Daily())
 
-        _selectionViewState.update { it.copy(mode = Selection(selectedTabs = tabs.map { tab -> tab.id })) }
+        _viewState.update { it.copy(mode = Selection(selectedTabs = tabs.map { tab -> tab.id })) }
     }
 
     fun onDeselectAllTabs() {
@@ -269,7 +384,7 @@ class TabSwitcherViewModel @Inject constructor(
         pixel.fire(AppPixelName.TAB_MANAGER_SELECT_MODE_MENU_BOOKMARK_TABS)
         pixel.fire(AppPixelName.TAB_MANAGER_SELECT_MODE_MENU_BOOKMARK_TABS_DAILY, type = Daily())
 
-        (selectionViewState.value.mode as? Selection)?.let { mode ->
+        (viewState.value.mode as? Selection)?.let { mode ->
             command.value = BookmarkTabsRequest(mode.selectedTabs)
         }
     }
@@ -353,7 +468,7 @@ class TabSwitcherViewModel @Inject constructor(
     // user has confirmed they want to close tabs
     fun onCloseTabsConfirmed(tabIds: List<String>) {
         viewModelScope.launch {
-            if (selectionViewState.value.mode is Selection) {
+            if (viewState.value.mode is Selection) {
                 unselectTabs(tabIds)
             }
 
@@ -361,14 +476,13 @@ class TabSwitcherViewModel @Inject constructor(
                 pixel.fire(AppPixelName.TAB_MANAGER_MENU_CLOSE_ALL_TABS_CONFIRMED)
                 pixel.fire(AppPixelName.TAB_MANAGER_MENU_CLOSE_ALL_TABS_CONFIRMED_DAILY, type = Daily())
 
-                if (tabManagerFeatureFlags.multiSelection().isEnabled()) {
-                    // mark tabs as deletable, the undo snackbar will be displayed when the tab switcher is closed
-                    tabRepository.markDeletable(tabIds)
-                    command.value = Command.CloseAndShowUndoMessage(tabIds)
+                tabRepository.markDeletable(tabIds)
+
+                if (fireModeAvailable && currentMode.value == BrowserMode.FIRE) {
+                    command.value = Command.ShowUndoDeleteTabsMessage(tabIds)
                 } else {
-                    // all tabs can be deleted immediately because no snackbar is needed and the tab switcher will be closed
-                    deleteTabs(tabIds)
-                    command.value = Command.Close
+                    // the undo snackbar will be displayed when the tab switcher is closed
+                    command.value = Command.CloseAndShowUndoMessage(tabIds)
                 }
             } else {
                 pixel.fire(AppPixelName.TAB_MANAGER_CLOSE_TABS_CONFIRMED)
@@ -386,38 +500,36 @@ class TabSwitcherViewModel @Inject constructor(
         onCloseTabsConfirmed(tabs.map { it.id })
     }
 
-    fun onTabCloseInNormalModeRequested(tab: Tab, swipeGestureUsed: Boolean = false) {
+    fun onTabCloseInNormalModeRequested(
+        tab: Tab,
+        swipeGestureUsed: Boolean = false,
+    ) {
         viewModelScope.launch {
-            if (tabs.size == 1) {
-                if (tabManagerFeatureFlags.multiSelection().isEnabled()) {
-                    // mark the tab as deletable, the undo snackbar will be shown after tab switcher is closed
-                    markTabAsDeletable(tab, swipeGestureUsed)
-                    command.value = Command.CloseAndShowUndoMessage(listOf(tab.id))
-                } else {
-                    // the last tab can be deleted immediately because no snackbar is needed and the tab switcher will be closed
-                    deleteTabs(listOf(tab.id))
-                    command.value = Command.Close
-                }
+            val isLastTab = tabs.size == 1
+            if (isLastTab && currentMode.value != BrowserMode.FIRE) {
+                // mark the tab as deletable, the undo snackbar will be shown after tab switcher is closed
+                markTabAsDeletable(tab, swipeGestureUsed)
+                command.value = Command.CloseAndShowUndoMessage(listOf(tab.id))
             } else {
                 markTabAsDeletable(tab, swipeGestureUsed)
-
-                // when the feature flag is disabled, the undo snackbar is shown via deletable tabs observer
-                if (tabManagerFeatureFlags.multiSelection().isEnabled()) {
-                    command.value = Command.ShowUndoDeleteTabsMessage(listOf(tab.id))
-                }
+                command.value = Command.ShowUndoDeleteTabsMessage(listOf(tab.id))
             }
         }
     }
 
-    private suspend fun markTabAsDeletable(tab: Tab, swipeGestureUsed: Boolean) {
+    private suspend fun markTabAsDeletable(
+        tab: Tab,
+        swipeGestureUsed: Boolean,
+    ) {
         tabRepository.markDeletable(tab.tabEntity)
+        val browserModeParams = mapOf(Pixel.PixelParameter.BROWSER_MODE to currentMode.value.name.lowercase())
         if (swipeGestureUsed) {
-            pixel.fire(AppPixelName.TAB_MANAGER_CLOSE_TAB_SWIPED)
+            pixel.fire(AppPixelName.TAB_MANAGER_CLOSE_TAB_SWIPED, browserModeParams)
         } else {
-            pixel.fire(AppPixelName.TAB_MANAGER_CLOSE_TAB_CLICKED)
+            pixel.fire(AppPixelName.TAB_MANAGER_CLOSE_TAB_CLICKED, browserModeParams)
         }
 
-        if (selectionViewState.value.mode is Selection) {
+        if (viewState.value.mode is Selection) {
             unselectTab(tab.id)
         }
     }
@@ -442,19 +554,19 @@ class TabSwitcherViewModel @Inject constructor(
     private fun selectTab(tabId: String) = selectTabs(listOf(tabId))
 
     private fun unselectTabs(tabIds: List<String>) {
-        _selectionViewState.update {
+        _viewState.update {
             it.copy(mode = Selection(selectedTabs = selectionMode.selectedTabs - tabIds.toSet()))
         }
     }
 
     private fun selectTabs(tabIds: List<String>) {
-        _selectionViewState.update {
+        _viewState.update {
             it.copy(mode = Selection(selectedTabs = selectionMode.selectedTabs + tabIds.toSet()))
         }
     }
 
     fun onEmptyAreaClicked() {
-        if (tabManagerFeatureFlags.multiSelection().isEnabled() && selectionViewState.value.mode is Selection) {
+        if (viewState.value.mode is Selection) {
             triggerNormalMode()
         }
     }
@@ -462,8 +574,10 @@ class TabSwitcherViewModel @Inject constructor(
     fun onUpButtonPressed() {
         pixel.fire(AppPixelName.TAB_MANAGER_UP_BUTTON_PRESSED)
 
-        if (tabManagerFeatureFlags.multiSelection().isEnabled() && selectionViewState.value.mode is Selection) {
+        if (viewState.value.mode is Selection) {
             triggerNormalMode()
+        } else if (viewState.value.showFireTabsEmptyState) {
+            command.value = Command.SwitchToRegularModeAndClose
         } else {
             command.value = Command.Close
         }
@@ -472,15 +586,17 @@ class TabSwitcherViewModel @Inject constructor(
     fun onBackButtonPressed() {
         pixel.fire(AppPixelName.TAB_MANAGER_BACK_BUTTON_PRESSED)
 
-        if (tabManagerFeatureFlags.multiSelection().isEnabled() && selectionViewState.value.mode is Selection) {
+        if (viewState.value.mode is Selection) {
             triggerNormalMode()
+        } else if (viewState.value.showFireTabsEmptyState) {
+            command.value = Command.SwitchToRegularModeAndClose
         } else {
             command.value = Command.Close
         }
     }
 
     fun onMenuOpened() {
-        if (tabManagerFeatureFlags.multiSelection().isEnabled() && selectionViewState.value.mode is Selection) {
+        if (viewState.value.mode is Selection) {
             pixel.fire(AppPixelName.TAB_MANAGER_SELECT_MODE_MENU_PRESSED)
         } else {
             pixel.fire(AppPixelName.TAB_MANAGER_MENU_PRESSED)
@@ -495,9 +611,15 @@ class TabSwitcherViewModel @Inject constructor(
         pixel.fire(AppPixelName.TAB_MANAGER_MENU_SETTINGS_PRESSED)
     }
 
-    fun onTabMoved(fromIndex: Int, toIndex: Int) {
-        viewModelScope.launch(dispatcherProvider.io()) {
-            tabRepository.updateTabPosition(fromIndex, toIndex)
+    fun onTabMoved(
+        fromIndex: Int,
+        toIndex: Int,
+    ) {
+        // Capture the repo for the current mode and run on appCoroutineScope
+        // so the DB write isn't canceled when the user immediately taps a tab to leave
+        val repo = tabRepository
+        appCoroutineScope.launch(dispatcherProvider.io()) {
+            repo.updateTabPosition(fromIndex, toIndex)
         }
     }
 
@@ -508,26 +630,21 @@ class TabSwitcherViewModel @Inject constructor(
         }
     }
 
-    fun onLayoutTypeToggled() {
+    fun onListLayoutSelected() {
         viewModelScope.launch(dispatcherProvider.io()) {
-            when (layoutType.value) {
-                GRID -> {
-                    pixel.fire(TAB_MANAGER_LIST_VIEW_BUTTON_CLICKED)
-                    tabRepository.setTabLayoutType(LIST)
-                }
-                LIST -> {
-                    pixel.fire(TAB_MANAGER_GRID_VIEW_BUTTON_CLICKED)
-                    tabRepository.setTabLayoutType(GRID)
-                }
-                else -> Unit
+            if (viewState.value.layoutType != LIST) {
+                pixel.fire(TAB_MANAGER_LIST_VIEW_BUTTON_CLICKED)
+                tabRepository.setTabLayoutType(LIST)
             }
         }
     }
 
-    fun onFabClicked() {
-        when (selectionViewState.value.dynamicInterface.mainFabType) {
-            FabType.NEW_TAB -> onNewTabRequested()
-            FabType.CLOSE_TABS -> onCloseSelectedTabsRequested()
+    fun onGridLayoutSelected() {
+        viewModelScope.launch(dispatcherProvider.io()) {
+            if (viewState.value.layoutType != GRID) {
+                pixel.fire(TAB_MANAGER_GRID_VIEW_BUTTON_CLICKED)
+                tabRepository.setTabLayoutType(GRID)
+            }
         }
     }
 
@@ -546,109 +663,118 @@ class TabSwitcherViewModel @Inject constructor(
         return@withContext null
     }
 
-    fun onDuckChatFabClicked() {
+    fun onDuckAIButtonClicked() {
         viewModelScope.launch {
-            pixel.fire(DuckChatPixelName.DUCK_CHAT_OPEN)
+            val params = duckChat.createWasUsedBeforePixelParams()
+            pixel.fire(DuckChatPixelName.DUCK_CHAT_OPEN_TAB_SWITCHER_FAB, parameters = params)
 
-            duckChat.openDuckChat()
+            val url = duckChat.getDuckChatUrl("", false)
+            duckChat.reportDuckChatEntry(DuckChatEntryPoint.TAB_SWITCHER, opensNewTab = true, hasPrompt = false)
+            tabRepository.add(url, true)
+            command.value = Command.Close
         }
     }
 
-    fun onDuckChatMenuClicked() {
-        viewModelScope.launch {
-            pixel.fire(DuckChatPixelName.DUCK_CHAT_OPEN)
-
-            val wasUsedBefore = duckChat.wasOpenedBefore()
-            val params = mapOf("was_used_before" to wasUsedBefore.toBinaryString())
-            pixel.fire(DuckChatPixelName.DUCK_CHAT_OPEN_NEW_TAB_MENU, parameters = params)
-
-            duckChat.openDuckChat()
-        }
+    fun onFireTabsPromoDismissed() {
+        if (!_viewState.value.isFireTabsPromoVisible) return
+        tabSwitcherPromoHandled = true
+        pixel.fire(AppPixelName.FIRE_TABS_PROMO_TAB_SWITCHER_DISMISSED)
+        _viewState.update { it.copy(isFireTabsPromoVisible = false) }
     }
 
     fun onTrackerAnimationInfoPanelClicked() {
-        pixel.fire(
-            pixel = TAB_MANAGER_INFO_PANEL_TAPPED,
-            parameters = senseOfProtectionExperiment.getTabManagerPixelParams(),
-        )
+        trackersAnimationInfoPanelPixels.fireInfoPanelTapped()
         command.value = ShowAnimatedTileDismissalDialog
     }
 
     fun onTrackerAnimationTilePositiveButtonClicked() {
         viewModelScope.launch {
-            command.value = DismissAnimatedTileDismissalDialog
+            tabSwitcherDataStore.setTrackersAnimationInfoTileHidden(isHidden = true)
+            trackersAnimationInfoPanelPixels.fireInfoPanelDismissed()
         }
     }
 
     fun onTrackerAnimationTileNegativeButtonClicked() {
         viewModelScope.launch {
-            tabSwitcherDataStore.setIsAnimationTileDismissed(isDismissed = true)
-            val trackerCount = webTrackersBlockedAppRepository.getTrackerCountForLast7Days()
-            pixel.fire(
-                pixel = TAB_MANAGER_INFO_PANEL_DISMISSED,
-                parameters = mapOf("trackerCount" to trackerCount.toString()) +
-                    senseOfProtectionExperiment.getTabManagerPixelParams(),
-            )
+            command.value = DismissAnimatedTileDismissalDialog
         }
     }
 
     fun onTrackerAnimationInfoPanelVisible() {
-        pixel.fire(
-            pixel = AppPixelName.TAB_MANAGER_INFO_PANEL_IMPRESSIONS,
-            parameters = senseOfProtectionExperiment.getTabManagerPixelParams(),
-        )
+        trackersAnimationInfoPanelPixels.fireInfoPanelImpression()
     }
 
     private suspend fun getTabItems(
         tabEntities: List<TabEntity>,
         activeTab: TabEntity?,
-        isAnimationTileDismissed: Boolean,
+        isTrackersAnimationInfoPanelHidden: Boolean,
         mode: Mode,
+        browserMode: BrowserMode,
     ): List<TabSwitcherItem> {
-        val normalTabs = tabEntities.map {
-            NormalTab(it, isActive = it.tabId == activeTab?.tabId)
+        if (mode is Selection) {
+            return tabEntities.map { entity ->
+                val uri = entity.url?.toUri()
+                val isDuckAi = uri != null && duckChat.isDuckChatUrl(uri)
+                SelectableTab(
+                    entity = entity,
+                    isSelected = entity.tabId in mode.selectedTabs,
+                    isDuckAi = isDuckAi,
+                    title = tabTitleResolver.resolveTitle(entity, browserMode),
+                )
+            }
         }
 
-        suspend fun getNormalTabItemsWithOptionalAnimationTile(): List<TabSwitcherItem> {
-            return if (senseOfProtectionExperiment.isUserEnrolledInVariant2CohortAndExperimentEnabled()) {
-                if (!isAnimationTileDismissed) {
-                    val trackerCountForLast7Days = webTrackersBlockedAppRepository.getTrackerCountForLast7Days()
-
-                    listOf(TrackerAnimationInfoPanel(trackerCountForLast7Days)) + normalTabs
-                } else {
-                    normalTabs
-                }
+        val tabs = tabEntities.map { entity ->
+            val isActive = entity.tabId == activeTab?.tabId
+            val title = tabTitleResolver.resolveTitle(entity, browserMode)
+            val uri = entity.url?.toUri()
+            if (uri != null && duckChat.isDuckChatUrl(uri)) {
+                DuckAiTab(entity, isActive, title)
             } else {
-                normalTabs
+                NormalTab(entity, isActive, title)
             }
         }
 
-        return if (tabManagerFeatureFlags.multiSelection().isEnabled() && mode is Selection) {
-            tabEntities.map {
-                SelectableTab(it, isSelected = it.tabId in mode.selectedTabs)
-            }
+        return if (!isTrackersAnimationInfoPanelHidden && browserMode != BrowserMode.FIRE) {
+            val trackerCountForLast7Days = webTrackersBlockedAppRepository.getTrackerCountForLast7Days()
+            listOf(TrackersAnimationInfoPanel(trackerCountForLast7Days)) + tabs
         } else {
-            getNormalTabItemsWithOptionalAnimationTile()
+            tabs
         }
     }
 
-    data class SelectionViewState(
-        val tabSwitcherItems: List<TabSwitcherItem> = emptyList(),
+    sealed class TabItems {
+        data object NotInitialized : TabItems()
+        data class Loaded(val items: List<TabSwitcherItem>) : TabItems()
+
+        val itemsOrEmpty: List<TabSwitcherItem>
+            get() = (this as? Loaded)?.items.orEmpty()
+    }
+
+    data class ViewState(
+        val tabItems: TabItems = TabItems.NotInitialized,
         val mode: Mode = Normal,
         val layoutType: LayoutType? = null,
-        val isNewVisualDesignEnabled: Boolean = false,
-        val isDuckChatEnabled: Boolean = false,
+        val isDuckAIButtonVisible: Boolean = false,
+        val isSplitOmnibarEnabled: Boolean = false,
+        val browserMode: BrowserMode = BrowserMode.REGULAR,
+        val regularTabCount: Int? = null,
+        val isBrowserModeToggleVisible: Boolean = false,
+        val isFireTabsPromoVisible: Boolean = false,
     ) {
+        val tabSwitcherItems: List<TabSwitcherItem> = tabItems.itemsOrEmpty
         val tabs: List<Tab> = tabSwitcherItems.filterIsInstance<Tab>()
         val numSelectedTabs: Int = (mode as? Selection)?.selectedTabs?.size ?: 0
 
+        val showFireTabsEmptyState: Boolean = browserMode == BrowserMode.FIRE && tabItems is TabItems.Loaded && tabs.isEmpty()
+
         val dynamicInterface = when (mode) {
             is Normal -> {
-                val isThereOnlyNewTabPage = tabs.size == 1 && tabs.first().isNewTabPage
                 DynamicInterface(
-                    isFireButtonVisible = true,
-                    isNewTabVisible = true,
-                    isDuckChatVisible = !isNewVisualDesignEnabled && isDuckChatEnabled,
+                    isFireButtonVisible = !isSplitOmnibarEnabled,
+                    isNewTabButtonVisible = !isSplitOmnibarEnabled,
+                    isDuckAIButtonVisible = isDuckAIButtonVisible,
+                    isMenuButtonVisible = !isSplitOmnibarEnabled,
                     isSelectAllVisible = false,
                     isDeselectAllVisible = false,
                     isSelectionActionsDividerVisible = false,
@@ -660,16 +786,13 @@ class TabSwitcherViewModel @Inject constructor(
                     isCloseOtherTabsVisible = false,
                     isCloseAllTabsDividerVisible = true,
                     isCloseAllTabsVisible = true,
-                    isMoreMenuItemEnabled = !isThereOnlyNewTabPage,
-                    isMainFabVisible = true,
-                    isAIFabVisible = isNewVisualDesignEnabled && isDuckChatEnabled,
-                    mainFabType = FabType.NEW_TAB,
-                    backButtonType = ARROW,
-                    layoutButtonType = when (layoutType) {
-                        GRID -> LayoutButtonType.LIST
-                        LIST -> LayoutButtonType.GRID
-                        else -> LayoutButtonType.HIDDEN
+                    backButtonType = BackButtonType.ARROW,
+                    layoutMenuMode = when (layoutType) {
+                        GRID -> LayoutMode.LIST
+                        LIST -> LayoutMode.GRID
+                        else -> LayoutMode.HIDDEN
                     },
+                    isBottomBarVisible = isSplitOmnibarEnabled,
                 )
             }
 
@@ -681,8 +804,9 @@ class TabSwitcherViewModel @Inject constructor(
                 val isSelectionActionable = isSomethingSelected && !isNtpTheOnlySelectedTab
                 DynamicInterface(
                     isFireButtonVisible = false,
-                    isNewTabVisible = false,
-                    isDuckChatVisible = false,
+                    isNewTabButtonVisible = false,
+                    isDuckAIButtonVisible = false,
+                    isMenuButtonVisible = true,
                     isSelectAllVisible = !areAllTabsSelected,
                     isDeselectAllVisible = areAllTabsSelected,
                     isSelectionActionsDividerVisible = isSelectionActionable,
@@ -694,20 +818,18 @@ class TabSwitcherViewModel @Inject constructor(
                     isCloseOtherTabsVisible = isSomethingSelected && !areAllTabsSelected,
                     isCloseAllTabsDividerVisible = isSomethingSelected,
                     isCloseAllTabsVisible = false,
-                    isMoreMenuItemEnabled = true,
-                    isMainFabVisible = isSomethingSelected,
-                    isAIFabVisible = false,
-                    mainFabType = FabType.CLOSE_TABS,
-                    backButtonType = CLOSE,
-                    layoutButtonType = LayoutButtonType.HIDDEN,
+                    backButtonType = BackButtonType.CLOSE,
+                    layoutMenuMode = LayoutMode.HIDDEN,
+                    isBottomBarVisible = false,
                 )
             }
         }
 
         data class DynamicInterface(
             val isFireButtonVisible: Boolean,
-            val isNewTabVisible: Boolean,
-            val isDuckChatVisible: Boolean,
+            val isNewTabButtonVisible: Boolean,
+            val isDuckAIButtonVisible: Boolean,
+            val isMenuButtonVisible: Boolean,
             val isSelectAllVisible: Boolean,
             val isDeselectAllVisible: Boolean,
             val isSelectionActionsDividerVisible: Boolean,
@@ -719,25 +841,17 @@ class TabSwitcherViewModel @Inject constructor(
             val isCloseOtherTabsVisible: Boolean,
             val isCloseAllTabsDividerVisible: Boolean,
             val isCloseAllTabsVisible: Boolean,
-            val isMoreMenuItemEnabled: Boolean,
-            val isMainFabVisible: Boolean,
-            val isAIFabVisible: Boolean,
-            val mainFabType: FabType,
             val backButtonType: BackButtonType,
-            val layoutButtonType: LayoutButtonType,
+            val layoutMenuMode: LayoutMode,
+            val isBottomBarVisible: Boolean,
         )
-
-        enum class FabType {
-            NEW_TAB,
-            CLOSE_TABS,
-        }
 
         enum class BackButtonType {
             ARROW,
             CLOSE,
         }
 
-        enum class LayoutButtonType {
+        enum class LayoutMode {
             GRID,
             LIST,
             HIDDEN,

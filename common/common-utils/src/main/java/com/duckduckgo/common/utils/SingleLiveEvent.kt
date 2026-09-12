@@ -19,8 +19,9 @@ import androidx.annotation.MainThread
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
+import logcat.LogPriority.WARN
+import logcat.logcat
 import java.util.concurrent.atomic.AtomicBoolean
-import timber.log.Timber
 
 /**
  * A lifecycle-aware observable that sends only new updates after subscription, used for events like
@@ -44,7 +45,7 @@ class SingleLiveEvent<T> : MutableLiveData<T>() {
         observer: Observer<in T>,
     ) {
         if (hasActiveObservers()) {
-            Timber.w("Multiple observers registered but only one will be notified of changes.")
+            logcat(WARN) { "Multiple observers registered but only one will be notified of changes." }
         }
 
         // Observe the internal MutableLiveData

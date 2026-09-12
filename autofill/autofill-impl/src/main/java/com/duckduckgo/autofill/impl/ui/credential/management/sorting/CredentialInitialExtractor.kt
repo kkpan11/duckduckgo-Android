@@ -20,10 +20,11 @@ import com.duckduckgo.autofill.api.domain.app.LoginCredentials
 import com.duckduckgo.autofill.impl.urlmatcher.AutofillUrlMatcher
 import com.duckduckgo.di.scopes.FragmentScope
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import java.lang.Character.*
 import java.text.Normalizer
 import javax.inject.Inject
-import timber.log.Timber
 
 interface InitialExtractor {
     fun extractInitial(loginCredentials: LoginCredentials): String
@@ -49,7 +50,7 @@ class CredentialInitialExtractor @Inject constructor(
             }
             DECIMAL_DIGIT_NUMBER -> INITIAL_CHAR_FOR_NON_LETTERS
             else -> {
-                Timber.v("Rejecting type %d for %s", type, rawInitial)
+                logcat(VERBOSE) { "Rejecting type $type for $rawInitial" }
                 INITIAL_CHAR_FOR_NON_LETTERS
             }
         }

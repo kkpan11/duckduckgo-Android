@@ -17,26 +17,43 @@
 package com.duckduckgo.app.browser.tabs.adapter
 
 import android.annotation.SuppressLint
-import android.content.Intent
+import android.os.Bundle
 import android.os.Message
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentManager
-import androidx.lifecycle.LifecycleOwner
-import androidx.recyclerview.widget.DiffUtil
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.BrowserTabFragment
 import com.duckduckgo.app.browser.tabs.TabManager.TabModel
-import com.duckduckgo.common.ui.tabs.SwipingTabsFeatureProvider
+import com.duckduckgo.app.browser.tabs.TabReuseDistanceReporter
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class TabPagerAdapter(
-    lifecycleOwner: LifecycleOwner,
-    fragmentManager: FragmentManager,
-    private val activityIntent: Intent?,
-    swipingTabsFeature: SwipingTabsFeatureProvider,
-) : FragmentStateAdapter(fragmentManager, lifecycleOwner.lifecycle, swipingTabsFeature) {
+    private val activity: BrowserActivity,
+    private val tabReuseDistanceReporter: TabReuseDistanceReporter,
+) : FragmentStateAdapter(activity) {
     private val tabs = mutableListOf<TabModel>()
-    private var messageForNewFragment: Message? = null
+
+    private data class PendingMessage(
+        val message: Message,
+        val cleanupJob: Job,
+    )
+
+    // Key is the source tab ID, value contains the message and its cleanup job
+    private val pendingMessages = mutableMapOf<String, PendingMessage>()
+
+    var currentTabIndex = -1
+        @SuppressLint("NotifyDataSetChanged")
+        set(value) {
+            // if the current tab index is -1 and the set value 0, it means the first tab is really selected
+            // and we need to notify the adapter to create the first fragment
+            if (field == -1 && value == 0) {
+                notifyItemChanged(0)
+            }
+            field = value
+        }
 
     override fun getItemCount() = tabs.size
 
@@ -52,31 +69,67 @@ class TabPagerAdapter(
 
     override fun createFragment(position: Int): Fragment {
         val tab = tabs[position]
-        val isExternal = activityIntent?.getBooleanExtra(BrowserActivity.LAUNCH_FROM_EXTERNAL_EXTRA, false) == true
+        val isExternal = activity.consumeExternalLaunchForTab(tab.tabId)
+        // Check if there's a message specifically for this tab's source tab ID
+        val pendingMessage = pendingMessages.remove(tab.sourceTabId)
+        pendingMessage?.cleanupJob?.cancel()
 
-        return if (messageForNewFragment != null) {
-            val message = messageForNewFragment
-            messageForNewFragment = null
-            return BrowserTabFragment.newInstance(tab.tabId, null, false, isExternal).apply {
-                this.messageFromPreviousTab = message
+        return if (pendingMessage != null) {
+            BrowserTabFragment.newInstance(tab.tabId, null, false, isExternal).apply {
+                this.messageFromPreviousTab = pendingMessage.message
             }
         } else {
             BrowserTabFragment.newInstance(tab.tabId, tab.url, tab.skipHome, isExternal)
         }
     }
 
-    fun setMessageForNewFragment(message: Message) {
-        messageForNewFragment = message
+    // This method prevents the creation of a tab fragment for the first tab when we don't know the current tab index yet
+    override fun shouldPlaceFragmentInViewHolder(position: Int): Boolean {
+        return currentTabIndex != -1 || position != 0
+    }
+
+    override fun onItemPlaced(itemId: Long) {
+        val tab = tabs.firstOrNull { it.tabId.hashCode().toLong() == itemId } ?: return
+        tabReuseDistanceReporter.onTabActivated(tab.tabId)
+    }
+
+    fun restore(state: Bundle) {
+        // state is only useful when there are fragments to restore (also avoids a crash)
+        if (activity.supportFragmentManager.fragments.isNotEmpty()) {
+            restoreState(state)
+        }
+    }
+
+    /**
+     * Sets a message for the next tab created from the given source tab.
+     * This should be called BEFORE calling openNewTab().
+     * The message will be automatically cleared after 10 seconds if not picked up.
+     */
+    fun setMessageForNewFragment(sourceTabId: String, message: Message) {
+        // Cancel any existing cleanup job for this source tab to prevent race conditions
+        pendingMessages.remove(sourceTabId)?.cleanupJob?.cancel()
+
+        val cleanupJob = activity.lifecycleScope.launch {
+            delay(10_000L)
+            pendingMessages.remove(sourceTabId)
+        }
+
+        pendingMessages[sourceTabId] = PendingMessage(message, cleanupJob)
     }
 
     @SuppressLint("NotifyDataSetChanged")
     fun onTabsUpdated(newTabs: List<TabModel>) {
+        tabReuseDistanceReporter.onTabCountChanged(newTabs.size)
         if (tabs.map { it.tabId } != newTabs.map { it.tabId }) {
-            // we only want to notify the adapter if the tab IDs change
-            val diff = DiffUtil.calculateDiff(PagerDiffUtil(tabs, newTabs))
+            val newIds = newTabs.map { it.tabId }.toSet()
+            val removedIds = tabs.map { it.tabId }.filter { it !in newIds }
             tabs.clear()
             tabs.addAll(newTabs)
-            diff.dispatchUpdatesTo(this)
+            notifyDataSetChanged()
+            if (removedIds.isNotEmpty()) {
+                cleanupRemovedItems()
+                tabReuseDistanceReporter.onTabsRemoved(removedIds)
+            }
         } else {
             // the state of tabs is managed separately, so we don't need to notify the adapter, but we need URL and skipHome to create new fragments
             tabs.clear()
@@ -85,27 +138,10 @@ class TabPagerAdapter(
     }
 
     fun getTabIdAtPosition(position: Int): String? {
-        return if (position < tabs.size) {
+        return if (position >= 0 && position < tabs.size) {
             tabs[position].tabId
         } else {
             null
-        }
-    }
-
-    inner class PagerDiffUtil(
-        private val oldList: List<TabModel>,
-        private val newList: List<TabModel>,
-    ) : DiffUtil.Callback() {
-        override fun getOldListSize() = oldList.size
-
-        override fun getNewListSize() = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition].tabId == newList[newItemPosition].tabId
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return areItemsTheSame(oldItemPosition, newItemPosition)
         }
     }
 }

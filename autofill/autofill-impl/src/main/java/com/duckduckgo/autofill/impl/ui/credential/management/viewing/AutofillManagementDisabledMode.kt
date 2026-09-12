@@ -23,24 +23,36 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings.ACTION_BIOMETRIC_ENROLL
 import android.provider.Settings.ACTION_FINGERPRINT_ENROLL
-import android.provider.Settings.ACTION_SECURITY_SETTINGS
 import android.provider.Settings.ACTION_SETTINGS
+import android.provider.Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.autofill.impl.databinding.FragmentAutofillManagementDisabledBinding
 import com.duckduckgo.common.ui.DuckDuckGoFragment
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.FragmentScope
+import logcat.LogPriority.WARN
+import logcat.asLog
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 @InjectWith(FragmentScope::class)
 class AutofillManagementDisabledMode : DuckDuckGoFragment() {
 
     @Inject
     lateinit var appBuildConfig: AppBuildConfig
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private lateinit var binding: FragmentAutofillManagementDisabledBinding
 
@@ -58,6 +70,9 @@ class AutofillManagementDisabledMode : DuckDuckGoFragment() {
         savedInstanceState: Bundle?,
     ) {
         super.onViewCreated(view, savedInstanceState)
+        if (edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.AUTOFILL)) {
+            edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.root)
+        }
         binding.disabledCta.setOnClickListener {
             launchDeviceAuthEnrollment()
         }
@@ -65,22 +80,25 @@ class AutofillManagementDisabledMode : DuckDuckGoFragment() {
 
     @SuppressLint("InlinedApi", "DEPRECATION")
     private fun launchDeviceAuthEnrollment() {
+        logcat { "Launching device authentication enrollment. Manufacturer=[${appBuildConfig.manufacturer}],sdkInt=[${appBuildConfig.sdkInt}]" }
+
         when {
             appBuildConfig.manufacturer == "Xiaomi" -> {
                 // Issue on Xiaomi: https://stackoverflow.com/questions/68484485/intent-action-fingerprint-enroll-on-redmi-results-in-exception
-                SYSTEM_SETTINGS_ACTION.safeLaunchSettingsActivity(tryFallback = false)
+                Intent(SYSTEM_SETTINGS_ACTION).safeLaunchSettingsActivity(tryFallback = false)
             }
 
             appBuildConfig.sdkInt >= Build.VERSION_CODES.R -> {
-                ACTION_BIOMETRIC_ENROLL.safeLaunchSettingsActivity(tryFallback = true)
-            }
-
-            appBuildConfig.sdkInt >= Build.VERSION_CODES.P -> {
-                ACTION_FINGERPRINT_ENROLL.safeLaunchSettingsActivity(tryFallback = true)
+                val intent = Intent(ACTION_BIOMETRIC_ENROLL)
+                if (appBuildConfig.manufacturer.equals("TCL", ignoreCase = true)) {
+                    // https://app.asana.com/1/137249556945/project/1200930669568058/task/1210133000985922?focus=true
+                    intent.putExtra(EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED, DEVICE_CREDENTIAL)
+                }
+                intent.safeLaunchSettingsActivity(tryFallback = true)
             }
 
             else -> {
-                ACTION_SECURITY_SETTINGS.safeLaunchSettingsActivity(tryFallback = true)
+                Intent(ACTION_FINGERPRINT_ENROLL).safeLaunchSettingsActivity(tryFallback = true)
             }
         }
 
@@ -91,13 +109,13 @@ class AutofillManagementDisabledMode : DuckDuckGoFragment() {
      * Attempt to launch the given activity.
      * If it fails because the activity wasn't found, try launching the main settings activity if tryFallback=true.
      */
-    private fun String.safeLaunchSettingsActivity(tryFallback: Boolean) {
+    private fun Intent.safeLaunchSettingsActivity(tryFallback: Boolean) {
         try {
-            requireActivity().startActivity(Intent(this))
+            requireActivity().startActivity(this)
         } catch (e: ActivityNotFoundException) {
-            Timber.w("%s. Trying fallback? %s", e.message, tryFallback)
+            logcat(WARN) { "${e.asLog()}. Trying fallback? $tryFallback" }
             if (tryFallback) {
-                SYSTEM_SETTINGS_ACTION.safeLaunchSettingsActivity(tryFallback = false)
+                Intent(SYSTEM_SETTINGS_ACTION).safeLaunchSettingsActivity(tryFallback = false)
             }
         }
     }

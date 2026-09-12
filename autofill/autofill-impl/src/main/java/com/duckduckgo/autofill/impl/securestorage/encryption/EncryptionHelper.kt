@@ -17,21 +17,24 @@
 package com.duckduckgo.autofill.impl.securestorage.encryption
 
 import android.security.keystore.KeyProperties
-import com.duckduckgo.autofill.api.AutofillFeature
+import com.duckduckgo.app.statistics.pixels.Pixel
+import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Daily
+import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames
 import com.duckduckgo.autofill.impl.securestorage.SecureStorageException
 import com.duckduckgo.autofill.impl.securestorage.SecureStorageException.InternalSecureStorageException
 import com.duckduckgo.autofill.impl.securestorage.encryption.EncryptionHelper.EncryptedBytes
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.sanitizeStackTrace
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.lang.Exception
 import java.security.Key
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.inject.Inject
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 
 interface EncryptionHelper {
     @Throws(SecureStorageException::class)
@@ -59,8 +62,8 @@ interface EncryptionHelper {
 
 @ContributesBinding(AppScope::class)
 class RealEncryptionHelper @Inject constructor(
-    private val autofillFeature: AutofillFeature,
     private val dispatcherProvider: DispatcherProvider,
+    private val pixel: Pixel,
 ) : EncryptionHelper {
     private val encryptionCipher = Cipher.getInstance(TRANSFORMATION)
     private val decryptionCipher = Cipher.getInstance(TRANSFORMATION)
@@ -72,83 +75,45 @@ class RealEncryptionHelper @Inject constructor(
         raw: ByteArray,
         key: Key,
     ): EncryptedBytes = withContext(dispatcherProvider.io()) {
-        return@withContext if (autofillFeature.createAsyncPreferences().isEnabled()) {
-            encryptAsync(raw, key)
-        } else {
-            encryptSync(raw, key)
-        }
-    }
-
-    @Synchronized
-    private fun encryptSync(
-        raw: ByteArray,
-        key: Key,
-    ): EncryptedBytes {
-        return innerEncrypt(raw, key)
-    }
-
-    private suspend fun encryptAsync(
-        raw: ByteArray,
-        key: Key,
-    ): EncryptedBytes {
         encryptMutex.withLock {
-            return innerEncrypt(raw, key)
-        }
-    }
+            val encrypted = try {
+                encryptionCipher.init(Cipher.ENCRYPT_MODE, key)
+                encryptionCipher.doFinal(raw)
+            } catch (exception: Exception) {
+                InternalSecureStorageException(message = "Error occurred while encrypting data", cause = exception).let {
+                    pixel.fire(
+                        pixel = AutofillPixelNames.AUTOFILL_ENCRYPT_DATA_FAILED,
+                        parameters = mapOf("error" to it.sanitizeStackTrace()),
+                        type = Daily(),
+                    )
+                    throw it
+                }
+            }
+            val iv = encryptionCipher.iv
 
-    private fun innerEncrypt(
-        raw: ByteArray,
-        key: Key,
-    ): EncryptedBytes {
-        val encrypted = try {
-            encryptionCipher.init(Cipher.ENCRYPT_MODE, key)
-            encryptionCipher.doFinal(raw)
-        } catch (exception: Exception) {
-            throw InternalSecureStorageException(message = "Error occurred while encrypting data", cause = exception)
+            EncryptedBytes(encrypted, iv)
         }
-        val iv = encryptionCipher.iv
-
-        return EncryptedBytes(encrypted, iv)
     }
 
     override suspend fun decrypt(
         toDecrypt: EncryptedBytes,
         key: Key,
     ): ByteArray = withContext(dispatcherProvider.io()) {
-        return@withContext if (autofillFeature.createAsyncPreferences().isEnabled()) {
-            decryptAsync(toDecrypt, key)
-        } else {
-            decryptSync(toDecrypt, key)
-        }
-    }
-
-    @Synchronized
-    private fun decryptSync(
-        toDecrypt: EncryptedBytes,
-        key: Key,
-    ): ByteArray {
-        return innerDecrypt(toDecrypt, key)
-    }
-
-    private suspend fun decryptAsync(
-        toDecrypt: EncryptedBytes,
-        key: Key,
-    ): ByteArray {
         decryptMutex.withLock {
-            return innerDecrypt(toDecrypt, key)
-        }
-    }
-
-    private fun innerDecrypt(
-        toDecrypt: EncryptedBytes,
-        key: Key,
-    ): ByteArray {
-        return try {
-            val ivSpec = GCMParameterSpec(GCM_PARAM_SPEC_LENGTH, toDecrypt.iv)
-            decryptionCipher.init(Cipher.DECRYPT_MODE, key, ivSpec)
-            decryptionCipher.doFinal(toDecrypt.data)
-        } catch (exception: Exception) {
-            throw InternalSecureStorageException(message = "Error occurred while decrypting data", cause = exception)
+            try {
+                val ivSpec = GCMParameterSpec(GCM_PARAM_SPEC_LENGTH, toDecrypt.iv)
+                decryptionCipher.init(Cipher.DECRYPT_MODE, key, ivSpec)
+                decryptionCipher.doFinal(toDecrypt.data)
+            } catch (exception: Exception) {
+                InternalSecureStorageException(message = "Error occurred while decrypting data", cause = exception).let {
+                    pixel.fire(
+                        pixel = AutofillPixelNames.AUTOFILL_DECRYPT_DATA_FAILED,
+                        parameters = mapOf("error" to it.sanitizeStackTrace()),
+                        type = Daily(),
+                    )
+                    throw it
+                }
+            }
         }
     }
 

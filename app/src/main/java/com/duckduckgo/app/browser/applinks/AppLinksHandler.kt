@@ -16,7 +16,9 @@
 
 package com.duckduckgo.app.browser.applinks
 
+import com.duckduckgo.app.browser.SpecialUrlDetector.UrlType.AppLink
 import com.duckduckgo.app.browser.UriString
+import com.duckduckgo.browser.feature.toggles.AndroidBrowserConfigFeature
 import com.duckduckgo.common.utils.extractDomain
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
@@ -25,7 +27,9 @@ import javax.inject.Inject
 interface AppLinksHandler {
     fun handleAppLink(
         isForMainFrame: Boolean,
-        urlString: String,
+        appLink: AppLink,
+        hasGesture: Boolean,
+        clientPackage: String?,
         appLinksEnabled: Boolean,
         shouldHaltWebNavigation: Boolean,
         launchAppLink: () -> Unit,
@@ -34,19 +38,41 @@ interface AppLinksHandler {
     fun updatePreviousUrl(urlString: String?)
     fun setUserQueryState(state: Boolean)
     fun isUserQuery(): Boolean
+
+    /**
+     * True when the app link resolves back to the app that opened the custom tab
+     *
+     * @param appLink the app link being evaluated.
+     * @param callerPackage package that launched the custom tab (if any).
+     */
+    fun isTrustedCaller(appLink: AppLink, callerPackage: String?): Boolean
+
+    /**
+     * True when the app link's domain always launches its app, bypassing the usual user-gesture and prompt requirements.
+     *
+     * @param appLink the app link being evaluated.
+     */
+    fun isAlwaysTriggerDomain(appLink: AppLink): Boolean
 }
 
 @ContributesBinding(AppScope::class)
-class DuckDuckGoAppLinksHandler @Inject constructor() : AppLinksHandler {
+class DuckDuckGoAppLinksHandler @Inject constructor(
+    private val androidBrowserConfigFeature: AndroidBrowserConfigFeature,
+) : AppLinksHandler {
 
     var previousUrl: String? = null
     var isAUserQuery = false
     var hasTriggeredForDomain = false
+
+    // Domains exempt from every suppression rule below  as they launch on repeat navigations to the same
+    // domain, and without a user gesture.
     private val alwaysTriggerList = listOf("app.digid.nl")
 
     override fun handleAppLink(
         isForMainFrame: Boolean,
-        urlString: String,
+        appLink: AppLink,
+        hasGesture: Boolean,
+        clientPackage: String?,
         appLinksEnabled: Boolean,
         shouldHaltWebNavigation: Boolean,
         launchAppLink: () -> Unit,
@@ -55,14 +81,25 @@ class DuckDuckGoAppLinksHandler @Inject constructor() : AppLinksHandler {
             return false
         }
 
+        val urlString = appLink.uriString
+        val isAlwaysTriggerDomain = isAlwaysTriggerDomain(appLink)
+
+        // HTTP navigations shouldn't launch apps unless started with a user gesture. That is unless
+        // the "trusted-caller" carve-out applies - if an app opens a Custom Tab, App Links that
+        // point back to that same app should be allowed even without user interaction.
+        if (!isAlwaysTriggerDomain && androidBrowserConfigFeature.customTabEndlessLoopFix().isEnabled()) {
+            if (!hasGesture && !isTrustedCaller(appLink, clientPackage)) {
+                return false
+            }
+        }
+
         previousUrl?.let {
             if (isSameOrSubdomain(it, urlString)) {
-                val shouldTrigger = alwaysTriggerList.contains(urlString.extractDomain())
-                if (isAUserQuery || !hasTriggeredForDomain || shouldTrigger) {
+                if (isAUserQuery || !hasTriggeredForDomain || isAlwaysTriggerDomain) {
                     previousUrl = urlString
                     launchAppLink()
                     hasTriggeredForDomain = true
-                    if (shouldTrigger) return true
+                    if (isAlwaysTriggerDomain) return true
                 }
                 return false
             }
@@ -92,5 +129,14 @@ class DuckDuckGoAppLinksHandler @Inject constructor() : AppLinksHandler {
 
     override fun isUserQuery(): Boolean {
         return isAUserQuery
+    }
+
+    override fun isTrustedCaller(appLink: AppLink, callerPackage: String?): Boolean {
+        val targetPackage = appLink.appIntent?.component?.packageName ?: appLink.appIntent?.`package`
+        return targetPackage != null && callerPackage == targetPackage
+    }
+
+    override fun isAlwaysTriggerDomain(appLink: AppLink): Boolean {
+        return alwaysTriggerList.contains(appLink.uriString.extractDomain())
     }
 }

@@ -36,8 +36,8 @@ import com.duckduckgo.common.ui.view.text.DaxTextView
 import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.di.scopes.FragmentScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
-import com.duckduckgo.subscriptions.impl.PrivacyProFeature
 import com.duckduckgo.subscriptions.impl.R
+import com.duckduckgo.subscriptions.impl.SubscriptionsFeature
 import com.duckduckgo.subscriptions.impl.databinding.ContentFeedbackSubmitBinding
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackReportType.GENERAL_FEEDBACK
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackReportType.REPORT_PROBLEM
@@ -51,7 +51,7 @@ class SubscriptionFeedbackSubmitFragment : SubscriptionFeedbackFragment(R.layout
     lateinit var globalActivityStarter: GlobalActivityStarter
 
     @Inject
-    lateinit var privacyProFeature: PrivacyProFeature
+    lateinit var subscriptionsFeature: SubscriptionsFeature
 
     private val submitTextWatcher: TextWatcher = object : TextWatcher {
         override fun beforeTextChanged(
@@ -99,15 +99,17 @@ class SubscriptionFeedbackSubmitFragment : SubscriptionFeedbackFragment(R.layout
             }
             binding.feedbackSubmitDescription.hint = getString(R.string.feedbackSubmitVpnDescriptionHint)
 
-            if (privacyProFeature.allowEmailFeedback().isEnabled()) {
-                binding.showEmail()
-            } else {
-                binding.hideEmail()
+            binding.feedbackSubmitContactSupportByLine.show()
+            binding.feedbackSubmitContactSupportByLine.setClickableLink(
+                "support_link",
+                SpannableString(getText(R.string.feedbackSubmitContactSupport)),
+            ) {
+                listener.onContactSupportOpened()
             }
         } else {
             binding.feedbackSubmitHeader.gone()
             binding.feedbackSubmitByLine.gone()
-            binding.hideEmail()
+            binding.feedbackSubmitContactSupportByLine.gone()
             if (reportType == GENERAL_FEEDBACK) {
                 binding.feedbackSubmitDescription.hint = getString(R.string.feedbackSubmitGeneralDescriptionHint)
             } else {
@@ -116,20 +118,10 @@ class SubscriptionFeedbackSubmitFragment : SubscriptionFeedbackFragment(R.layout
         }
 
         binding.feedbackSubmitButton.setOnClickListener {
-            listener.onUserSubmit(binding.feedbackSubmitDescription.text.trim(), binding.feedbackSubmitEmail.text.trim())
+            listener.onUserSubmit(binding.feedbackSubmitDescription.text.trim())
         }
 
         binding.feedbackSubmitDescription.showKeyboard()
-    }
-
-    private fun ContentFeedbackSubmitBinding.showEmail() {
-        feedbackSubmitEmailByLine.show()
-        feedbackSubmitEmail.show()
-    }
-
-    private fun ContentFeedbackSubmitBinding.hideEmail() {
-        feedbackSubmitEmailByLine.gone()
-        feedbackSubmitEmail.gone()
     }
 
     private fun DaxTextView.setClickableLink(
@@ -177,10 +169,10 @@ class SubscriptionFeedbackSubmitFragment : SubscriptionFeedbackFragment(R.layout
     interface Listener {
         fun onUserSubmit(
             description: String,
-            email: String? = null,
         )
 
         fun onFaqsOpened()
+        fun onContactSupportOpened()
     }
 
     companion object {

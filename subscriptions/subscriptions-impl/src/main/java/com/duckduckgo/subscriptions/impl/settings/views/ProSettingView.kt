@@ -32,8 +32,9 @@ import com.duckduckgo.common.utils.ConflatedJob
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.ViewViewModelFactory
 import com.duckduckgo.di.scopes.ViewScope
-import com.duckduckgo.mobile.android.R as CommonR
 import com.duckduckgo.navigation.api.GlobalActivityStarter
+import com.duckduckgo.subscriptions.api.SubscriptionScreens.RestoreSubscriptionScreenWithParams
+import com.duckduckgo.subscriptions.api.SubscriptionScreens.SubscriptionsSettingsScreenWithEmptyParams
 import com.duckduckgo.subscriptions.api.SubscriptionStatus.AUTO_RENEWABLE
 import com.duckduckgo.subscriptions.api.SubscriptionStatus.EXPIRED
 import com.duckduckgo.subscriptions.api.SubscriptionStatus.GRACE_PERIOD
@@ -43,6 +44,7 @@ import com.duckduckgo.subscriptions.api.SubscriptionStatus.WAITING
 import com.duckduckgo.subscriptions.impl.R
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants
 import com.duckduckgo.subscriptions.impl.databinding.ViewSettingsBinding
+import com.duckduckgo.subscriptions.impl.internal.SubscriptionsUrlProvider
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Command
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Command.OpenBuyScreen
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Command.OpenRestoreScreen
@@ -50,13 +52,12 @@ import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Comm
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.ViewState
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.ViewState.SubscriptionRegion.ROW
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.ViewState.SubscriptionRegion.US
-import com.duckduckgo.subscriptions.impl.ui.RestoreSubscriptionActivity.Companion.RestoreSubscriptionScreenWithParams
-import com.duckduckgo.subscriptions.impl.ui.SubscriptionSettingsActivity.Companion.SubscriptionsSettingsScreenWithEmptyParams
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionsWebViewActivityWithParams
 import dagger.android.support.AndroidSupportInjection
-import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
+import com.duckduckgo.mobile.android.R as CommonR
 
 @InjectWith(ViewScope::class)
 class ProSettingView @JvmOverloads constructor(
@@ -73,6 +74,9 @@ class ProSettingView @JvmOverloads constructor(
 
     @Inject
     lateinit var dispatchers: DispatcherProvider
+
+    @Inject
+    lateinit var subscriptionsUrlProvider: SubscriptionsUrlProvider
 
     private val binding: ViewSettingsBinding by viewBinding()
 
@@ -167,15 +171,13 @@ class ProSettingView @JvmOverloads constructor(
             }
             else -> {
                 with(binding) {
-                    subscriptionBuy.setPrimaryText(context.getString(R.string.subscriptionSettingSubscribe))
-                    subscriptionBuy.setSecondaryText(
-                        when (viewState.region) {
-                            ROW -> context.getString(R.string.subscriptionSettingSubscribeSubtitleRow)
-                            US -> context.getString(R.string.subscriptionSettingSubscribeSubtitle)
-                            else -> ""
-                        },
-                    )
-                    subscriptionGet.setText(R.string.subscriptionSettingGet)
+                    if (viewState.duckAiPlusAvailable) {
+                        subscriptionBuy.setPrimaryText(context.getString(R.string.subscriptionSettingSubscribeSecure))
+                    } else {
+                        subscriptionBuy.setPrimaryText(context.getString(R.string.subscriptionSettingSubscribe))
+                    }
+                    subscriptionBuy.setSecondaryText(getSubscriptionSecondaryText(viewState))
+                    subscriptionGet.setText(getActionButtonText(viewState))
 
                     subscriptionBuyContainer.isVisible = true
                     subscriptionRestoreContainer.isVisible = true
@@ -183,6 +185,26 @@ class ProSettingView @JvmOverloads constructor(
                     subscriptionSettingContainer.isGone = true
                 }
             }
+        }
+    }
+
+    private fun getActionButtonText(viewState: ViewState) = when {
+        viewState.blackFridayOfferAvailable -> R.string.subscriptionSettingBlackFridayOffer
+        viewState.freeTrialEligible -> R.string.subscriptionSettingTryFreeTrial
+        else -> R.string.subscriptionSettingGet
+    }
+
+    private fun getSubscriptionSecondaryText(viewState: ViewState) = if (viewState.duckAiPlusAvailable) {
+        when (viewState.region) {
+            ROW -> context.getString(R.string.subscriptionSettingSubscribeWithDuckAiSubtitleRow)
+            US -> context.getString(R.string.subscriptionSettingSubscribeWithDuckAiSubtitle)
+            else -> ""
+        }
+    } else {
+        when (viewState.region) {
+            ROW -> context.getString(R.string.subscriptionSettingSubscribeSubtitleRow)
+            US -> context.getString(R.string.subscriptionSettingSubscribeSubtitle)
+            else -> ""
         }
     }
 
@@ -195,8 +217,8 @@ class ProSettingView @JvmOverloads constructor(
                 globalActivityStarter.start(
                     context,
                     SubscriptionsWebViewActivityWithParams(
-                        url = SubscriptionsConstants.BUY_URL,
-                        origin = "funnel_appsettings_android",
+                        url = subscriptionsUrlProvider.buyUrl,
+                        origin = SubscriptionsConstants.ORIGIN_APP_SETTINGS,
                     ),
                 )
             }

@@ -21,17 +21,18 @@ import com.duckduckgo.feature.toggles.api.Toggle.State.Target
 import com.duckduckgo.feature.toggles.api.Toggle.TargetMatcherPlugin
 import com.duckduckgo.subscriptions.api.Subscriptions
 import com.squareup.anvil.annotations.ContributesMultibinding
-import javax.inject.Inject
+import dagger.Lazy
 import kotlinx.coroutines.runBlocking
+import javax.inject.Inject
 
 @ContributesMultibinding(AppScope::class)
 class SubscriptionsToggleTargetMatcherPlugin @Inject constructor(
-    private val subscriptions: Subscriptions,
+    private val subscriptions: Lazy<Subscriptions>,
 ) : TargetMatcherPlugin {
     override fun matchesTargetProperty(target: Target): Boolean {
-        return target.isPrivacyProEligible?.let { isPrivacyProEligible ->
+        return target.isPrivacyProEligible?.let { isEligible ->
             // runBlocking sucks I know :shrug:
-            isPrivacyProEligible == runBlocking { subscriptions.isEligible() }
+            isEligible == runBlocking { subscriptions.get().isEligible() }
         } ?: true
     }
 }

@@ -17,22 +17,27 @@
 package com.duckduckgo.app.settings
 
 import com.duckduckgo.app.di.AppCoroutineScope
+import com.duckduckgo.app.pixels.AppPixelName
 import com.duckduckgo.app.pixels.AppPixelName.SETTINGS_EMAIL_PROTECTION_PRESSED
 import com.duckduckgo.app.pixels.AppPixelName.SETTINGS_SYNC_PRESSED
+import com.duckduckgo.app.pixels.duckchat.createWasUsedBeforePixelParams
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.autofill.api.email.EmailManager
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.extensions.toBinaryString
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.duckchat.api.DuckChat
 import com.duckduckgo.duckchat.impl.pixel.DuckChatPixelName.DUCK_CHAT_SETTINGS_PRESSED
+import com.duckduckgo.subscriptions.api.SubscriptionStatus.UNKNOWN
+import com.duckduckgo.subscriptions.api.Subscriptions
 import com.duckduckgo.sync.api.SyncState.OFF
 import com.duckduckgo.sync.api.SyncStateMonitor
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Utility to dispatch pixels triggered by interactions on the settings screen.
@@ -41,6 +46,7 @@ interface SettingsPixelDispatcher {
     fun fireSyncPressed()
     fun fireDuckChatPressed()
     fun fireEmailPressed()
+    fun fireSettingsOpenedWithSubscriptionPurchaseAvailable()
 }
 
 @ContributesBinding(scope = AppScope::class)
@@ -51,6 +57,8 @@ class SettingsPixelDispatcherImpl @Inject constructor(
     private val syncStateMonitor: SyncStateMonitor,
     private val duckChat: DuckChat,
     private val emailManager: EmailManager,
+    private val subscriptions: Subscriptions,
+    private val dispatcherProvider: DispatcherProvider,
 ) : SettingsPixelDispatcher {
 
     override fun fireSyncPressed() {
@@ -68,12 +76,10 @@ class SettingsPixelDispatcherImpl @Inject constructor(
 
     override fun fireDuckChatPressed() {
         appCoroutineScope.launch {
-            val wasUsedBefore = duckChat.wasOpenedBefore()
+            val params = duckChat.createWasUsedBeforePixelParams()
             pixel.fire(
                 pixel = DUCK_CHAT_SETTINGS_PRESSED,
-                parameters = mapOf(
-                    PARAM_DUCK_CHAT_USED_BEFORE to wasUsedBefore.toBinaryString(),
-                ),
+                parameters = params,
             )
         }
     }
@@ -90,9 +96,16 @@ class SettingsPixelDispatcherImpl @Inject constructor(
         }
     }
 
+    override fun fireSettingsOpenedWithSubscriptionPurchaseAvailable() {
+        appCoroutineScope.launch(dispatcherProvider.io()) {
+            if (subscriptions.isEligible() && subscriptions.getSubscriptionStatus() == UNKNOWN) {
+                pixel.fire(AppPixelName.SETTINGS_OPENED_WITH_SUBSCRIPTION_AVAILABLE)
+            }
+        }
+    }
+
     private companion object {
         const val PARAM_SYNC_IS_ENABLED = "is_enabled"
-        const val PARAM_DUCK_CHAT_USED_BEFORE = "was_used_before"
         const val PARAM_EMAIL_IS_SIGNED_IN = "is_signed_in"
     }
 }

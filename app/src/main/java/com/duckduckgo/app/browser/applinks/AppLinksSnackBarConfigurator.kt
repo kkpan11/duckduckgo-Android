@@ -24,13 +24,16 @@ import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.SpecialUrlDetector.UrlType.AppLink
 import com.duckduckgo.app.pixels.AppPixelName
 import com.duckduckgo.app.statistics.pixels.Pixel
+import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Daily
 import com.duckduckgo.common.ui.view.makeSnackbarWithNoBottomInset
 import com.duckduckgo.di.scopes.AppScope
 import com.google.android.material.snackbar.BaseTransientBottomBar
 import com.google.android.material.snackbar.Snackbar
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.ERROR
+import logcat.asLog
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface AppLinksSnackBarConfigurator {
     fun configureAppLinkSnackBar(view: View?, appLink: AppLink, viewModel: BrowserTabViewModel): Snackbar?
@@ -50,6 +53,7 @@ class DuckDuckGoAppLinksSnackBarConfigurator @Inject constructor(
             it.makeSnackbarWithNoBottomInset(message, Snackbar.LENGTH_LONG).apply {
                 setAction(action) {
                     pixel.fire(AppPixelName.APP_LINKS_SNACKBAR_OPEN_ACTION_PRESSED)
+                    pixel.fire(AppPixelName.APP_LINKS_SNACKBAR_OPEN_ACTION_PRESSED_DAILY, type = Daily())
                     appLinksLauncher.openAppLink(context, appLink, viewModel)
                 }
                 addCallback(
@@ -57,6 +61,7 @@ class DuckDuckGoAppLinksSnackBarConfigurator @Inject constructor(
                         override fun onShown(transientBottomBar: Snackbar?) {
                             super.onShown(transientBottomBar)
                             pixel.fire(AppPixelName.APP_LINKS_SNACKBAR_SHOWN)
+                            pixel.fire(AppPixelName.APP_LINKS_SNACKBAR_SHOWN_DAILY, type = Daily())
                         }
                     },
                 )
@@ -85,7 +90,7 @@ class DuckDuckGoAppLinksSnackBarConfigurator @Inject constructor(
             val applicationInfo = packageManager.getApplicationInfo(packageName, 0)
             packageManager.getApplicationLabel(applicationInfo).toString()
         } catch (exception: PackageManager.NameNotFoundException) {
-            Timber.e(exception, "App name not found")
+            logcat(ERROR) { "App name not found: ${exception.asLog()}" }
             null
         }
     }

@@ -27,12 +27,13 @@ import com.duckduckgo.voice.api.VoiceSearchAvailability
 import com.duckduckgo.voice.impl.VoiceSearchPixelNames.VOICE_SEARCH_OFF
 import com.duckduckgo.voice.impl.VoiceSearchPixelNames.VOICE_SEARCH_ON
 import com.duckduckgo.voice.store.VoiceSearchRepository
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class AccessibilitySettingsViewModel @Inject constructor(
@@ -70,7 +71,7 @@ class AccessibilitySettingsViewModel @Inject constructor(
     }
 
     fun onForceZoomChanged(checked: Boolean) {
-        Timber.v("AccessibilityActSettings: onForceZoomChanged $checked")
+        logcat(VERBOSE) { "AccessibilityActSettings: onForceZoomChanged $checked" }
         accessibilitySettings.forceZoom = checked
         viewModelScope.launch {
             viewState.emit(
@@ -82,7 +83,7 @@ class AccessibilitySettingsViewModel @Inject constructor(
     }
 
     fun onSystemFontSizeChanged(checked: Boolean) {
-        Timber.v("AccessibilityActSettings: onOverrideSystemFontSizeChanged $checked")
+        logcat(VERBOSE) { "AccessibilityActSettings: onOverrideSystemFontSizeChanged $checked" }
         accessibilitySettings.overrideSystemFontSize = checked
         viewModelScope.launch {
             viewState.emit(
@@ -94,7 +95,7 @@ class AccessibilitySettingsViewModel @Inject constructor(
     }
 
     fun onFontSizeChanged(newValue: Float) {
-        Timber.v("AccessibilityActSettings: onFontSizeChanged $newValue")
+        logcat(VERBOSE) { "AccessibilityActSettings: onFontSizeChanged $newValue" }
         accessibilitySettings.appFontSize = newValue
         viewModelScope.launch {
             viewState.emit(
@@ -109,7 +110,6 @@ class AccessibilitySettingsViewModel @Inject constructor(
         viewModelScope.launch(dispatcherProvider.io()) {
             voiceSearchRepository.setVoiceSearchUserEnabled(checked)
             if (checked) {
-                voiceSearchRepository.resetVoiceSearchDismissed()
                 pixel.fire(VOICE_SEARCH_ON)
             } else {
                 pixel.fire(VOICE_SEARCH_OFF)

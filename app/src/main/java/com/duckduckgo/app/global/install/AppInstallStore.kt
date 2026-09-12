@@ -22,17 +22,26 @@ import androidx.annotation.UiThread
 import androidx.annotation.VisibleForTesting
 import androidx.core.content.edit
 import androidx.lifecycle.LifecycleOwner
+import com.duckduckgo.app.di.AppCoroutineScope
 import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
+import com.duckduckgo.common.utils.DispatcherProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import logcat.LogPriority
+import logcat.logcat
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-import timber.log.Timber
 
 interface AppInstallStore : MainProcessLifecycleObserver {
     var installTimestamp: Long
 
     var widgetInstalled: Boolean
 
+    /** Setting to `true` also flips [wasEverDefaultBrowser] to `true` permanently. */
     var defaultBrowser: Boolean
+    val wasEverDefaultBrowser: Boolean
+
+    var defaultBrowserChangedSurveyDone: Boolean
 
     var newDefaultBrowserDialogCount: Int
 
@@ -43,7 +52,11 @@ fun AppInstallStore.daysInstalled(): Long {
     return TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - installTimestamp)
 }
 
-class AppInstallSharedPreferences @Inject constructor(private val context: Context) : AppInstallStore {
+class AppInstallSharedPreferences @Inject constructor(
+    private val context: Context,
+    @AppCoroutineScope private val appCoroutineScope: CoroutineScope,
+    private val dispatcherProvider: DispatcherProvider,
+) : AppInstallStore {
     override var installTimestamp: Long
         get() = preferences.getLong(KEY_TIMESTAMP_UTC, 0L)
         set(timestamp) = preferences.edit { putLong(KEY_TIMESTAMP_UTC, timestamp) }
@@ -54,7 +67,19 @@ class AppInstallSharedPreferences @Inject constructor(private val context: Conte
 
     override var defaultBrowser: Boolean
         get() = preferences.getBoolean(KEY_DEFAULT_BROWSER, false)
-        set(defaultBrowser) = preferences.edit { putBoolean(KEY_DEFAULT_BROWSER, defaultBrowser) }
+        set(defaultBrowser) = preferences.edit {
+            putBoolean(KEY_DEFAULT_BROWSER, defaultBrowser)
+            if (defaultBrowser) {
+                putBoolean(KEY_WAS_EVER_DEFAULT_BROWSER, true)
+            }
+        }
+
+    override val wasEverDefaultBrowser: Boolean
+        get() = preferences.getBoolean(KEY_WAS_EVER_DEFAULT_BROWSER, false)
+
+    override var defaultBrowserChangedSurveyDone: Boolean
+        get() = preferences.getBoolean(KEY_DEFAULT_BROWSER_CHANGED_SURVEY_DONE, false)
+        set(value) = preferences.edit { putBoolean(KEY_DEFAULT_BROWSER_CHANGED_SURVEY_DONE, value) }
 
     override var newDefaultBrowserDialogCount: Int
         get() = preferences.getInt(ROLE_MANAGER_BROWSER_DIALOG_KEY, 0)
@@ -66,9 +91,11 @@ class AppInstallSharedPreferences @Inject constructor(private val context: Conte
 
     @UiThread
     override fun onCreate(owner: LifecycleOwner) {
-        Timber.i("recording installation timestamp")
-        if (!hasInstallTimestampRecorded()) {
-            installTimestamp = System.currentTimeMillis()
+        appCoroutineScope.launch(dispatcherProvider.io()) {
+            logcat(LogPriority.INFO) { "recording installation timestamp" }
+            if (!hasInstallTimestampRecorded()) {
+                installTimestamp = System.currentTimeMillis()
+            }
         }
     }
 
@@ -78,6 +105,8 @@ class AppInstallSharedPreferences @Inject constructor(private val context: Conte
         const val KEY_TIMESTAMP_UTC = "INSTALL_TIMESTAMP_UTC"
         const val KEY_WIDGET_INSTALLED = "KEY_WIDGET_INSTALLED"
         const val KEY_DEFAULT_BROWSER = "KEY_DEFAULT_BROWSER"
+        const val KEY_WAS_EVER_DEFAULT_BROWSER = "KEY_WAS_EVER_DEFAULT_BROWSER"
+        const val KEY_DEFAULT_BROWSER_CHANGED_SURVEY_DONE = "KEY_DEFAULT_BROWSER_CHANGED_SURVEY_DONE"
         private const val ROLE_MANAGER_BROWSER_DIALOG_KEY = "ROLE_MANAGER_BROWSER_DIALOG_KEY"
     }
 }

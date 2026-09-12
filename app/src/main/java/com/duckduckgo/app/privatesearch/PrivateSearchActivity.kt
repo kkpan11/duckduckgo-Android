@@ -27,41 +27,72 @@ import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivityPrivateSearchBinding
 import com.duckduckgo.app.privatesearch.PrivateSearchViewModel.Command
+import com.duckduckgo.browser.api.ui.BrowserScreens.PrivateSearchScreenNoParams
 import com.duckduckgo.browser.api.ui.BrowserScreens.WebViewActivityWithParams
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
-import javax.inject.Inject
+import com.duckduckgo.settings.api.SettingsPageFeature
+import com.duckduckgo.settings.api.SettingsWebViewScreenWithParams
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(PrivateSearchScreenNoParams::class)
 class PrivateSearchActivity : DuckDuckGoActivity() {
-
     @Inject
     lateinit var globalActivityStarter: GlobalActivityStarter
+
+    @Inject
+    lateinit var settingsPageFeature: SettingsPageFeature
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private val viewModel: PrivateSearchViewModel by bindViewModel()
     private val binding: ActivityPrivateSearchBinding by viewBinding()
 
-    private val autocompleteToggleListener = CompoundButton.OnCheckedChangeListener { _, isChecked ->
-        viewModel.onAutocompleteSettingChanged(isChecked)
-    }
+    private val autocompleteToggleListener =
+        CompoundButton.OnCheckedChangeListener { _, isChecked ->
+            viewModel.onAutocompleteSettingChanged(isChecked)
+        }
 
-    private val autocompleteRecentlyVisitedSitesToggleListener = CompoundButton.OnCheckedChangeListener { _, isChecked ->
-        viewModel.onAutocompleteRecentlyVisitedSitesSettingChanged(isChecked)
-    }
+    private val autocompleteRecentlyVisitedSitesToggleListener =
+        CompoundButton.OnCheckedChangeListener { _, isChecked ->
+            viewModel.onAutocompleteRecentlyVisitedSitesSettingChanged(isChecked)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.SETTINGS)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
+
         setContentView(binding.root)
         setupToolbar(binding.includeToolbar.toolbar)
 
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
+
         configureUiEventHandlers()
         observeViewModel()
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyNavigationBarInsets(binding.contentScrollView, drawBehindGestureNav = true)
     }
 
     private fun configureUiEventHandlers() {
@@ -92,7 +123,8 @@ class PrivateSearchActivity : DuckDuckGoActivity() {
                 }
             }.launchIn(lifecycleScope)
 
-        viewModel.commands()
+        viewModel
+            .commands()
             .flowWithLifecycle(lifecycle, Lifecycle.State.CREATED)
             .onEach { processCommand(it) }
             .launchIn(lifecycleScope)
@@ -105,16 +137,27 @@ class PrivateSearchActivity : DuckDuckGoActivity() {
     }
 
     private fun launchCustomizeSearchWebPage() {
-        globalActivityStarter.start(
-            this,
-            WebViewActivityWithParams(
-                url = DUCKDUCKGO_SETTINGS_WEB_LINK,
-                getString(R.string.privateSearchMoreSearchSettingsTitle),
-            ),
-        )
+        if (settingsPageFeature.embeddedSettingsWebView().isEnabled()) {
+            globalActivityStarter.start(
+                this,
+                SettingsWebViewScreenWithParams(
+                    url = DUCKDUCKGO_SETTINGS_WEB_LINK_EMBEDDED,
+                    getString(R.string.privateSearchMoreSearchSettingsTitle),
+                ),
+            )
+        } else {
+            globalActivityStarter.start(
+                this,
+                WebViewActivityWithParams(
+                    url = DUCKDUCKGO_SETTINGS_WEB_LINK,
+                    getString(R.string.privateSearchMoreSearchSettingsTitle),
+                ),
+            )
+        }
     }
 
     companion object {
         private const val DUCKDUCKGO_SETTINGS_WEB_LINK = "https://duckduckgo.com/settings"
+        private const val DUCKDUCKGO_SETTINGS_WEB_LINK_EMBEDDED = "https://duckduckgo.com/settings?ko=-1&embedded=1#general"
     }
 }

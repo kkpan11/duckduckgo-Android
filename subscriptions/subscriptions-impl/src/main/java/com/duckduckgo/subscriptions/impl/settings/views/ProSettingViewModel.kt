@@ -22,20 +22,22 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.duckduckgo.anvil.annotations.ContributesViewModel
+import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.ViewScope
+import com.duckduckgo.subscriptions.api.Product.DuckAiPlus
 import com.duckduckgo.subscriptions.api.SubscriptionStatus
 import com.duckduckgo.subscriptions.api.SubscriptionStatus.UNKNOWN
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.MONTHLY_PLAN_ROW
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.MONTHLY_PLAN_US
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.YEARLY_PLAN_ROW
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.YEARLY_PLAN_US
+import com.duckduckgo.subscriptions.impl.SubscriptionsFeature
 import com.duckduckgo.subscriptions.impl.SubscriptionsManager
 import com.duckduckgo.subscriptions.impl.pixels.SubscriptionPixelSender
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Command.OpenBuyScreen
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Command.OpenRestoreScreen
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Command.OpenSettings
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.ViewState.SubscriptionRegion
-import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -46,12 +48,16 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 @SuppressLint("NoLifecycleObserver") // we don't observe app lifecycle
 @ContributesViewModel(ViewScope::class)
 class ProSettingViewModel @Inject constructor(
     private val subscriptionsManager: SubscriptionsManager,
     private val pixelSender: SubscriptionPixelSender,
+    private val subscriptionsFeature: SubscriptionsFeature,
+    private val dispatcherProvider: DispatcherProvider,
 ) : ViewModel(), DefaultLifecycleObserver {
 
     sealed class Command {
@@ -65,6 +71,9 @@ class ProSettingViewModel @Inject constructor(
     data class ViewState(
         val status: SubscriptionStatus = UNKNOWN,
         val region: SubscriptionRegion? = null,
+        val duckAiPlusAvailable: Boolean = false,
+        val freeTrialEligible: Boolean = false,
+        val blackFridayOfferAvailable: Boolean = false,
     ) {
         enum class SubscriptionRegion { US, ROW }
     }
@@ -91,13 +100,28 @@ class ProSettingViewModel @Inject constructor(
         subscriptionsManager.subscriptionStatus
             .distinctUntilChanged()
             .onEach { subscriptionStatus ->
-                val offer = subscriptionsManager.getSubscriptionOffer().firstOrNull()
-                val region = when (offer?.planId) {
-                    MONTHLY_PLAN_ROW, YEARLY_PLAN_ROW -> SubscriptionRegion.ROW
-                    MONTHLY_PLAN_US, YEARLY_PLAN_US -> SubscriptionRegion.US
-                    else -> null
+                val newViewState = withContext(dispatcherProvider.io()) {
+                    val offer = subscriptionsManager.getSubscriptionOffer().firstOrNull()
+                    val region = when (offer?.planId) {
+                        MONTHLY_PLAN_ROW, YEARLY_PLAN_ROW -> SubscriptionRegion.ROW
+                        MONTHLY_PLAN_US, YEARLY_PLAN_US -> SubscriptionRegion.US
+                        else -> null
+                    }
+
+                    val duckAiEnabled = subscriptionsFeature.duckAiPlus().isEnabled()
+                    val duckAiAvailable = duckAiEnabled && offer?.features?.any { feature ->
+                        feature == DuckAiPlus.value
+                    } ?: false
+
+                    viewState.value.copy(
+                        status = subscriptionStatus,
+                        region = region,
+                        duckAiPlusAvailable = duckAiAvailable,
+                        freeTrialEligible = subscriptionsManager.isFreeTrialEligible(),
+                        blackFridayOfferAvailable = subscriptionsManager.blackFridayOfferAvailable(),
+                    )
                 }
-                _viewState.emit(viewState.value.copy(status = subscriptionStatus, region = region))
+                _viewState.emit(newViewState)
             }.launchIn(viewModelScope)
     }
 

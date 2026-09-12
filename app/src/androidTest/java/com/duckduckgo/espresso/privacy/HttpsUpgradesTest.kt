@@ -16,6 +16,7 @@
 
 package com.duckduckgo.espresso.privacy
 
+import android.view.View
 import android.webkit.WebView
 import androidx.core.net.toUri
 import androidx.test.espresso.IdlingRegistry
@@ -31,13 +32,16 @@ import androidx.test.ext.junit.rules.activityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
 import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.R
+import com.duckduckgo.app.browser.mode.InAppNavigation
 import com.duckduckgo.common.utils.isHttps
+import com.duckduckgo.espresso.JsObjectIdlingResource
 import com.duckduckgo.espresso.PrivacyTest
 import com.duckduckgo.espresso.WebViewIdlingResource
 import com.duckduckgo.privacy.config.impl.network.JSONObjectAdapter
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import org.hamcrest.CoreMatchers.containsString
+import org.hamcrest.CoreMatchers.sameInstance
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -48,6 +52,7 @@ class HttpsUpgradesTest {
     var activityScenarioRule = activityScenarioRule<BrowserActivity>(
         BrowserActivity.intent(
             InstrumentationRegistry.getInstrumentation().targetContext,
+            launchSource = InAppNavigation,
             queryExtra = "http://privacy-test-pages.site/privacy-protections/https-upgrades/",
         ),
     )
@@ -62,18 +67,26 @@ class HttpsUpgradesTest {
             webView = it.findViewById(R.id.browserWebView)
         }
 
-        val idlingResourceForDisableProtections = WebViewIdlingResource(webView!!)
+        val testWebView = webView!!
+
+        // The upgrade-navigation test calls window.open, so a second tab (and WebView) exists while the
+        // test runs; match this tab's WebView explicitly instead of relying on there being only one.
+        val testWebViewMatcher = sameInstance<View>(testWebView)
+
+        val idlingResourceForDisableProtections = WebViewIdlingResource(testWebView)
         IdlingRegistry.getInstance().register(idlingResourceForDisableProtections)
 
-        onWebView()
+        onWebView(testWebViewMatcher)
             .withElement(findElement(ID, "start"))
             .check(webMatches(getText(), containsString("Start test")))
             .perform(webClick())
 
-        val idlingResourceForScript = WebViewIdlingResource(webView!!)
+        // The page loads before its tests finish, so page progress alone does not mean the results are
+        // populated: upgrade-navigation resolves only once the popup it opens posts its URL back.
+        val idlingResourceForScript = JsObjectIdlingResource(testWebView, RESULTS_OBJECT, condition = RESULTS_POPULATED)
         IdlingRegistry.getInstance().register(idlingResourceForScript)
 
-        val results = onWebView()
+        val results = onWebView(testWebViewMatcher)
             .perform(script(SCRIPT))
             .get()
 
@@ -95,6 +108,13 @@ class HttpsUpgradesTest {
     companion object {
         const val SCRIPT = "return results.results;"
         val compatibleIds = listOf("upgrade-navigation")
+
+        // The page declares `results` with const, so it is a global binding rather than a window property
+        private const val RESULTS_OBJECT = "results"
+        private val RESULTS_POPULATED = compatibleIds.joinToString(
+            separator = " && ",
+            prefix = "typeof $RESULTS_OBJECT !== 'undefined' && ",
+        ) { "!!$RESULTS_OBJECT.results?.find(r => r.id === '$it')?.value" }
     }
 
     data class TestJson(val status: Int, val value: List<HttpsUpgradeTest>)

@@ -41,8 +41,8 @@ import com.duckduckgo.savedsites.impl.newtab.FavouriteNewTabSectionsItem.Placeho
 import com.duckduckgo.savedsites.impl.newtab.FavouritesNewTabSectionsAdapter.FavouriteViewHolder.ItemState.Drag
 import com.duckduckgo.savedsites.impl.newtab.FavouritesNewTabSectionsAdapter.FavouriteViewHolder.ItemState.LongPress
 import com.duckduckgo.savedsites.impl.newtab.FavouritesNewTabSectionsAdapter.FavouriteViewHolder.ItemState.Stale
-import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 
 class FavouritesNewTabSectionsAdapter(
     private val lifecycleOwner: LifecycleOwner,
@@ -150,9 +150,9 @@ class FavouritesNewTabSectionsAdapter(
         private var popupMenu: PopupMenu? = null
 
         sealed class ItemState {
-            object Stale : ItemState()
-            object LongPress : ItemState()
-            object Drag : ItemState()
+            data object Stale : ItemState()
+            data object LongPress : ItemState()
+            data object Drag : ItemState()
         }
 
         private val scaleDown = ObjectAnimator.ofPropertyValuesHolder(

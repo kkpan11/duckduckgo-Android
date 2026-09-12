@@ -21,12 +21,12 @@ import com.duckduckgo.common.utils.plugins.pixel.PixelInterceptorPlugin
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.networkprotection.impl.pixels.NetworkProtectionPixelNames.NETP_SETTINGS_PRESSED
 import com.squareup.anvil.annotations.ContributesMultibinding
-import javax.inject.Inject
 import logcat.logcat
 import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import javax.inject.Inject
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -36,19 +36,17 @@ class NetpCohortPixelInterceptor @Inject constructor(
     private val cohortStore: NetpCohortStore,
 ) : PixelInterceptorPlugin, Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request().newBuilder()
-        val pixel = chain.request().url.pathSegments.last()
+        val originalRequest = chain.request()
+        val pixel = originalRequest.url.pathSegments.last()
 
-        val url = if (pixel.startsWith(PIXEL_PREFIX) && !EXCEPTIONS.any { exception -> pixel.startsWith(exception) }) {
+        if (pixel.startsWith(PIXEL_PREFIX) && !EXCEPTIONS.any { exception -> pixel.startsWith(exception) }) {
             // IF there is no cohort for NetP we just drop the pixel request
-            cohortStore.cohortLocalDate?.let {
-                chain.request().url.newBuilder().build()
-            } ?: return dummyResponse(chain)
-        } else {
-            chain.request().url
+            if (cohortStore.cohortLocalDate == null) {
+                return dummyResponse(chain)
+            }
         }
 
-        return chain.proceed(request.url(url).build())
+        return chain.proceed(originalRequest)
     }
 
     private fun dummyResponse(chain: Interceptor.Chain): Response {

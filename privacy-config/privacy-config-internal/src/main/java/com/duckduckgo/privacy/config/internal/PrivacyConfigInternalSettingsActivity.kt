@@ -33,6 +33,7 @@ import com.duckduckgo.common.ui.view.gone
 import com.duckduckgo.common.ui.view.hide
 import com.duckduckgo.common.ui.view.show
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.privacy.config.impl.PrivacyConfigDownloader
 import com.duckduckgo.privacy.config.internal.PrivacyConfigInternalViewModel.Command
@@ -41,14 +42,17 @@ import com.duckduckgo.privacy.config.internal.PrivacyConfigInternalViewModel.Com
 import com.duckduckgo.privacy.config.internal.PrivacyConfigInternalViewModel.Command.Loading
 import com.duckduckgo.privacy.config.internal.PrivacyConfigInternalViewModel.ViewState
 import com.duckduckgo.privacy.config.internal.databinding.ActivityPrivacyConfigInternalSettingsBinding
-import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 class PrivacyConfigInternalSettingsActivity : DuckDuckGoActivity() {
 
     @Inject lateinit var downloader: PrivacyConfigDownloader
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private val binding: ActivityPrivacyConfigInternalSettingsBinding by viewBinding()
     private val viewModel: PrivacyConfigInternalViewModel by bindViewModel()
@@ -62,7 +66,9 @@ class PrivacyConfigInternalSettingsActivity : DuckDuckGoActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableTransparentEdgeToEdge()
         setContentView(binding.root)
+        configureEdgeToEdgeInsets()
         setupToolbar(binding.toolbar)
         configureViews()
         viewModel.start()
@@ -74,6 +80,12 @@ class PrivacyConfigInternalSettingsActivity : DuckDuckGoActivity() {
             .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
             .onEach { processCommand(it) }
             .launchIn(lifecycleScope)
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.appBar)
+        edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.container)
     }
 
     private fun configureViews() {

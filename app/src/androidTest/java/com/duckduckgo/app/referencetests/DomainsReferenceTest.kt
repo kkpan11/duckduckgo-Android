@@ -25,17 +25,16 @@ import androidx.core.net.toUri
 import androidx.room.Room
 import androidx.test.annotation.UiThreadTest
 import androidx.test.platform.app.InstrumentationRegistry
+import com.duckduckgo.adblocking.api.duckplayer.DuckPlayer
 import com.duckduckgo.adclick.api.AdClickManager
 import com.duckduckgo.app.browser.WebViewRequestInterceptor
 import com.duckduckgo.app.browser.useragent.provideUserAgentOverridePluginPoint
 import com.duckduckgo.app.browser.webview.MaliciousSiteBlockerWebViewIntegration
 import com.duckduckgo.app.fakes.FakeMaliciousSiteBlockerWebViewIntegration
-import com.duckduckgo.app.fakes.FeatureToggleFake
 import com.duckduckgo.app.fakes.UserAgentFake
 import com.duckduckgo.app.fakes.UserAllowListRepositoryFake
 import com.duckduckgo.app.global.db.AppDatabase
 import com.duckduckgo.app.privacy.db.PrivacyProtectionCountDao
-import com.duckduckgo.app.privacy.db.UserAllowListDao
 import com.duckduckgo.app.privacy.db.UserAllowListRepository
 import com.duckduckgo.app.surrogates.ResourceSurrogateLoader
 import com.duckduckgo.app.surrogates.ResourceSurrogatesImpl
@@ -46,7 +45,7 @@ import com.duckduckgo.app.trackerdetection.EntityLookup
 import com.duckduckgo.app.trackerdetection.RealUrlToTypeMapper
 import com.duckduckgo.app.trackerdetection.TdsClient
 import com.duckduckgo.app.trackerdetection.TdsEntityLookup
-import com.duckduckgo.app.trackerdetection.TrackerDetector
+import com.duckduckgo.app.trackerdetection.TrackerDetectorClientProvider
 import com.duckduckgo.app.trackerdetection.TrackerDetectorImpl
 import com.duckduckgo.app.trackerdetection.api.ActionJsonAdapter
 import com.duckduckgo.app.trackerdetection.api.TdsJson
@@ -54,15 +53,20 @@ import com.duckduckgo.app.trackerdetection.db.TdsCnameEntityDao
 import com.duckduckgo.app.trackerdetection.db.TdsDomainEntityDao
 import com.duckduckgo.app.trackerdetection.db.TdsEntityDao
 import com.duckduckgo.app.trackerdetection.db.WebTrackersBlockedDao
+import com.duckduckgo.app.trackerdetection.flags.OptimizeCnameDetectionRCWrapper
+import com.duckduckgo.browser.feature.toggles.AndroidBrowserConfigFeature
 import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.common.test.FileUtilities
-import com.duckduckgo.duckplayer.api.DuckPlayer
+import com.duckduckgo.feature.toggles.api.FakeFeatureToggleFactory
 import com.duckduckgo.feature.toggles.api.FeatureToggle
+import com.duckduckgo.feature.toggles.api.FeatureToggleFake
 import com.duckduckgo.httpsupgrade.api.HttpsUpgrader
 import com.duckduckgo.privacy.config.api.ContentBlocking
 import com.duckduckgo.privacy.config.api.Gpc
 import com.duckduckgo.privacy.config.api.TrackerAllowlist
 import com.duckduckgo.request.filterer.api.RequestFilterer
+import com.duckduckgo.request.interception.api.RequestBlocklist
+import com.duckduckgo.tracker.detection.api.TrackerDetector
 import com.duckduckgo.user.agent.api.UserAgentProvider
 import com.duckduckgo.user.agent.impl.RealUserAgentProvider
 import com.duckduckgo.user.agent.impl.UserAgent
@@ -90,6 +94,7 @@ class DomainsReferenceTest(private val testCase: TestCase) {
     private lateinit var entityLookup: EntityLookup
     private lateinit var db: AppDatabase
     private lateinit var trackerDetector: TrackerDetector
+    private lateinit var trackerDetectorClientProvider: TrackerDetectorClientProvider
     private lateinit var tdsEntityDao: TdsEntityDao
     private lateinit var tdsDomainEntityDao: TdsDomainEntityDao
     private lateinit var tdsCnameEntityDao: TdsCnameEntityDao
@@ -98,9 +103,9 @@ class DomainsReferenceTest(private val testCase: TestCase) {
     private val resourceSurrogates = ResourceSurrogatesImpl()
 
     private var webView: WebView = mock()
-    private val mockUserAllowListDao: UserAllowListDao = mock()
     private val mockContentBlocking: ContentBlocking = mock()
     private val mockTrackerAllowlist: TrackerAllowlist = mock()
+    private val mockRequestBlocklist: RequestBlocklist = mock()
     private var mockWebTrackersBlockedDao: WebTrackersBlockedDao = mock()
     private var mockHttpsUpgrader: HttpsUpgrader = mock()
     private var mockRequest: WebResourceRequest = mock()
@@ -108,6 +113,9 @@ class DomainsReferenceTest(private val testCase: TestCase) {
     private val mockRequestFilterer: RequestFilterer = mock()
     private val mockDuckPlayer: DuckPlayer = mock()
     private val mockUserAllowListRepository: UserAllowListRepository = mock()
+    private val cachedCnameLookupEnabled = object : OptimizeCnameDetectionRCWrapper {
+        override val enabled: Boolean = true
+    }
     private val fakeUserAgent: UserAgent = UserAgentFake()
     private val fakeToggle: FeatureToggle = FeatureToggleFake()
     private val fakeUserAllowListRepository = UserAllowListRepositoryFake()
@@ -122,6 +130,7 @@ class DomainsReferenceTest(private val testCase: TestCase) {
     private val mockGpc: Gpc = mock()
     private val mockAdClickManager: AdClickManager = mock()
     private val mockMaliciousSiteProtection: MaliciousSiteBlockerWebViewIntegration = FakeMaliciousSiteBlockerWebViewIntegration()
+    private val fakeAndroidBrowserConfigFeature = FakeFeatureToggleFactory.create(AndroidBrowserConfigFeature::class.java)
 
     companion object {
         private val moshi = Moshi.Builder().add(ActionJsonAdapter()).build()
@@ -175,10 +184,24 @@ class DomainsReferenceTest(private val testCase: TestCase) {
             gpc = mockGpc,
             userAgentProvider = userAgentProvider,
             adClickManager = mockAdClickManager,
-            cloakedCnameDetector = CloakedCnameDetectorImpl(tdsCnameEntityDao, mockTrackerAllowlist, mockUserAllowListRepository),
+            cloakedCnameDetector = CloakedCnameDetectorImpl(
+                tdsCnameEntityDao,
+                mockTrackerAllowlist,
+                mockUserAllowListRepository,
+                cachedCnameLookupEnabled,
+            ),
             requestFilterer = mockRequestFilterer,
-            maliciousSiteBlockerWebViewIntegration = mockMaliciousSiteProtection,
+            requestBlocklist = mockRequestBlocklist,
+            contentBlocking = mockContentBlocking,
+            trackerAllowlist = mockTrackerAllowlist,
+            userAllowListRepository = mockUserAllowListRepository,
             duckPlayer = mockDuckPlayer,
+            maliciousSiteBlockerWebViewIntegration = mockMaliciousSiteProtection,
+            dispatchers = coroutinesTestRule.testDispatcherProvider,
+            appCoroutineScope = coroutinesTestRule.testScope,
+            androidBrowserConfigFeature = fakeAndroidBrowserConfigFeature,
+            isMainProcess = true,
+            webTrackersBlockedDao = mockWebTrackersBlockedDao,
         )
     }
 
@@ -228,15 +251,15 @@ class DomainsReferenceTest(private val testCase: TestCase) {
         tdsCnameEntityDao = db.tdsCnameEntityDao()
 
         entityLookup = TdsEntityLookup(tdsEntityDao, tdsDomainEntityDao)
-        trackerDetector =
-            TrackerDetectorImpl(
-                entityLookup,
-                mockUserAllowListDao,
-                mockContentBlocking,
-                mockTrackerAllowlist,
-                mockWebTrackersBlockedDao,
-                mockAdClickManager,
-            )
+        val trackerDetectorImpl = TrackerDetectorImpl(
+            entityLookup,
+            mockUserAllowListRepository,
+            mockContentBlocking,
+            mockTrackerAllowlist,
+            mockAdClickManager,
+        )
+        trackerDetector = trackerDetectorImpl
+        trackerDetectorClientProvider = trackerDetectorImpl
 
         val json = FileUtilities.loadText(javaClass.classLoader!!, "reference_tests/tracker_radar_reference.json")
         val adapter = moshi.adapter(TdsJson::class.java)
@@ -245,12 +268,12 @@ class DomainsReferenceTest(private val testCase: TestCase) {
         val entities = tdsJson.jsonToEntities()
         val domainEntities = tdsJson.jsonToDomainEntities()
         val cnameEntities = tdsJson.jsonToCnameEntities()
-        val client = TdsClient(Client.ClientName.TDS, trackers, RealUrlToTypeMapper(), false)
+        val client = TdsClient(Client.ClientName.TDS, trackers, RealUrlToTypeMapper())
 
         tdsEntityDao.insertAll(entities)
         tdsDomainEntityDao.insertAll(domainEntities)
         tdsCnameEntityDao.insertAll(cnameEntities)
-        trackerDetector.addClient(client)
+        trackerDetectorClientProvider.addClient(client)
     }
 
     private fun initialiseResourceSurrogates() {

@@ -27,6 +27,7 @@
         layout="@layout/include_default_toolbar" />
 
     <ScrollView
+        android:id="@+id/contentScrollView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
@@ -74,13 +75,6 @@
                 app:secondaryText="@string/devSettingsTriggerAnrSubtitle" />
 
             <com.duckduckgo.common.ui.view.listitem.TwoLineListItem
-                android:id="@+id/clearSavedSites"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:primaryText="@string/devSettingsClearSavedSites"
-                app:secondaryText="@string/devSettingsClearSavedSitesSubtitle" />
-
-            <com.duckduckgo.common.ui.view.listitem.TwoLineListItem
                 android:id="@+id/customTabs"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -101,13 +95,6 @@
                 android:layout_height="wrap_content"
                 app:primaryText="@string/devSettingsScreenTabs"
                 app:secondaryText="@string/devSettingsScreenTabsSubtitle" />
-
-            <com.duckduckgo.common.ui.view.listitem.TwoLineListItem
-                android:id="@+id/showTabSwitcherAnimatedTile"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:primaryText="@string/devSettingsShowTabSwitcherAnimatedTile"
-                app:secondaryText="@string/devSettingsShowTabSwitcherAnimatedSubtitle" />
 
             <com.duckduckgo.common.ui.view.listitem.SectionHeaderListItem
                 android:id="@+id/privacyTitle"

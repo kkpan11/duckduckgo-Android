@@ -192,7 +192,7 @@
     <string name="netpNotificationCTAReconnectNow">Şimdi Yeniden Bağlan</string>
     <string name="netpNotificationSnoozeTitle">VPN uyku modunda</string>
     <string name="netpNotificationSnoozeBody" instruction="Placeholder is time in hh:mm format">VPN %1$s itibarıyla yeniden bağlanacak</string>
-    <string name="netpNotificationVpnAccessRevoked">Abonelik süresi dolduğu için VPN bağlantısı kesildi. DuckDuckGo VPN\'e yeniden bağlanmak için Privacy Pro\'ya abone olun.</string>
+    <string name="netpNotificationVpnAccessRevoked">Abonelik süresi dolduğu için VPN bağlantısı kesildi. VPN\'i yeniden bağlamak için DuckDuckGo\'ya abone olun.</string>
 
     <!-- Geoswitching -->
     <string name="netpGeoswitchingTitle">VPN Konumu</string>
@@ -204,7 +204,7 @@
 
     <!-- Access revoked-->
     <string name="netpDialogVpnAccessRevokedTitle">Abonelik süresi dolduğu için VPN bağlantısı kesildi</string>
-    <string name="netpDialogVpnAccessRevokedBody">DuckDuckGo VPN\'e yeniden bağlanmak için Privacy Pro\'ya abone olun.</string>
+    <string name="netpDialogVpnAccessRevokedBody">VPN\'i yeniden bağlamak için DuckDuckGo\'ya abone olun.</string>
     <string name="netpDialogVpnAccessRevokedPositiveAction">Abone ol</string>
     <string name="netpDialogVpnAccessRevokedNegativeAction">Reddet</string>
 
@@ -222,7 +222,7 @@
     <string name="netpCustomDnsSettingText">DNS Sunucusu</string>
     <string name="netpPrivateDns">Özel DNS</string>
     <string name="netpCustomDnsDefault" translatable="false">DuckDuckGo</string>
-    <string name="netpCustomDnsDefaultBlockMalware">DuckDuckGo (Riskli alan adlarını engelleyin)</string>
+    <string name="netpCustomDnsDefaultBlockMalware">DuckDuckGo (Dolandırıcılık Engelleyici)</string>
     <string name="netpCustomDnsDefaultOption">DuckDuckGo (Önerilen)</string>
     <string name="netpCustomDnsCustom">Özelleştirme</string>
     <string name="netpCustomDnsInputAddressHint">IPv4 Adresi</string>
@@ -233,8 +233,8 @@
     <string name="netpDdgDnsByLine">DuckDuckGo, DNS sorgularını DNS sunucularımız üzerinden yönlendirir. Böylece internet sağlayıcınız hangi web sitelerini ziyaret ettiğinizi göremez.</string>
 
     <!-- Block malware DNS -->
-    <string name="netpDnsBlockMalwareHeader">İçerik Engelleme ve Filtreleme</string>
-    <string name="netpDnsBlockMalwarePrimary">Riskli alan adlarını engelleyin</string>
+    <string name="netpDnsBlockMalwareHeader">Kötü Amaçlı İçerik Engelleme</string>
+    <string name="netpDnsBlockMalwarePrimary">Dolandırıcılık Engelleyici</string>
     <string name="netpDnsBlockMalwareByline">DNS düzeyinde bir engelleme listesiyle kötü amaçlı yazılım, kimlik avı saldırıları ve çevrimiçi dolandırıcılık barındırdığı için işaretlenmiş 150.000\'den fazla alan adını engelleyin. <annotation type="learn_more_link">Daha Fazla Bilgi</annotation></string>
     <string name="netpDnsBlockMalwareFaqsTitle">DNS Engelleme Listeleri</string>
 
@@ -257,4 +257,9 @@
     <string name="netpAutoExcludeToggleName">VPN\'lerle uyumlu olmayan uygulamaları otomatik olarak hariç tutun</string>
     <string name="netpExclusionListLabelAutoExclude">VPN\'lerle uyumlu değil</string>
     <string name="netpExclusionListAutoExcludeDescription">Bankacılık veya yayın uygulamaları gibi bazı uygulamalar VPN\'lerle iyi çalışmaz. Bu ayar etkinleştirildiğinde, bu uygulamalar otomatik olarak hariç tutulur.</string>
+
+    <!-- Content Descriptions -->
+    <string name="netpCloseButtonContentDescription">Kapat</string>
+    <string name="netpVpnIndicatorContentDescription">VPN durum göstergesi</string>
+
 </resources>

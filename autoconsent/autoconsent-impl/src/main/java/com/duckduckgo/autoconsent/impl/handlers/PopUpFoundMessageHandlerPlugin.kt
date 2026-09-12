@@ -18,32 +18,45 @@ package com.duckduckgo.autoconsent.impl.handlers
 
 import android.webkit.WebView
 import com.duckduckgo.autoconsent.api.AutoconsentCallback
+import com.duckduckgo.autoconsent.impl.AutoconsentReloadLoopDetector
 import com.duckduckgo.autoconsent.impl.MessageHandlerPlugin
 import com.duckduckgo.autoconsent.impl.adapters.JSONObjectAdapter
+import com.duckduckgo.autoconsent.impl.pixels.AutoConsentPixel
+import com.duckduckgo.autoconsent.impl.pixels.AutoconsentPixelManager
 import com.duckduckgo.autoconsent.impl.store.AutoconsentSettingsRepository
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 @ContributesMultibinding(AppScope::class)
-class PopUpFoundMessageHandlerPlugin @Inject constructor(private val repository: AutoconsentSettingsRepository) : MessageHandlerPlugin {
+class PopUpFoundMessageHandlerPlugin @Inject constructor(
+    private val repository: AutoconsentSettingsRepository,
+    private val autoconsentPixelManager: AutoconsentPixelManager,
+    private val reloadLoopDetector: AutoconsentReloadLoopDetector,
+) : MessageHandlerPlugin {
 
     private val moshi = Moshi.Builder().add(JSONObjectAdapter()).build()
 
     override fun process(messageType: String, jsonString: String, webView: WebView, autoconsentCallback: AutoconsentCallback) {
         try {
             if (supportedTypes.contains(messageType)) {
+                autoconsentPixelManager.fireDailyPixel(AutoConsentPixel.AUTOCONSENT_POPUP_FOUND_DAILY)
+
                 val message: PopUpFoundMessage = parseMessage(jsonString) ?: return
+                reloadLoopDetector.detectReloadLoop(webView, message.cmp)
+
+                // Opt-in flow below, if user setting is true, do nothing
                 if (repository.userSetting) return
+                // for complex multi-frame CMPs, trigger opt-in flow only on -frame rules
                 if (message.cmp.endsWith(IGNORE_CMP_SUFFIX, ignoreCase = true)) return
 
                 autoconsentCallback.onFirstPopUpHandled()
             }
         } catch (e: Exception) {
-            Timber.d(e.localizedMessage)
+            logcat { e.localizedMessage }
         }
     }
 

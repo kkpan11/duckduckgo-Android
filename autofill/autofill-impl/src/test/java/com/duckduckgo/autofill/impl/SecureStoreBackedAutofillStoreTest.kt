@@ -59,6 +59,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 @SuppressLint("DenyListedApi")
@@ -546,7 +547,10 @@ class SecureStoreBackedAutofillStoreTest {
         )
         testee.saveCredentials(url, credentials)
 
-        assertEquals(credentials.copy(domain = "example.com", lastUpdatedMillis = UPDATED_INITIAL_LAST_UPDATED), testee.getCredentials(url)[0])
+        assertEquals(
+            credentials.copy(domain = "example.com", lastUpdatedMillis = UPDATED_INITIAL_LAST_UPDATED, lastUsedMillis = UPDATED_INITIAL_LAST_UPDATED),
+            testee.getCredentials(url)[0],
+        )
     }
 
     @Test
@@ -699,6 +703,44 @@ class SecureStoreBackedAutofillStoreTest {
         val saved = storeCredentials(id = 1, domain = "example.com", username = "username", password = "password")
         val updated = testee.updateCredentials(saved, refreshLastUpdatedTimestamp = false)!!
         assertEquals(DEFAULT_INITIAL_LAST_UPDATED, updated.lastUpdatedMillis)
+    }
+
+    @Test
+    fun whenGetCredentialCountFailsThenResultFailureEmitted() = runTest {
+        setupTesteeWithAutofillAvailable()
+        secureStore.exceptionToThrow = RuntimeException("Storage error")
+
+        val result = testee.getCredentialCount().first()
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun whenUserHasNeverImportedPasswordThenCallsThroughToStoreCorrectly() = runTest {
+        setupTesteeWithAutofillAvailable()
+        testee.hasEverImportedPasswords
+        verify(autofillPrefsStore).hasEverImportedPasswords
+    }
+
+    @Test
+    fun whenUserHasImportedPasswordThenCallsThroughToStoreCorrectly() = runTest {
+        setupTesteeWithAutofillAvailable()
+        testee.hasEverImportedPasswords = true
+        verify(autofillPrefsStore).hasEverImportedPasswords = true
+    }
+
+    @Test
+    fun whenUserHasNeverDismissedImportPasswordPromoThenCallsThroughToStoreCorrectly() = runTest {
+        setupTesteeWithAutofillAvailable()
+        testee.hasDeclinedPasswordManagementImportPromo
+        verify(autofillPrefsStore).hasDeclinedPasswordManagementImportPromo
+    }
+
+    @Test
+    fun whenUserHasDismissedImportPasswordPromoThenCallsThroughToStoreCorrectly() = runTest {
+        setupTesteeWithAutofillAvailable()
+        testee.hasDeclinedPasswordManagementImportPromo = true
+        verify(autofillPrefsStore).hasDeclinedPasswordManagementImportPromo = true
     }
 
     private fun enableDeepDomainCheckFeatureFlag() {

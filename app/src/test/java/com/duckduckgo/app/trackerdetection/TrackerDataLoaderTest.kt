@@ -19,7 +19,6 @@ package com.duckduckgo.app.trackerdetection
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.duckduckgo.app.global.db.AppDatabase
-import com.duckduckgo.app.pixels.remoteconfig.OptimizeTrackerEvaluationRCWrapper
 import com.duckduckgo.app.trackerdetection.api.TdsJson
 import com.duckduckgo.app.trackerdetection.api.TdsJsonEntity
 import com.duckduckgo.app.trackerdetection.api.TdsJsonTracker
@@ -54,7 +53,7 @@ class TrackerDataLoaderTest {
 
     private lateinit var testee: TrackerDataLoader
 
-    private val mockTrackerDetector: TrackerDetector = mock()
+    private val mockTrackerDetectorClientProvider: TrackerDetectorClientProvider = mock()
     private val mockTdsTrackerDao: TdsTrackerDao = mock()
     private val mockTdsEntityDao: TdsEntityDao = mock()
     private val mockTdsDomainEntityDao: TdsDomainEntityDao = mock()
@@ -63,6 +62,8 @@ class TrackerDataLoaderTest {
     private val mockContext: Context = mock()
     private val mockAppDatabase: AppDatabase = mock()
     private val mockUrlToTypeMapper: UrlToTypeMapper = mock()
+    private val mockEntityLookupRefresher: EntityLookupRefresher = mock()
+    private val mockCloakedCnameRefresher: CloakedCnameRefresher = mock()
 
     private val runnableCaptor = argumentCaptor<Runnable>()
     private val tdsMetaDataCaptor = argumentCaptor<TdsMetadata>()
@@ -71,7 +72,7 @@ class TrackerDataLoaderTest {
     fun setup() {
         testee = TrackerDataLoader(
             appCoroutineScope = TestScope(),
-            trackerDetector = mockTrackerDetector,
+            trackerDetectorClientProvider = mockTrackerDetectorClientProvider,
             tdsTrackerDao = mockTdsTrackerDao,
             tdsEntityDao = mockTdsEntityDao,
             tdsDomainEntityDao = mockTdsDomainEntityDao,
@@ -81,11 +82,9 @@ class TrackerDataLoaderTest {
             appDatabase = mockAppDatabase,
             moshi = Moshi.Builder().build(),
             urlToTypeMapper = mockUrlToTypeMapper,
-            coroutineRule.testDispatcherProvider,
-            object : OptimizeTrackerEvaluationRCWrapper {
-                override val enabled: Boolean
-                    get() = false
-            },
+            entityLookupRefresher = mockEntityLookupRefresher,
+            cloakedCnameRefresher = mockCloakedCnameRefresher,
+            dispatcherProvider = coroutineRule.testDispatcherProvider,
         )
     }
 
@@ -109,5 +108,12 @@ class TrackerDataLoaderTest {
         verify(mockTdsDomainEntityDao).updateAll(tdsJson.jsonToDomainEntities())
         verify(mockTdsTrackerDao).updateAll(tdsJson.jsonToTrackers().values)
         verify(mockTdsCnameEntityDao).updateAll(tdsJson.jsonToCnameEntities())
+    }
+
+    @Test
+    fun whenLoadTrackersThenCnameCacheIsRefreshed() {
+        testee.loadTrackers()
+
+        verify(mockCloakedCnameRefresher).refresh()
     }
 }

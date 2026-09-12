@@ -28,12 +28,12 @@ import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import logcat.LogPriority
+import logcat.LogPriority.WARN
 import logcat.logcat
+import javax.inject.Inject
 
 @ContributesMultibinding(
     scope = VpnScope::class,
@@ -73,11 +73,11 @@ class AppTPVpnConnectivityLossListener @Inject constructor(
             if (isActive() && connectivityLostEvents++ > 1) {
                 connectivityLostEvents = 0
                 if (reconnectAttempts++ > 2) {
-                    logcat(LogPriority.WARN) { "AppTP detected connectivity loss, again, give up..." }
+                    logcat(WARN) { "AppTP detected connectivity loss, again, give up..." }
                     reconnectAttempts = 0
                     appTrackingProtection.stop()
                 } else {
-                    logcat(LogPriority.WARN) { "AppTP detected connectivity loss, re-configuring..." }
+                    logcat(WARN) { "AppTP detected connectivity loss, re-configuring..." }
                     appTrackingProtection.restart()
                 }
             }

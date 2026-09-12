@@ -38,8 +38,10 @@ import com.duckduckgo.common.ui.view.getColorFromAttr
 import com.duckduckgo.common.ui.view.gone
 import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.ActivityScope
-import com.duckduckgo.mobile.android.R as commonR
 import com.duckduckgo.mobile.android.vpn.AppTpVpnFeature
 import com.duckduckgo.mobile.android.vpn.AppTpVpnFeature.APPTP_VPN
 import com.duckduckgo.mobile.android.vpn.R
@@ -58,12 +60,13 @@ import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.facebook.shimmer.ShimmerFrameLayout
 import com.google.android.material.snackbar.BaseTransientBottomBar.LENGTH_LONG
 import com.google.android.material.snackbar.Snackbar
-import javax.inject.Inject
-import javax.inject.Provider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import javax.inject.Inject
+import javax.inject.Provider
+import com.duckduckgo.mobile.android.R as commonR
 
 @InjectWith(ActivityScope::class)
 class TrackingProtectionExclusionListActivity :
@@ -89,6 +92,10 @@ class TrackingProtectionExclusionListActivity :
 
     @Inject lateinit var dispatcherProvider: DispatcherProvider
 
+    @Inject lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
+
     private val binding: ActivityTrackingProtectionExclusionListBinding by viewBinding()
 
     private val viewModel: ManageAppsProtectionViewModel by bindViewModel()
@@ -101,6 +108,10 @@ class TrackingProtectionExclusionListActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.VPN)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
 
         reportBreakage = registerForActivityResult(reportBreakageContract.get()) { result ->
             if (!result.isEmpty()) {
@@ -115,11 +126,21 @@ class TrackingProtectionExclusionListActivity :
         bindViews()
         observeViewModel()
 
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
+
         viewModel.applyAppsFilter(getAppsFilterOrDefault())
 
         deviceShieldPixels.didShowExclusionListActivity()
 
         lifecycle.addObserver(viewModel)
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.rootContainer)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.excludedAppsRecycler)
     }
 
     override fun onDestroy() {
@@ -154,7 +175,8 @@ class TrackingProtectionExclusionListActivity :
             }
 
             R.id.reportIssue -> {
-                launchFeedback(); true
+                launchFeedback()
+                true
             }
 
             else -> super.onOptionsItemSelected(item)
@@ -225,7 +247,8 @@ class TrackingProtectionExclusionListActivity :
             )
 
             is Command.LaunchFeedback -> reportBreakage.launch(command.reportBreakageScreen)
-            else -> { /* noop */
+            else -> {
+                /* noop */
             }
         }
     }

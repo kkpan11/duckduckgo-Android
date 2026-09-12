@@ -26,14 +26,15 @@ import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.device.DeviceInfo
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.math.roundToLong
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 interface PagePaintedHandler {
     operator fun invoke(
@@ -69,7 +70,7 @@ class RealPagePaintedHandler @Inject constructor(
                         ),
                     )
 
-                    Timber.v("First-paint duration extracted: %dms for %s", firstPaint, url)
+                    logcat(VERBOSE) { "First-paint duration extracted: ${firstPaint}ms for $url" }
                 }
             }
         }

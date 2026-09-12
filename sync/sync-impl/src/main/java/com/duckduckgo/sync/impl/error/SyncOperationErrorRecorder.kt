@@ -21,8 +21,8 @@ import com.duckduckgo.sync.impl.pixels.SyncPixels
 import com.duckduckgo.sync.store.model.SyncOperationErrorType
 import com.duckduckgo.sync.store.model.SyncOperationErrorType.TIMESTAMP_CONFLICT
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface SyncOperationErrorRecorder {
 
@@ -44,7 +44,7 @@ class RealSyncOperationErrorRecorder @Inject constructor(
     override fun record(
         errorType: SyncOperationErrorType,
     ) {
-        Timber.d("Sync-Error: Recording Operation Error $errorType")
+        logcat { "Sync-Error: Recording Operation Error $errorType" }
         repository.addError(errorType)
     }
 
@@ -52,7 +52,7 @@ class RealSyncOperationErrorRecorder @Inject constructor(
         feature: String,
         errorType: SyncOperationErrorType,
     ) {
-        Timber.d("Sync-Error: Recording Operation Error $errorType for $feature")
+        logcat { "Sync-Error: Recording Operation Error $errorType for $feature" }
         if (errorType == TIMESTAMP_CONFLICT) {
             syncPixels.fireTimestampConflictPixel(feature)
         }

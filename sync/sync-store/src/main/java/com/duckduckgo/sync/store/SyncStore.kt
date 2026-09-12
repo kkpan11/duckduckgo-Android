@@ -9,6 +9,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 
+/**
+ * Distinct type for the scoped password (SP) so it can't be silently swapped with the account's primary key.
+ */
+@JvmInline
+value class ScopedPassword(val raw: String)
+
+/**
+ * Cached public half of the account-wide `account_info` protected key (RSA-OAEP-256 JWK components).
+ */
+data class AccountInfoPublicKey(val keyId: String, val modulus: String, val exponent: String)
+
 interface SyncStore {
     var syncingDataEnabled: Boolean
     var userId: String?
@@ -17,6 +28,22 @@ interface SyncStore {
     var token: String?
     var primaryKey: String?
     var secretKey: String?
+
+    /** Which access credential this device authenticated with ("ddg" or "3party"). */
+    var credentialId: String?
+
+    /** Scoped password (SP primary key) for the 3party credential. Only present when a 3party credential exists. */
+    var scopedPassword: ScopedPassword?
+
+    /** Cached public key for the account's `account_info` protected key, once registered. */
+    var accountInfoPublicKey: AccountInfoPublicKey?
+
+    /**
+     * The `userId` this device last completed the unified-device-list migration for, or null if it never has.
+     * Keyed by user so a different account (via switch or re-signin) migrates afresh; [clearAll] wipes it on sign-out.
+     */
+    var unifiedDeviceListMigratedForUserId: String?
+
     fun isEncryptionSupported(): Boolean
     fun isSignedInFlow(): Flow<Boolean>
     fun isSignedIn(): Boolean
@@ -134,6 +161,55 @@ constructor(
             }
         }
 
+    override var credentialId: String?
+        get() = encryptedPreferences?.getString(KEY_CREDENTIAL_ID, null)
+        set(value) {
+            encryptedPreferences?.edit(commit = true) {
+                if (value == null) remove(KEY_CREDENTIAL_ID) else putString(KEY_CREDENTIAL_ID, value)
+            }
+        }
+
+    override var scopedPassword: ScopedPassword?
+        get() = encryptedPreferences?.getString(KEY_SCOPED_PASSWORD, null)?.let(::ScopedPassword)
+        set(value) {
+            encryptedPreferences?.edit(commit = true) {
+                if (value == null) remove(KEY_SCOPED_PASSWORD) else putString(KEY_SCOPED_PASSWORD, value.raw)
+            }
+        }
+
+    override var accountInfoPublicKey: AccountInfoPublicKey?
+        get() {
+            val keyId = encryptedPreferences?.getString(KEY_ACCOUNT_INFO_KID, null) ?: return null
+            val modulus = encryptedPreferences?.getString(KEY_ACCOUNT_INFO_MODULUS, null) ?: return null
+            val exponent = encryptedPreferences?.getString(KEY_ACCOUNT_INFO_EXPONENT, null) ?: return null
+            return AccountInfoPublicKey(keyId, modulus, exponent)
+        }
+        set(value) {
+            encryptedPreferences?.edit(commit = true) {
+                if (value == null) {
+                    remove(KEY_ACCOUNT_INFO_KID)
+                    remove(KEY_ACCOUNT_INFO_MODULUS)
+                    remove(KEY_ACCOUNT_INFO_EXPONENT)
+                } else {
+                    putString(KEY_ACCOUNT_INFO_KID, value.keyId)
+                    putString(KEY_ACCOUNT_INFO_MODULUS, value.modulus)
+                    putString(KEY_ACCOUNT_INFO_EXPONENT, value.exponent)
+                }
+            }
+        }
+
+    override var unifiedDeviceListMigratedForUserId: String?
+        get() = encryptedPreferences?.getString(KEY_UNIFIED_DEVICE_LIST_MIGRATED_USER_ID, null)
+        set(value) {
+            encryptedPreferences?.edit(commit = true) {
+                if (value == null) {
+                    remove(KEY_UNIFIED_DEVICE_LIST_MIGRATED_USER_ID)
+                } else {
+                    putString(KEY_UNIFIED_DEVICE_LIST_MIGRATED_USER_ID, value)
+                }
+            }
+        }
+
     override fun isEncryptionSupported(): Boolean = encryptedPreferences != null
 
     override fun isSignedInFlow(): Flow<Boolean> = isSignedInStateFlow
@@ -176,5 +252,11 @@ constructor(
         private const val KEY_SYNCING_DATA_ENABLED = "KEY_SYNCING_DATA_ENABLED"
         private const val KEY_PK = "KEY_PK"
         private const val KEY_SK = "KEY_SK"
+        private const val KEY_CREDENTIAL_ID = "KEY_CREDENTIAL_ID"
+        private const val KEY_SCOPED_PASSWORD = "KEY_SCOPED_PASSWORD"
+        private const val KEY_ACCOUNT_INFO_KID = "KEY_ACCOUNT_INFO_KID"
+        private const val KEY_ACCOUNT_INFO_MODULUS = "KEY_ACCOUNT_INFO_MODULUS"
+        private const val KEY_ACCOUNT_INFO_EXPONENT = "KEY_ACCOUNT_INFO_EXPONENT"
+        private const val KEY_UNIFIED_DEVICE_LIST_MIGRATED_USER_ID = "KEY_UNIFIED_DEVICE_LIST_MIGRATED_USER_ID"
     }
 }

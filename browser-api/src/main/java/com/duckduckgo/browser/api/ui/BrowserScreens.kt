@@ -16,6 +16,7 @@
 
 package com.duckduckgo.browser.api.ui
 
+import com.duckduckgo.browsermode.api.BrowserMode
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 
 /**
@@ -33,22 +34,57 @@ sealed class BrowserScreens {
     ) : GlobalActivityStarter.ActivityParams
 
     /**
-     * Use this model to launch the Feedback screen
-     */
-    object FeedbackActivityWithEmptyParams : GlobalActivityStarter.ActivityParams
-
-    /**
      * Use this model to launch the Bookmarks screen
      */
-    object BookmarksScreenNoParams : GlobalActivityStarter.ActivityParams
+    data object BookmarksScreenNoParams : GlobalActivityStarter.ActivityParams
 
     /**
      * Use this model to launch the Settings screen
      */
-    object SettingsScreenNoParams : GlobalActivityStarter.ActivityParams
+    data object SettingsScreenNoParams : GlobalActivityStarter.ActivityParams
 
     /**
      * Use this model to launch the New Tab Settings screen
      */
-    object NewTabSettingsScreenNoParams : GlobalActivityStarter.ActivityParams
+    data object NewTabSettingsScreenNoParams : GlobalActivityStarter.ActivityParams
+
+    /**
+     * Use this model to launch the PrivateSearch screen
+     */
+    data object PrivateSearchScreenNoParams : GlobalActivityStarter.ActivityParams
+
+    /**
+     * Use this model to launch the Tab Switcher screen
+     */
+    data object TabSwitcherScreenNoParams : GlobalActivityStarter.ActivityParams
+
+    /**
+     * Use this model to launch the Tab Switcher screen in a specific [browserMode]. When [browserMode]
+     * differs from the active mode, the Tab Switcher switches to it on open. Use [TabSwitcherScreenNoParams]
+     * to open in the current mode.
+     */
+    data class TabSwitcherScreenWithParams(val browserMode: BrowserMode) : GlobalActivityStarter.ActivityParams
+
+    /**
+     * Use this model to launch the standalone PDF viewer for a PDF at [cachedFileUri], displaying [fileName]
+     * in the toolbar. Check [com.duckduckgo.browser.api.pdf.PdfViewerAvailability] before launching this screen.
+     *
+     * [source] identifies where the open came from: it gates the external-open pixels (fired only for
+     * [PdfViewerSource.EXTERNAL_INTENT]) and the back-navigation target (external opens land in the browser,
+     * in-app opens return to the launching screen).
+     */
+    data class PdfViewerActivityParams(
+        val cachedFileUri: String,
+        val fileName: String,
+        val source: PdfViewerSource,
+    ) : GlobalActivityStarter.ActivityParams
+
+    /** Where a [PdfViewerActivityParams] open originated. */
+    enum class PdfViewerSource {
+        /** Opened from another app via the system "Open with" handler. */
+        EXTERNAL_INTENT,
+
+        /** Opened in-app from the Downloads screen. */
+        DOWNLOADS,
+    }
 }

@@ -34,18 +34,22 @@ import com.duckduckgo.browser.api.UserBrowserProperties
 import com.duckduckgo.browser.api.brokensite.BrokenSiteContext
 import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.common.utils.plugins.PluginPoint
+import com.duckduckgo.feature.toggles.api.Toggle
 import com.duckduckgo.privacy.config.api.ContentBlocking
 import com.duckduckgo.privacy.config.api.UnprotectedTemporary
+import com.duckduckgo.privacy.dashboard.api.PrivacyDashboardOpenedPlugin
 import com.duckduckgo.privacy.dashboard.api.PrivacyProtectionTogglePlugin
 import com.duckduckgo.privacy.dashboard.api.PrivacyToggleOrigin
 import com.duckduckgo.privacy.dashboard.api.ui.DashboardOpener
 import com.duckduckgo.privacy.dashboard.api.ui.ToggleReports
 import com.duckduckgo.privacy.dashboard.impl.di.JsonModule
 import com.duckduckgo.privacy.dashboard.impl.pixels.PrivacyDashboardCustomTabPixelNames
-import com.duckduckgo.privacy.dashboard.impl.pixels.PrivacyDashboardPixels.*
+import com.duckduckgo.privacy.dashboard.impl.pixels.PrivacyDashboardPixels.BROKEN_SITE_ALLOWLIST_ADD
+import com.duckduckgo.privacy.dashboard.impl.pixels.PrivacyDashboardPixels.BROKEN_SITE_ALLOWLIST_REMOVE
+import com.duckduckgo.privacy.dashboard.impl.pixels.PrivacyDashboardPixels.PRIVACY_DASHBOARD_ALLOWLIST_ADD
+import com.duckduckgo.privacy.dashboard.impl.pixels.PrivacyDashboardPixels.PRIVACY_DASHBOARD_ALLOWLIST_REMOVE
+import com.duckduckgo.privacy.dashboard.impl.pixels.PrivacyDashboardPixels.REPORT_BROKEN_SITE_SENT
 import com.duckduckgo.privacy.dashboard.impl.ui.PrivacyDashboardHybridViewModel.Command.GoBack
-import com.duckduckgo.privacyprotectionspopup.api.PrivacyProtectionsPopupExperimentExternalPixels
-import com.duckduckgo.privacyprotectionspopup.api.PrivacyProtectionsToggleUsageListener
 import com.nhaarman.mockitokotlin2.mock
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -87,14 +91,11 @@ class PrivacyDashboardHybridViewModelTest {
     private val mockUserBrowserProperties: UserBrowserProperties = mock()
 
     private val pixel = mock<Pixel>()
-    private val privacyProtectionsToggleUsageListener: PrivacyProtectionsToggleUsageListener = mock()
-    private val privacyProtectionsPopupExperimentExternalPixels: PrivacyProtectionsPopupExperimentExternalPixels = mock {
-        runBlocking { whenever(mock.getPixelParams()).thenReturn(emptyMap()) }
-    }
 
     private val brokenSiteSender: BrokenSiteSender = mock()
     private val protectionTogglePlugin = FakePrivacyProtectionTogglePlugin()
     private val pluginPoint = FakePluginPoint(protectionTogglePlugin)
+    private val dashboardOpenedPluginPoint = FakeDashboardOpenedPluginPoint()
 
     private val toggleReports: ToggleReports = mock {
         runBlocking { whenever(mock.shouldPrompt()).thenReturn(false) }
@@ -110,11 +111,10 @@ class PrivacyDashboardHybridViewModelTest {
             protectionStatusViewStateMapper = AppProtectionStatusViewStateMapper(contentBlocking, unprotectedTemporary),
             privacyDashboardPayloadAdapter = AppPrivacyDashboardPayloadAdapter(moshi = JsonModule.moshi(Moshi.Builder().build())),
             autoconsentStatusViewStateMapper = CookiePromptManagementStatusViewStateMapper(),
-            protectionsToggleUsageListener = privacyProtectionsToggleUsageListener,
-            privacyProtectionsPopupExperimentExternalPixels = privacyProtectionsPopupExperimentExternalPixels,
             userBrowserProperties = mockUserBrowserProperties,
             brokenSiteSender = brokenSiteSender,
             privacyProtectionTogglePlugin = pluginPoint,
+            privacyDashboardOpenedPlugin = dashboardOpenedPluginPoint,
             toggleReports = toggleReports,
             moshi = Moshi.Builder().build(),
         )
@@ -171,36 +171,6 @@ class PrivacyDashboardHybridViewModelTest {
     }
 
     @Test
-    fun whenOnPrivacyProtectionClickedThenListenerIsNotified() = runTest {
-        val site = site(siteAllowed = false)
-        testee.onSiteChanged(site)
-
-        testee.onPrivacyProtectionsClicked(privacyProtectionsClickedPayload(isProtected = false))
-
-        verify(privacyProtectionsToggleUsageListener).onPrivacyProtectionsToggleUsed()
-    }
-
-    @Test
-    fun whenPrivacyProtectionsPopupExperimentParamsArePresentThenTheyShouldBeIncludedInPixels() = runTest {
-        val params = mapOf("test_key" to "test_value")
-        whenever(privacyProtectionsPopupExperimentExternalPixels.getPixelParams()).thenReturn(params)
-        val site = site(siteAllowed = false)
-        testee.onSiteChanged(site)
-        testee.onPrivacyProtectionsClicked(privacyProtectionsClickedPayload(isProtected = false))
-        testee.onPrivacyProtectionsClicked(privacyProtectionsClickedPayload(isProtected = true))
-        coroutineRule.testScope.advanceUntilIdle()
-
-        verify(pixel).fire(PRIVACY_DASHBOARD_OPENED, params, type = Count)
-        verify(privacyProtectionsPopupExperimentExternalPixels).tryReportPrivacyDashboardOpened()
-        verify(pixel).fire(PRIVACY_DASHBOARD_ALLOWLIST_ADD, params, type = Count)
-        assertEquals(1, protectionTogglePlugin.toggleOff)
-        verify(privacyProtectionsPopupExperimentExternalPixels).tryReportProtectionsToggledFromPrivacyDashboard(protectionsEnabled = false)
-        verify(pixel).fire(PRIVACY_DASHBOARD_ALLOWLIST_REMOVE, params, type = Count)
-        verify(privacyProtectionsPopupExperimentExternalPixels).tryReportProtectionsToggledFromPrivacyDashboard(protectionsEnabled = true)
-        assertEquals(1, protectionTogglePlugin.toggleOn)
-    }
-
-    @Test
     fun whenOnPrivacyProtectionClickedAndProtectionsEnabledAndOpenedFromCustomTabThenFireCustomTabSpecificPixel() = runTest {
         val site = site(siteAllowed = false)
         testee.onSiteChanged(site)
@@ -232,10 +202,13 @@ class PrivacyDashboardHybridViewModelTest {
             whenever(site.upgradedHttps).thenReturn(true)
             whenever(site.consentManaged).thenReturn(true)
             whenever(site.errorCodeEvents).thenReturn(listOf("401", "401", "500"))
+            whenever(site.activeContentScopeExperiments).thenReturn(null)
+            whenever(site.debugFlags).thenReturn(null)
 
             val brokenSiteContext: BrokenSiteContext = mock { brokenSiteContext ->
                 whenever(brokenSiteContext.userRefreshCount).thenReturn(userRefreshCount)
                 whenever(brokenSiteContext.jsPerformance).thenReturn(jsPerformance)
+                whenever(brokenSiteContext.breakageData).thenReturn(null)
             }
             whenever(site.realBrokenSiteContext).thenReturn(brokenSiteContext)
         }
@@ -262,6 +235,8 @@ class PrivacyDashboardHybridViewModelTest {
             consentManaged = true,
             consentOptOutFailed = false,
             consentSelfTestFailed = false,
+            consentRule = null,
+            consentReloadLoop = false,
             errorCodes = """["401","401","500"]""",
             httpErrorCodes = "",
             loginSite = null,
@@ -269,6 +244,213 @@ class PrivacyDashboardHybridViewModelTest {
             userRefreshCount = userRefreshCount,
             openerContext = null,
             jsPerformance = jsPerformance.toList(),
+            contentScopeExperiments = null,
+            debugFlags = null,
+            breakageData = null,
+        )
+
+        val isToggleReport = false
+
+        verify(brokenSiteSender).submitBrokenSiteFeedback(expectedBrokenSite, isToggleReport)
+        verify(pixel).fire(REPORT_BROKEN_SITE_SENT, mapOf("opener" to "dashboard"), type = Count)
+    }
+
+    @Test
+    fun whenUserClicksOnSubmitReportWithActiveExperimentsThenSubmitsReportWithActiveExperiments() = runTest {
+        val siteUrl = "https://example.com"
+        val userRefreshCount = 2
+        val jsPerformance = doubleArrayOf(1.0, 2.0, 3.0)
+
+        val mockToggle = mock<Toggle>()
+        val site: Site = mock { site ->
+            whenever(site.uri).thenReturn(siteUrl.toUri())
+            whenever(site.url).thenReturn(siteUrl)
+            whenever(site.userAllowList).thenReturn(true)
+            whenever(site.isDesktopMode).thenReturn(false)
+            whenever(site.upgradedHttps).thenReturn(true)
+            whenever(site.consentManaged).thenReturn(true)
+            whenever(site.errorCodeEvents).thenReturn(listOf("401", "401", "500"))
+            whenever(site.activeContentScopeExperiments).thenReturn(listOf(mockToggle))
+            whenever(site.debugFlags).thenReturn(null)
+
+            val brokenSiteContext: BrokenSiteContext = mock { brokenSiteContext ->
+                whenever(brokenSiteContext.userRefreshCount).thenReturn(userRefreshCount)
+                whenever(brokenSiteContext.jsPerformance).thenReturn(jsPerformance)
+                whenever(brokenSiteContext.breakageData).thenReturn(null)
+            }
+            whenever(site.realBrokenSiteContext).thenReturn(brokenSiteContext)
+        }
+
+        testee.onSiteChanged(site)
+
+        val category = "login"
+        val description = "I can't sign in!"
+        testee.onSubmitBrokenSiteReport(
+            payload = """{"category":"$category","description":"$description"}""",
+            reportFlow = DASHBOARD,
+            opener = DashboardOpener.DASHBOARD,
+        )
+
+        val expectedBrokenSite = BrokenSite(
+            category = category,
+            description = description,
+            siteUrl = siteUrl,
+            upgradeHttps = true,
+            blockedTrackers = "",
+            surrogates = "",
+            siteType = "mobile",
+            urlParametersRemoved = false,
+            consentManaged = true,
+            consentOptOutFailed = false,
+            consentSelfTestFailed = false,
+            consentRule = null,
+            consentReloadLoop = false,
+            errorCodes = """["401","401","500"]""",
+            httpErrorCodes = "",
+            loginSite = null,
+            reportFlow = DASHBOARD,
+            userRefreshCount = userRefreshCount,
+            openerContext = null,
+            jsPerformance = jsPerformance.toList(),
+            contentScopeExperiments = listOf(mockToggle),
+            debugFlags = null,
+            breakageData = null,
+        )
+
+        val isToggleReport = false
+
+        verify(brokenSiteSender).submitBrokenSiteFeedback(expectedBrokenSite, isToggleReport)
+        verify(pixel).fire(REPORT_BROKEN_SITE_SENT, mapOf("opener" to "dashboard"), type = Count)
+    }
+
+    @Test
+    fun whenUserClicksOnSubmitReportWithDebugFlagsThenSubmitsReportWithDebugFlags() = runTest {
+        val siteUrl = "https://example.com"
+        val userRefreshCount = 2
+        val jsPerformance = doubleArrayOf(1.0, 2.0, 3.0)
+
+        val debugFlags = listOf("flag1", "flag2")
+        val site: Site = mock { site ->
+            whenever(site.uri).thenReturn(siteUrl.toUri())
+            whenever(site.url).thenReturn(siteUrl)
+            whenever(site.userAllowList).thenReturn(true)
+            whenever(site.isDesktopMode).thenReturn(false)
+            whenever(site.upgradedHttps).thenReturn(true)
+            whenever(site.consentManaged).thenReturn(true)
+            whenever(site.errorCodeEvents).thenReturn(listOf("401", "401", "500"))
+            whenever(site.activeContentScopeExperiments).thenReturn(null)
+            whenever(site.debugFlags).thenReturn(debugFlags)
+
+            val brokenSiteContext: BrokenSiteContext = mock { brokenSiteContext ->
+                whenever(brokenSiteContext.userRefreshCount).thenReturn(userRefreshCount)
+                whenever(brokenSiteContext.jsPerformance).thenReturn(jsPerformance)
+                whenever(brokenSiteContext.breakageData).thenReturn(null)
+            }
+            whenever(site.realBrokenSiteContext).thenReturn(brokenSiteContext)
+        }
+
+        testee.onSiteChanged(site)
+
+        val category = "login"
+        val description = "I can't sign in!"
+        testee.onSubmitBrokenSiteReport(
+            payload = """{"category":"$category","description":"$description"}""",
+            reportFlow = DASHBOARD,
+            opener = DashboardOpener.DASHBOARD,
+        )
+
+        val expectedBrokenSite = BrokenSite(
+            category = category,
+            description = description,
+            siteUrl = siteUrl,
+            upgradeHttps = true,
+            blockedTrackers = "",
+            surrogates = "",
+            siteType = "mobile",
+            urlParametersRemoved = false,
+            consentManaged = true,
+            consentOptOutFailed = false,
+            consentSelfTestFailed = false,
+            consentRule = null,
+            consentReloadLoop = false,
+            errorCodes = """["401","401","500"]""",
+            httpErrorCodes = "",
+            loginSite = null,
+            reportFlow = DASHBOARD,
+            userRefreshCount = userRefreshCount,
+            openerContext = null,
+            jsPerformance = jsPerformance.toList(),
+            contentScopeExperiments = null,
+            debugFlags = debugFlags,
+            breakageData = null,
+        )
+
+        val isToggleReport = false
+
+        verify(brokenSiteSender).submitBrokenSiteFeedback(expectedBrokenSite, isToggleReport)
+        verify(pixel).fire(REPORT_BROKEN_SITE_SENT, mapOf("opener" to "dashboard"), type = Count)
+    }
+
+    @Test
+    fun whenUserClicksOnSubmitReportWithBreakageDataThenSubmitsReportWithBreakageData() = runTest {
+        val siteUrl = "https://example.com"
+        val userRefreshCount = 3
+        val jsPerformance = doubleArrayOf(1.0, 2.0, 3.0)
+        val breakageData = "%7B%22test%22%3A%22value%22%7D"
+
+        val site: Site = mock { site ->
+            whenever(site.uri).thenReturn(siteUrl.toUri())
+            whenever(site.url).thenReturn(siteUrl)
+            whenever(site.userAllowList).thenReturn(true)
+            whenever(site.isDesktopMode).thenReturn(false)
+            whenever(site.upgradedHttps).thenReturn(true)
+            whenever(site.consentManaged).thenReturn(true)
+            whenever(site.errorCodeEvents).thenReturn(listOf("401", "401", "500"))
+            whenever(site.activeContentScopeExperiments).thenReturn(null)
+            whenever(site.debugFlags).thenReturn(null)
+
+            val brokenSiteContext: BrokenSiteContext = mock { brokenSiteContext ->
+                whenever(brokenSiteContext.userRefreshCount).thenReturn(userRefreshCount)
+                whenever(brokenSiteContext.jsPerformance).thenReturn(jsPerformance)
+                whenever(brokenSiteContext.breakageData).thenReturn(breakageData)
+            }
+            whenever(site.realBrokenSiteContext).thenReturn(brokenSiteContext)
+        }
+
+        testee.onSiteChanged(site)
+
+        val category = "login"
+        val description = "I can't sign in!"
+        testee.onSubmitBrokenSiteReport(
+            payload = """{"category":"$category","description":"$description"}""",
+            reportFlow = DASHBOARD,
+            opener = DashboardOpener.DASHBOARD,
+        )
+
+        val expectedBrokenSite = BrokenSite(
+            category = category,
+            description = description,
+            siteUrl = siteUrl,
+            upgradeHttps = true,
+            blockedTrackers = "",
+            surrogates = "",
+            siteType = "mobile",
+            urlParametersRemoved = false,
+            consentManaged = true,
+            consentOptOutFailed = false,
+            consentSelfTestFailed = false,
+            consentRule = null,
+            consentReloadLoop = false,
+            errorCodes = """["401","401","500"]""",
+            httpErrorCodes = "",
+            loginSite = null,
+            reportFlow = DASHBOARD,
+            userRefreshCount = userRefreshCount,
+            openerContext = null,
+            jsPerformance = jsPerformance.toList(),
+            contentScopeExperiments = null,
+            debugFlags = null,
+            breakageData = breakageData,
         )
 
         val isToggleReport = false
@@ -387,6 +569,10 @@ private class FakeUserAllowListRepository : UserAllowListRepository {
     override suspend fun addDomainToUserAllowList(domain: String) = domains.update { it + domain }
 
     override suspend fun removeDomainFromUserAllowList(domain: String) = domains.update { it - domain }
+}
+
+class FakeDashboardOpenedPluginPoint : PluginPoint<PrivacyDashboardOpenedPlugin> {
+    override fun getPlugins(): Collection<PrivacyDashboardOpenedPlugin> = emptyList()
 }
 
 class FakePluginPoint(val plugin: FakePrivacyProtectionTogglePlugin) : PluginPoint<PrivacyProtectionTogglePlugin> {

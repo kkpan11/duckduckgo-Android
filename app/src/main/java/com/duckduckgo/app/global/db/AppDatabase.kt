@@ -26,13 +26,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.duckduckgo.app.bookmarks.db.*
 import com.duckduckgo.app.browser.cookies.db.AuthCookieAllowedDomainEntity
 import com.duckduckgo.app.browser.cookies.db.AuthCookiesAllowedDomainsDao
-import com.duckduckgo.app.browser.defaultbrowsing.prompts.store.ExperimentAppUsageDao
-import com.duckduckgo.app.browser.defaultbrowsing.prompts.store.ExperimentAppUsageEntity
+import com.duckduckgo.app.browser.defaultbrowsing.prompts.store.DefaultBrowserPromptsAppUsageDao
+import com.duckduckgo.app.browser.defaultbrowsing.prompts.store.DefaultBrowserPromptsAppUsageEntity
 import com.duckduckgo.app.browser.pageloadpixel.PageLoadedPixelDao
 import com.duckduckgo.app.browser.pageloadpixel.PageLoadedPixelEntity
 import com.duckduckgo.app.browser.pageloadpixel.firstpaint.PagePaintedPixelDao
 import com.duckduckgo.app.browser.pageloadpixel.firstpaint.PagePaintedPixelEntity
 import com.duckduckgo.app.browser.rating.db.*
+import com.duckduckgo.app.browser.session.WebViewSessionDao
+import com.duckduckgo.app.browser.session.WebViewSessionEntity
 import com.duckduckgo.app.cta.db.DismissedCtaDao
 import com.duckduckgo.app.cta.model.DismissedCta
 import com.duckduckgo.app.fire.fireproofwebsite.data.FireproofWebsiteDao
@@ -55,6 +57,10 @@ import com.duckduckgo.app.statistics.model.QueryParamsTypeConverter
 import com.duckduckgo.app.statistics.store.PendingPixelDao
 import com.duckduckgo.app.survey.db.SurveyDao
 import com.duckduckgo.app.survey.model.Survey
+import com.duckduckgo.app.tabs.db.DuckAiTabSessionDao
+import com.duckduckgo.app.tabs.db.DuckAiTabSessionEntity
+import com.duckduckgo.app.tabs.db.TabPageContextDao
+import com.duckduckgo.app.tabs.db.TabPageContextEntity
 import com.duckduckgo.app.tabs.db.TabsDao
 import com.duckduckgo.app.tabs.model.LocalDateTimeTypeConverter
 import com.duckduckgo.app.tabs.model.TabEntity
@@ -71,9 +77,17 @@ import com.duckduckgo.savedsites.store.Relation
 import com.duckduckgo.savedsites.store.SavedSitesEntitiesDao
 import com.duckduckgo.savedsites.store.SavedSitesRelationsDao
 
+/**
+ * Main application database.
+ *
+ * [TabEntity] and [TabSelectionEntity] are also used by
+ * [com.duckduckgo.app.fire.db.FireModeDatabase]. Any schema change to these entities must be
+ * accompanied by a migration in BOTH databases — forgetting one will result in a runtime crash
+ * for the affected users.
+ */
 @Database(
     exportSchema = true,
-    version = 58,
+    version = 64,
     entities = [
         TdsTracker::class,
         TdsEntity::class,
@@ -84,6 +98,8 @@ import com.duckduckgo.savedsites.store.SavedSitesRelationsDao
         SitesVisitedEntity::class,
         TabEntity::class,
         TabSelectionEntity::class,
+        TabPageContextEntity::class,
+        WebViewSessionEntity::class,
         BookmarkEntity::class,
         FavoriteEntity::class,
         BookmarkFolderEntity::class,
@@ -106,10 +122,10 @@ import com.duckduckgo.savedsites.store.SavedSitesRelationsDao
         AuthCookieAllowedDomainEntity::class,
         Entity::class,
         Relation::class,
-        ExperimentAppUsageEntity::class,
+        DefaultBrowserPromptsAppUsageEntity::class,
+        DuckAiTabSessionEntity::class,
     ],
 )
-
 @TypeConverters(
     Survey.StatusTypeConverter::class,
     DismissedCta.IdTypeConverter::class,
@@ -134,6 +150,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun userAllowListDao(): UserAllowListDao
     abstract fun networkLeaderboardDao(): NetworkLeaderboardDao
     abstract fun tabsDao(): TabsDao
+    abstract fun tabPageContextDao(): TabPageContextDao
+    abstract fun duckAiTabSessionDao(): DuckAiTabSessionDao
+    abstract fun webViewSessionDao(): WebViewSessionDao
     abstract fun bookmarksDao(): BookmarksDao
     abstract fun favoritesDao(): FavoritesDao
     abstract fun bookmarkFoldersDao(): BookmarkFoldersDao
@@ -160,7 +179,7 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun syncRelationsDao(): SavedSitesRelationsDao
 
-    abstract fun experimentAppUsageDao(): ExperimentAppUsageDao
+    abstract fun defaultBrowserPromptsAppUsageDao(): DefaultBrowserPromptsAppUsageDao
 }
 
 @Suppress("PropertyName")
@@ -694,6 +713,92 @@ class MigrationsProvider(val context: Context, val settingsDataStore: SettingsDa
         }
     }
 
+    private val MIGRATION_58_TO_59: Migration = object : Migration(58, 59) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS `default_browser_prompts_app_usage` (`isoDateET` TEXT NOT NULL, PRIMARY KEY(`isoDateET`))")
+            database.execSQL("DROP TABLE IF EXISTS `experiment_app_usage_entity`")
+        }
+    }
+
+    private val MIGRATION_59_TO_60: Migration = object : Migration(59, 60) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE `page_loaded_pixel_entity` ADD COLUMN `isTabInForegroundOnFinish` INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE `page_loaded_pixel_entity` ADD COLUMN `activeRequestsOnLoadStart` INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("ALTER TABLE `page_loaded_pixel_entity` ADD COLUMN `concurrentRequestsOnFinish` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    private val MIGRATION_60_TO_61: Migration = object : Migration(60, 61) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS `tab_page_context` (" +
+                    "`tabId` TEXT NOT NULL, " +
+                    "`url` TEXT NOT NULL, " +
+                    "`serializedPageContext` TEXT NOT NULL, " +
+                    "`collectedAt` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`tabId`), " +
+                    "FOREIGN KEY(`tabId`) REFERENCES `tabs`(`tabId`) ON UPDATE NO ACTION ON DELETE CASCADE" +
+                    ")",
+            )
+        }
+    }
+
+    private val MIGRATION_61_TO_62: Migration = object : Migration(61, 62) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS `webview_sessions` (" +
+                    "`tabId` TEXT NOT NULL, " +
+                    "`sessionBundle` BLOB NOT NULL, " +
+                    "`savedAt` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`tabId`), " +
+                    "FOREIGN KEY(`tabId`) REFERENCES `tabs`(`tabId`) ON UPDATE NO ACTION ON DELETE CASCADE" +
+                    ")",
+            )
+        }
+    }
+
+    private val MIGRATION_62_TO_63: Migration = object : Migration(62, 63) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS `duck_ai_tab_session` (" +
+                    "`tabId` TEXT NOT NULL, " +
+                    "`entryPointSource` TEXT NOT NULL, " +
+                    "PRIMARY KEY(`tabId`), " +
+                    "FOREIGN KEY(`tabId`) REFERENCES `tabs`(`tabId`) ON UPDATE NO ACTION ON DELETE CASCADE" +
+                    ")",
+            )
+        }
+    }
+
+    // Recreate-and-copy rather than ALTER TABLE DROP COLUMN, which needs SQLite 3.35 (API 35) and min_sdk is 28.
+    private val MIGRATION_63_TO_64: Migration = object : Migration(63, 64) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS `page_loaded_pixel_entity_new` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`appVersion` TEXT NOT NULL, " +
+                    "`elapsedTime` INTEGER NOT NULL, " +
+                    "`webviewVersion` TEXT NOT NULL, " +
+                    "`cpmEnabled` INTEGER NOT NULL, " +
+                    "`isTabInForegroundOnFinish` INTEGER NOT NULL, " +
+                    "`activeRequestsOnLoadStart` INTEGER NOT NULL, " +
+                    "`concurrentRequestsOnFinish` INTEGER NOT NULL" +
+                    ")",
+            )
+            database.execSQL(
+                "INSERT INTO `page_loaded_pixel_entity_new` (" +
+                    "`id`, `appVersion`, `elapsedTime`, `webviewVersion`, `cpmEnabled`, " +
+                    "`isTabInForegroundOnFinish`, `activeRequestsOnLoadStart`, `concurrentRequestsOnFinish`" +
+                    ") SELECT " +
+                    "`id`, `appVersion`, `elapsedTime`, `webviewVersion`, `cpmEnabled`, " +
+                    "`isTabInForegroundOnFinish`, `activeRequestsOnLoadStart`, `concurrentRequestsOnFinish` " +
+                    "FROM `page_loaded_pixel_entity`",
+            )
+            database.execSQL("DROP TABLE `page_loaded_pixel_entity`")
+            database.execSQL("ALTER TABLE `page_loaded_pixel_entity_new` RENAME TO `page_loaded_pixel_entity`")
+        }
+    }
+
     /**
      * WARNING ⚠️
      * This needs to happen because Room doesn't support UNIQUE (...) ON CONFLICT REPLACE when creating the bookmarks table.
@@ -709,12 +814,6 @@ class MigrationsProvider(val context: Context, val settingsDataStore: SettingsDa
             database.execSQL("INSERT INTO `bookmarks_temp` (id, title, url, parentId) SELECT * FROM `bookmarks`")
             database.execSQL("DROP TABLE `bookmarks`")
             database.execSQL("ALTER TABLE `bookmarks_temp` RENAME TO `bookmarks`")
-        }
-    }
-
-    val CHANGE_JOURNAL_ON_OPEN = object : RoomDatabase.Callback() {
-        override fun onOpen(db: SupportSQLiteDatabase) {
-            db.query("PRAGMA journal_mode=DELETE;").use { cursor -> cursor.moveToFirst() }
         }
     }
 
@@ -777,6 +876,12 @@ class MigrationsProvider(val context: Context, val settingsDataStore: SettingsDa
             MIGRATION_55_TO_56,
             MIGRATION_56_TO_57,
             MIGRATION_57_TO_58,
+            MIGRATION_58_TO_59,
+            MIGRATION_59_TO_60,
+            MIGRATION_60_TO_61,
+            MIGRATION_61_TO_62,
+            MIGRATION_62_TO_63,
+            MIGRATION_63_TO_64,
         )
 
     @Deprecated(

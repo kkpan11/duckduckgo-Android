@@ -19,14 +19,14 @@ package com.duckduckgo.installation.impl.installer.aura
 import com.duckduckgo.anvil.annotations.PriorityKey
 import com.duckduckgo.app.statistics.AtbInitializerListener
 import com.duckduckgo.app.statistics.store.StatisticsDataStore
-import com.duckduckgo.browser.api.referrer.AppReferrer
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.installation.impl.installer.InstallSourceExtractor
+import com.duckduckgo.referral.api.AppReferrer
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
-import javax.inject.Inject
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 @ContributesMultibinding(AppScope::class)
 @PriorityKey(AtbInitializerListener.PRIORITY_AURA_EXPERIMENT_MANAGER)

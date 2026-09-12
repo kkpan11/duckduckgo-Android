@@ -21,9 +21,9 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ResultReceiver
 import com.duckduckgo.mobile.android.vpn.pixels.DeviceShieldPixels
-import javax.inject.Inject
-import logcat.LogPriority
+import logcat.LogPriority.ERROR
 import logcat.logcat
+import javax.inject.Inject
 
 private const val INVALID_NOTIFICATION_VARIANT = -1
 
@@ -63,7 +63,7 @@ class WeeklyNotificationPressedHandler @Inject constructor(
     ) {
         logcat { "Weekly notification pressed" }
         if (notificationVariant == INVALID_NOTIFICATION_VARIANT) {
-            logcat(LogPriority.ERROR) { "Weekly notification pressed reported with uninitialized notification variant" }
+            logcat(ERROR) { "Weekly notification pressed reported with uninitialized notification variant" }
         } else {
             deviceShieldPixels.didPressOnWeeklyNotification(notificationVariant)
         }
@@ -82,7 +82,7 @@ class DailyNotificationPressedHandler @Inject constructor(
     ) {
         logcat { "Daily notification pressed" }
         if (notificationVariant == INVALID_NOTIFICATION_VARIANT) {
-            logcat(LogPriority.ERROR) { "Daily notification pressed reported with uninitialized notification variant" }
+            logcat(ERROR) { "Daily notification pressed reported with uninitialized notification variant" }
         } else {
             deviceShieldPixels.didPressOnDailyNotification(notificationVariant)
         }

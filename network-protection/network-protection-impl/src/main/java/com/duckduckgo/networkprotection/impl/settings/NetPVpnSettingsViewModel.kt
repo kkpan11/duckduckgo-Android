@@ -34,9 +34,6 @@ import com.duckduckgo.networkprotection.impl.snooze.VpnDisableOnCall
 import com.squareup.anvil.annotations.ContributesTo
 import dagger.Module
 import dagger.Provides
-import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import javax.inject.Qualifier
 import kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,6 +42,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import logcat.logcat
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.inject.Inject
+import javax.inject.Qualifier
 
 @SuppressLint("NoLifecycleObserver") // we don't observe app lifecycle
 @ContributesViewModel(ActivityScope::class)
@@ -54,7 +54,7 @@ class NetPVpnSettingsViewModel @Inject constructor(
     private val networkProtectionState: NetworkProtectionState,
     private val vpnDisableOnCall: VpnDisableOnCall,
     private val networkProtectionPixels: NetworkProtectionPixels,
-    @InternalApi private val isIgnoringBatteryOptimizations: () -> Boolean,
+    @BatteryOptimizationsApi private val isIgnoringBatteryOptimizations: BatteryOptimizationsChecker,
 ) : ViewModel(), DefaultLifecycleObserver {
 
     private val shouldRestartVpn = AtomicBoolean(false)
@@ -80,7 +80,9 @@ class NetPVpnSettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(dispatcherProvider.io()) {
-            _recommendedSettingsState.tryEmit(RecommendedSettings(isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations()))
+            _recommendedSettingsState.tryEmit(
+                RecommendedSettings(isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations.isIgnoringBatteryOptimizations()),
+            )
         }
     }
 
@@ -111,7 +113,7 @@ class NetPVpnSettingsViewModel @Inject constructor(
         fun updateRecommendedSettings() {
             owner.lifecycleScope.launch(dispatcherProvider.io()) {
                 _recommendedSettingsState.tryEmit(
-                    RecommendedSettings(isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations()),
+                    RecommendedSettings(isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations.isIgnoringBatteryOptimizations()),
                 )
             }
         }
@@ -154,14 +156,18 @@ class NetPVpnSettingsViewModel @Inject constructor(
 
 @Retention(AnnotationRetention.BINARY)
 @Qualifier
-private annotation class InternalApi
+private annotation class BatteryOptimizationsApi
+
+fun interface BatteryOptimizationsChecker {
+    fun isIgnoringBatteryOptimizations(): Boolean
+}
 
 @Module
 @ContributesTo(ActivityScope::class)
 class IgnoringBatteryOptimizationsModule {
     @Provides
-    @InternalApi
-    fun providesIsIgnoringBatteryOptimizations(context: Context): () -> Boolean {
-        return { context.isIgnoringBatteryOptimizations() }
+    @BatteryOptimizationsApi
+    fun providesIsIgnoringBatteryOptimizations(context: Context): BatteryOptimizationsChecker {
+        return BatteryOptimizationsChecker { context.isIgnoringBatteryOptimizations() }
     }
 }

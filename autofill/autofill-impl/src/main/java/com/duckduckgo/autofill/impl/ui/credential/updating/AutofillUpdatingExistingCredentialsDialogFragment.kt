@@ -43,25 +43,35 @@ import com.duckduckgo.autofill.impl.ui.credential.dialog.animateClosed
 import com.duckduckgo.autofill.impl.ui.credential.updating.AutofillUpdatingExistingCredentialsDialogFragment.DialogEvent.Dismissed
 import com.duckduckgo.autofill.impl.ui.credential.updating.AutofillUpdatingExistingCredentialsDialogFragment.DialogEvent.Shown
 import com.duckduckgo.autofill.impl.ui.credential.updating.AutofillUpdatingExistingCredentialsDialogFragment.DialogEvent.Updated
+import com.duckduckgo.common.ui.applyBottomSystemBarInsetPadding
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.FragmentViewModelFactory
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.FragmentScope
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import dagger.android.support.AndroidSupportInjection
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineStart.LAZY
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.logcat
+import javax.inject.Inject
 
 @InjectWith(FragmentScope::class)
 class AutofillUpdatingExistingCredentialsDialogFragment : BottomSheetDialogFragment(), CredentialUpdateExistingCredentialsDialog {
 
-    override fun getTheme(): Int = R.style.AutofillBottomSheetDialogTheme
+    override fun getTheme(): Int = if (edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.BOTTOM_SHEETS)) {
+        R.style.AutofillBottomSheetDialogThemeEdgeToEdge
+    } else {
+        R.style.AutofillBottomSheetDialogTheme
+    }
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
 
     @Inject
     lateinit var viewModelFactory: FragmentViewModelFactory
@@ -94,7 +104,7 @@ class AutofillUpdatingExistingCredentialsDialogFragment : BottomSheetDialogFragm
     private val wasUsernameBackFilled: Deferred<Boolean> = lifecycleScope.async(start = LAZY) {
         val usernameToSave = getCredentialsToSave().username ?: return@async false
         partialCredentialSaveStore.wasBackFilledRecently(url = getOriginalUrl(), username = usernameToSave).also {
-            Timber.v("Determined that username was %sbackFilled", if (it) "" else "not ")
+            logcat { "Determined that username was ${if (it) "" else "not "}backFilled" }
         }
     }
 
@@ -127,6 +137,9 @@ class AutofillUpdatingExistingCredentialsDialogFragment : BottomSheetDialogFragm
 
         val binding = ContentAutofillUpdateExistingCredentialsBinding.inflate(inflater, container, false)
         configureViews(binding)
+        if (edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.BOTTOM_SHEETS)) {
+            binding.dialogRootView.applyBottomSystemBarInsetPadding()
+        }
         return binding.root
     }
 
@@ -135,7 +148,7 @@ class AutofillUpdatingExistingCredentialsDialogFragment : BottomSheetDialogFragm
         val credentials = getCredentialsToSave()
         val originalUrl = getOriginalUrl()
         val updateType = getUpdateType()
-        Timber.v("Update type is $updateType")
+        logcat { "Update type is $updateType" }
 
         configureDialogTitle(binding, updateType)
         configureCloseButtons(binding)
@@ -209,11 +222,11 @@ class AutofillUpdatingExistingCredentialsDialogFragment : BottomSheetDialogFragm
 
     override fun onCancel(dialog: DialogInterface) {
         if (ignoreCancellationEvents) {
-            Timber.v("onCancel: Ignoring cancellation event")
+            logcat { "onCancel: Ignoring cancellation event" }
             return
         }
 
-        Timber.v("onCancel: AutofillUpdatingExistingCredentialsDialogFragment. User declined to update credentials")
+        logcat { "onCancel: AutofillUpdatingExistingCredentialsDialogFragment. User declined to update credentials" }
         autofillFireproofDialogSuppressor.autofillSaveOrUpdateDialogVisibilityChanged(visible = false)
         pixelNameDialogEvent(Dismissed)?.let {
             lifecycleScope.launch {

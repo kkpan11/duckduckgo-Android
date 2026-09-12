@@ -25,9 +25,9 @@ import com.duckduckgo.app.browser.webview.RealMaliciousSiteBlockerWebViewIntegra
 import com.duckduckgo.app.di.AppCoroutineScope
 import com.duckduckgo.app.di.IsMainProcess
 import com.duckduckgo.app.pixels.AppPixelName
-import com.duckduckgo.app.pixels.remoteconfig.AndroidBrowserConfigFeature
 import com.duckduckgo.app.settings.db.SettingsDataStore
 import com.duckduckgo.app.statistics.pixels.Pixel
+import com.duckduckgo.browser.feature.toggles.AndroidBrowserConfigFeature
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.malicioussiteprotection.api.MaliciousSiteProtection
@@ -42,13 +42,15 @@ import com.duckduckgo.malicioussiteprotection.api.MaliciousSiteProtection.Malici
 import com.duckduckgo.privacy.config.api.PrivacyConfigCallbackPlugin
 import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.anvil.annotations.ContributesMultibinding
-import java.util.concurrent.atomic.AtomicInteger
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.logcat
+import java.util.concurrent.atomic.AtomicInteger
+import javax.inject.Inject
+
+const val SCAM_PROTECTION_LEARN_MORE_URL = "https://duckduckgo.com/duckduckgo-help-pages/threat-protection/scam-blocker"
 
 interface MaliciousSiteBlockerWebViewIntegration {
 
@@ -200,13 +202,13 @@ class RealMaliciousSiteBlockerWebViewIntegration @Inject constructor(
         val exemptedUrl = mainframeUrl?.let { getExemptedUrl(it) }
 
         if (exemptedUrl != null) {
-            Timber.d("Previously exempted, skipping $requestUrl as ${exemptedUrl.feed}")
+            logcat { "Previously exempted, skipping $requestUrl as ${exemptedUrl.feed}" }
             return IsMaliciousViewData.MaliciousSite(requestUrl, exemptedUrl.feed, true, clientSideHit = true)
         }
 
         processedUrls[requestUrl]?.let {
             processedUrls.remove(requestUrl)
-            Timber.d("Already intercepted, skipping $requestUrl, status: $it")
+            logcat { "Already intercepted, skipping $requestUrl, status: $it" }
             return when (it.status) {
                 is Safe -> IsMaliciousViewData.Safe(isForMainFrame)
                 is Malicious -> IsMaliciousViewData.MaliciousSite(requestUrl, it.status.feed, false, it.clientSideHit)
@@ -303,6 +305,6 @@ class RealMaliciousSiteBlockerWebViewIntegration @Inject constructor(
         feed: Feed,
     ) {
         exemptedUrlsHolder.addExemptedMaliciousUrl(ExemptedUrl(url, feed))
-        Timber.d("Added $url to exemptedUrls")
+        logcat { "Added $url to exemptedUrls" }
     }
 }

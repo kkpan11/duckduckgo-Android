@@ -1,8 +1,15 @@
 package com.duckduckgo.subscriptions.impl.settings.views
 
+import android.annotation.SuppressLint
 import app.cash.turbine.test
 import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.feature.toggles.api.FakeFeatureToggleFactory
+import com.duckduckgo.feature.toggles.api.Toggle.State
+import com.duckduckgo.subscriptions.api.Product
 import com.duckduckgo.subscriptions.api.SubscriptionStatus
+import com.duckduckgo.subscriptions.api.model.Entitlement
+import com.duckduckgo.subscriptions.impl.SubscriptionOffer
+import com.duckduckgo.subscriptions.impl.SubscriptionsFeature
 import com.duckduckgo.subscriptions.impl.SubscriptionsManager
 import com.duckduckgo.subscriptions.impl.pixels.SubscriptionPixelSender
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Command.OpenBuyScreen
@@ -10,7 +17,9 @@ import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Comm
 import com.duckduckgo.subscriptions.impl.settings.views.ProSettingViewModel.Command.OpenSettings
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -19,6 +28,7 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoMoreInteractions
 import org.mockito.kotlin.whenever
 
+@SuppressLint("DenyListedApi")
 class ProSettingViewModelTest {
     @get:Rule
     val coroutineTestRule: CoroutineTestRule = CoroutineTestRule()
@@ -26,10 +36,16 @@ class ProSettingViewModelTest {
     private val subscriptionsManager: SubscriptionsManager = mock()
     private val pixelSender: SubscriptionPixelSender = mock()
     private lateinit var viewModel: ProSettingViewModel
+    private val subscriptionsFeature = FakeFeatureToggleFactory.create(SubscriptionsFeature::class.java)
 
     @Before
     fun before() {
-        viewModel = ProSettingViewModel(subscriptionsManager, pixelSender)
+        viewModel = ProSettingViewModel(
+            subscriptionsManager,
+            pixelSender,
+            subscriptionsFeature,
+            coroutineTestRule.testDispatcherProvider,
+        )
     }
 
     @Test
@@ -65,6 +81,8 @@ class ProSettingViewModelTest {
     fun whenOnResumeEmitViewState() = runTest {
         whenever(subscriptionsManager.subscriptionStatus).thenReturn(flowOf(SubscriptionStatus.EXPIRED))
         whenever(subscriptionsManager.getSubscriptionOffer()).thenReturn(emptyList())
+        whenever(subscriptionsManager.isFreeTrialEligible()).thenReturn(false)
+        whenever(subscriptionsManager.blackFridayOfferAvailable()).thenReturn(false)
 
         viewModel.onCreate(mock())
         viewModel.viewState.test {
@@ -82,4 +100,105 @@ class ProSettingViewModelTest {
             cancelAndConsumeRemainingEvents()
         }
     }
+
+    @Test
+    fun givenFreeTrialEligibleWhenOnCreateThenFreeTrialEligibleViewStateTrue() = runTest {
+        whenever(subscriptionsManager.subscriptionStatus).thenReturn(flowOf(SubscriptionStatus.INACTIVE))
+        whenever(subscriptionsManager.getSubscriptionOffer()).thenReturn(emptyList())
+        whenever(subscriptionsManager.isFreeTrialEligible()).thenReturn(true)
+        whenever(subscriptionsManager.blackFridayOfferAvailable()).thenReturn(false)
+
+        viewModel.onCreate(mock())
+        viewModel.viewState.test {
+            assertEquals(true, awaitItem().freeTrialEligible)
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
+    fun whenDuckAiPlusEnabledIfSubscriptionPlanHasDuckAiThenDuckAiPlusAvailable() = runTest {
+        subscriptionsFeature.duckAiPlus().setRawStoredState(State(true))
+        whenever(subscriptionsManager.subscriptionStatus).thenReturn(flowOf(SubscriptionStatus.AUTO_RENEWABLE))
+        whenever(
+            subscriptionsManager.getSubscriptionOffer(),
+        ).thenReturn(listOf(subscriptionOffer.copy(entitlements = setOf(Entitlement("plus", Product.DuckAiPlus.value)))))
+        whenever(subscriptionsManager.isFreeTrialEligible()).thenReturn(true)
+        whenever(subscriptionsManager.blackFridayOfferAvailable()).thenReturn(false)
+
+        viewModel.onCreate(mock())
+        viewModel.viewState.test {
+            assertTrue(awaitItem().duckAiPlusAvailable)
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
+    fun whenDuckAiPlusEnabledIfSubscriptionPlanDoesNotHaveDuckAiThenDuckAiPlusAvailable() = runTest {
+        subscriptionsFeature.duckAiPlus().setRawStoredState(State(true))
+        whenever(subscriptionsManager.subscriptionStatus).thenReturn(flowOf(SubscriptionStatus.AUTO_RENEWABLE))
+        whenever(
+            subscriptionsManager.getSubscriptionOffer(),
+        ).thenReturn(listOf(subscriptionOffer.copy(entitlements = setOf(Entitlement("plus", Product.NetP.value)))))
+        whenever(subscriptionsManager.isFreeTrialEligible()).thenReturn(true)
+        whenever(subscriptionsManager.blackFridayOfferAvailable()).thenReturn(false)
+
+        viewModel.onCreate(mock())
+        viewModel.viewState.test {
+            assertFalse(awaitItem().duckAiPlusAvailable)
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
+    fun whenDuckAiPlusDisabledIfSubscriptionPlanHasDuckAiThenDuckAiPlusAvailableFalse() = runTest {
+        subscriptionsFeature.duckAiPlus().setRawStoredState(State(false))
+        whenever(subscriptionsManager.subscriptionStatus).thenReturn(flowOf(SubscriptionStatus.AUTO_RENEWABLE))
+        whenever(
+            subscriptionsManager.getSubscriptionOffer(),
+        ).thenReturn(listOf(subscriptionOffer.copy(entitlements = setOf(Entitlement("plus", Product.DuckAiPlus.value)))))
+        whenever(subscriptionsManager.isFreeTrialEligible()).thenReturn(true)
+        whenever(subscriptionsManager.blackFridayOfferAvailable()).thenReturn(false)
+
+        viewModel.onCreate(mock())
+        viewModel.viewState.test {
+            assertFalse(awaitItem().duckAiPlusAvailable)
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
+    fun whenBlackFridayOfferAvailableThenViewStateBlackFridayOfferAvailableTrue() = runTest {
+        whenever(subscriptionsManager.subscriptionStatus).thenReturn(flowOf(SubscriptionStatus.INACTIVE))
+        whenever(subscriptionsManager.getSubscriptionOffer()).thenReturn(emptyList())
+        whenever(subscriptionsManager.isFreeTrialEligible()).thenReturn(false)
+        whenever(subscriptionsManager.blackFridayOfferAvailable()).thenReturn(true)
+
+        viewModel.onCreate(mock())
+        viewModel.viewState.test {
+            assertTrue(awaitItem().blackFridayOfferAvailable)
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    @Test
+    fun whenBlackFridayOfferNotAvailableThenViewStateBlackFridayOfferAvailableFalse() = runTest {
+        whenever(subscriptionsManager.subscriptionStatus).thenReturn(flowOf(SubscriptionStatus.INACTIVE))
+        whenever(subscriptionsManager.getSubscriptionOffer()).thenReturn(emptyList())
+        whenever(subscriptionsManager.isFreeTrialEligible()).thenReturn(false)
+        whenever(subscriptionsManager.blackFridayOfferAvailable()).thenReturn(false)
+
+        viewModel.onCreate(mock())
+        viewModel.viewState.test {
+            assertFalse(awaitItem().blackFridayOfferAvailable)
+            cancelAndConsumeRemainingEvents()
+        }
+    }
+
+    private val subscriptionOffer = SubscriptionOffer(
+        planId = "test",
+        offerId = null,
+        tier = "plus",
+        pricingPhases = emptyList(),
+        entitlements = emptySet(),
+    )
 }

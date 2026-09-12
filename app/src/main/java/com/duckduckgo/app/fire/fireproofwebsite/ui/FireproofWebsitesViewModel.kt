@@ -29,9 +29,10 @@ import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.SingleLiveEvent
 import com.duckduckgo.di.scopes.ActivityScope
-import javax.inject.Inject
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.INFO
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class FireproofWebsitesViewModel @Inject constructor(
@@ -97,7 +98,7 @@ class FireproofWebsitesViewModel @Inject constructor(
     }
 
     fun onAutomaticFireproofSettingChanged(newAutomaticFireproofSetting: AutomaticFireproofSetting) {
-        Timber.i("User changed automatic fireproof setting, is now: ${newAutomaticFireproofSetting.name}")
+        logcat(INFO) { "User changed automatic fireproof setting, is now: ${newAutomaticFireproofSetting.name}" }
 
         viewModelScope.launch(dispatcherProvider.io()) {
             if (newAutomaticFireproofSetting != AutomaticFireproofSetting.NEVER) {

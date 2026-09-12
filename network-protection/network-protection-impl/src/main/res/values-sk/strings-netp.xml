@@ -194,7 +194,7 @@
     <string name="netpNotificationCTAReconnectNow">Pripoj sa teraz znovu</string>
     <string name="netpNotificationSnoozeTitle">VPN je pozastavená</string>
     <string name="netpNotificationSnoozeBody" instruction="Placeholder is time in hh:mm format">VPN sa znova pripojí o %1$s</string>
-    <string name="netpNotificationVpnAccessRevoked">VPN bola odpojená kvôli vypršaniu platnosti predplatného. Predplať si Privacy Pro, aby si znova pripojil/-a DuckDuckGo VPN.</string>
+    <string name="netpNotificationVpnAccessRevoked">VPN bola odpojená kvôli vypršaniu platnosti predplatného. Predplať si DuckDuckGo, aby si znova pripojil/a VPN.</string>
 
     <!-- Geoswitching -->
     <string name="netpGeoswitchingTitle">Umiestnenie VPN</string>
@@ -206,7 +206,7 @@
 
     <!-- Access revoked-->
     <string name="netpDialogVpnAccessRevokedTitle">VPN bola odpojená kvôli vypršaniu platnosti predplatného.</string>
-    <string name="netpDialogVpnAccessRevokedBody">Predplať si Privacy Pro, aby si znova pripojil/a DuckDuckGo VPN.</string>
+    <string name="netpDialogVpnAccessRevokedBody">Predplať si DuckDuckGo, aby si znova pripojil/a VPN.</string>
     <string name="netpDialogVpnAccessRevokedPositiveAction">Prihlásiť sa na odber</string>
     <string name="netpDialogVpnAccessRevokedNegativeAction">Odmietnuť</string>
 
@@ -224,7 +224,7 @@
     <string name="netpCustomDnsSettingText">DNS server</string>
     <string name="netpPrivateDns">Súkromné DNS</string>
     <string name="netpCustomDnsDefault" translatable="false">DuckDuckGo</string>
-    <string name="netpCustomDnsDefaultBlockMalware">DuckDuckGo (Blokovanie rizikových domén)</string>
+    <string name="netpCustomDnsDefaultBlockMalware">DuckDuckGo (Blokátor podvodov)</string>
     <string name="netpCustomDnsDefaultOption">DuckDuckGo (odporúčané)</string>
     <string name="netpCustomDnsCustom">Vlastné</string>
     <string name="netpCustomDnsInputAddressHint">Adresa IPv4</string>
@@ -235,8 +235,8 @@
     <string name="netpDdgDnsByLine">DuckDuckGo smeruje dopyty DNS cez naše servery DNS, aby tvoj poskytovateľ internetu nemohol vidieť, ktoré webové stránky navštevuješ.</string>
 
     <!-- Block malware DNS -->
-    <string name="netpDnsBlockMalwareHeader">Blokovanie a filtrovanie obsahu</string>
-    <string name="netpDnsBlockMalwarePrimary">Blokuj rizikové domény</string>
+    <string name="netpDnsBlockMalwareHeader">Blokovanie škodlivého obsahu</string>
+    <string name="netpDnsBlockMalwarePrimary">Blokátor podvodov</string>
     <string name="netpDnsBlockMalwareByline">Pomocou zoznamu blokovania na úrovni DNS zablokuj viac ako 150 000 domén označených ako hostiteľov malvéru, phishingových útokov a online podvodov. <annotation type="learn_more_link">Zistiť viac</annotation></string>
     <string name="netpDnsBlockMalwareFaqsTitle">DNS zoznamy blokovania</string>
 
@@ -263,4 +263,9 @@
     <string name="netpAutoExcludeToggleName">Automaticky vylúčiť aplikácie, ktoré nie sú kompatibilné s VPN sieťami.</string>
     <string name="netpExclusionListLabelAutoExclude">Nekompatibilné s VPN sieťami</string>
     <string name="netpExclusionListAutoExcludeDescription">Niektoré aplikácie, ako sú bankové alebo streamovacie aplikácie, nefungujú dobre s VPN. Ak je toto nastavenie povolené, takéto aplikácie automaticky vylúčime.</string>
+
+    <!-- Content Descriptions -->
+    <string name="netpCloseButtonContentDescription">Zatvoriť</string>
+    <string name="netpVpnIndicatorContentDescription">Indikátor stavu VPN</string>
+
 </resources>

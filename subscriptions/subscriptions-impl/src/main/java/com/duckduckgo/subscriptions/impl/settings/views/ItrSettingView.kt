@@ -33,18 +33,19 @@ import com.duckduckgo.common.utils.ViewViewModelFactory
 import com.duckduckgo.di.scopes.ViewScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.duckduckgo.subscriptions.impl.R
-import com.duckduckgo.subscriptions.impl.SubscriptionsConstants
+import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.ITR_URL
 import com.duckduckgo.subscriptions.impl.databinding.ViewItrSettingsBinding
+import com.duckduckgo.subscriptions.impl.internal.SubscriptionsUrlProvider
 import com.duckduckgo.subscriptions.impl.settings.views.ItrSettingViewModel.Command
 import com.duckduckgo.subscriptions.impl.settings.views.ItrSettingViewModel.Command.OpenItr
 import com.duckduckgo.subscriptions.impl.settings.views.ItrSettingViewModel.ViewState
 import com.duckduckgo.subscriptions.impl.settings.views.ItrSettingViewModel.ViewState.ItrState
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionsWebViewActivityWithParams
 import dagger.android.support.AndroidSupportInjection
-import javax.inject.Inject
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ViewScope::class)
 class ItrSettingView @JvmOverloads constructor(
@@ -61,6 +62,9 @@ class ItrSettingView @JvmOverloads constructor(
 
     @Inject
     lateinit var dispatchers: DispatcherProvider
+
+    @Inject
+    lateinit var subscriptionsUrlProvider: SubscriptionsUrlProvider
 
     private val binding: ViewItrSettingsBinding by viewBinding()
 
@@ -100,7 +104,7 @@ class ItrSettingView @JvmOverloads constructor(
                 is ItrState.Enabled -> {
                     isVisible = true
                     setStatus(isOn = true)
-                    setLeadingIconResource(R.drawable.ic_identity_theft_restoration_color_24)
+                    setLeadingIconResource(R.drawable.identity_theft_restoration_color_24)
                     isClickable = true
                     setClickListener { viewModel.onItr() }
                 }
@@ -109,7 +113,7 @@ class ItrSettingView @JvmOverloads constructor(
                     isClickable = false
                     setStatus(isOn = false)
                     setClickListener(null)
-                    setLeadingIconResource(R.drawable.ic_identity_theft_restoration_grayscale_color_24)
+                    setLeadingIconResource(R.drawable.identity_theft_restoration_grayscale_color_24)
                 }
                 ItrState.Hidden -> isGone = true
             }
@@ -122,7 +126,7 @@ class ItrSettingView @JvmOverloads constructor(
                 globalActivityStarter.start(
                     context,
                     SubscriptionsWebViewActivityWithParams(
-                        url = SubscriptionsConstants.ITR_URL,
+                        url = ITR_URL,
                     ),
                 )
             }

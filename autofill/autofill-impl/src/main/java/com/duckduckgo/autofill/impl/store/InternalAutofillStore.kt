@@ -40,6 +40,16 @@ interface InternalAutofillStore : AutofillStore {
      */
     var hasEverBeenPromptedToSaveLogin: Boolean
 
+    var hasEverImportedPasswords: Boolean
+
+    var hasDeclinedInBrowserPasswordImportPromo: Boolean
+    var hasDeclinedPasswordManagementImportPromo: Boolean
+
+    fun hasEverImportedPasswordsFlow(): Flow<Boolean>
+
+    var inBrowserImportPromoShownCount: Int
+    var hasDismissedMainAppSettingsPromo: Boolean
+
     /**
      * Find saved credential for the given id
      * @param id of the saved credential
@@ -75,7 +85,7 @@ interface InternalAutofillStore : AutofillStore {
     /**
      * Returns a count of how many credentials are stored
      */
-    suspend fun getCredentialCount(): Flow<Int>
+    suspend fun getCredentialCount(): Flow<Result<Int>>
 
     /**
      * Deletes all saved credentials

@@ -6,7 +6,10 @@ import com.duckduckgo.app.browser.omnibar.OmnibarEntryConverter
 import com.duckduckgo.app.browser.tabs.TabManager.TabModel
 import com.duckduckgo.app.tabs.model.TabEntity
 import com.duckduckgo.app.tabs.model.TabRepository
+import com.duckduckgo.browsermode.api.BrowserMode
 import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.duckchat.api.DuckAiSessionCallback
+import com.duckduckgo.duckchat.api.DuckAiSessionExitTrigger
 import com.duckduckgo.feature.toggles.api.FakeFeatureToggleFactory
 import com.duckduckgo.feature.toggles.api.Toggle.State
 import kotlinx.coroutines.test.runTest
@@ -15,6 +18,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -29,6 +33,7 @@ class DefaultTabManagerTest {
     private val tabRepository: TabRepository = mock()
     private val omnibarEntryConverter: OmnibarEntryConverter = mock()
     private val skipUrlConversionOnNewTabFeature = FakeFeatureToggleFactory.create(SkipUrlConversionOnNewTabFeature::class.java)
+    private val duckAiSessionCallback: DuckAiSessionCallback = mock()
 
     private lateinit var testee: DefaultTabManager
 
@@ -36,18 +41,21 @@ class DefaultTabManagerTest {
     fun setup() {
         skipUrlConversionOnNewTabFeature.self().setRawStoredState(State(enable = false))
 
-        testee = DefaultTabManager(
-            tabRepository = tabRepository,
-            dispatchers = coroutineTestRule.testDispatcherProvider,
-            queryUrlConverter = omnibarEntryConverter,
-            skipUrlConversionOnNewTabFeature = skipUrlConversionOnNewTabFeature,
-        )
-
+        testee = createTabManager(BrowserMode.REGULAR)
         testee.registerCallbacks({})
     }
 
+    private fun createTabManager(browserMode: BrowserMode) = DefaultTabManager(
+        tabRepository = tabRepository,
+        dispatchers = coroutineTestRule.testDispatcherProvider,
+        queryUrlConverter = omnibarEntryConverter,
+        skipUrlConversionOnNewTabFeature = skipUrlConversionOnNewTabFeature,
+        browserMode = browserMode,
+        duckAiSessionCallback = duckAiSessionCallback,
+    )
+
     @Test
-    fun whenOnSelectedTabChangedThenSelectedTabIdIsUpdated() {
+    fun whenOnSelectedTabChangedThenSelectedTabIdIsUpdated() = runTest {
         val tabId = "tabId"
         testee.onSelectedTabChanged(tabId)
 
@@ -55,10 +63,26 @@ class DefaultTabManagerTest {
     }
 
     @Test
+    fun whenOpenNewTabThenPendingNewTabOpenedExitRecordedForCurrentlySelectedTab() = runTest {
+        testee.onSelectedTabChanged("current-tab")
+
+        testee.openNewTab()
+
+        verify(duckAiSessionCallback).onExitIntent("current-tab", DuckAiSessionExitTrigger.NEW_TAB_OPENED)
+    }
+
+    @Test
+    fun whenOpenNewTabWithNoSelectedTabThenNoPendingExitRecorded() = runTest {
+        testee.openNewTab()
+
+        verify(duckAiSessionCallback, never()).onExitIntent(any(), any())
+    }
+
+    @Test
     fun whenOnTabsChangedThenOnTabsUpdatedCalledWithNewTabs() = runTest {
         val tabId = "tabId"
         val tabId2 = "tabId2"
-        val tabs = listOf(TabModel(tabId, "cnn.com", false), TabModel(tabId2, "bbc.com", true))
+        val tabs = listOf(TabModel(tabId, "cnn.com", false, null), TabModel(tabId2, "bbc.com", true, null))
         val onTabsUpdated: (List<TabModel>) -> Unit = mock()
 
         testee.registerCallbacks(onTabsUpdated)
@@ -73,6 +97,16 @@ class DefaultTabManagerTest {
         testee.onTabsChanged(emptyList())
 
         verify(tabRepository).addDefaultTab()
+    }
+
+    @Test
+    fun whenOnTabsChangedAndNoTabsInFireModeThenDefaultTabNotAdded() = runTest {
+        // Fire mode never seeds a tab implicitly — fire tabs are only ever created by an explicit user action.
+        val fireManager = createTabManager(BrowserMode.FIRE).also { it.registerCallbacks({}) }
+
+        fireManager.onTabsChanged(emptyList())
+
+        verify(tabRepository, never()).addDefaultTab()
     }
 
     @Test

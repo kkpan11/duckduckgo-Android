@@ -30,11 +30,11 @@ import com.duckduckgo.mobile.android.vpn.Vpn
 import com.duckduckgo.mobile.android.vpn.pixels.DeviceShieldPixels
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
 import dagger.android.AndroidInjection
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.WARN
+import logcat.logcat
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-import kotlinx.coroutines.withContext
-import logcat.LogPriority
-import logcat.logcat
 
 @InjectWith(ReceiverScope::class)
 class VpnActionReceiver : BroadcastReceiver() {
@@ -84,7 +84,7 @@ class VpnActionReceiver : BroadcastReceiver() {
             }
 
             else -> {
-                logcat(LogPriority.WARN) { "VpnActionReceiver: unknown action" }
+                logcat(WARN) { "VpnActionReceiver: unknown action: ${intent.action}" }
                 pendingResult?.finish()
             }
         }

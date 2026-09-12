@@ -19,13 +19,11 @@ package com.duckduckgo.autofill.impl.ui.credential.management
 import android.annotation.SuppressLint
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
-import com.duckduckgo.app.browser.api.WebViewCapabilityChecker
-import com.duckduckgo.app.browser.api.WebViewCapabilityChecker.WebViewCapability.DocumentStartJavaScript
-import com.duckduckgo.app.browser.api.WebViewCapabilityChecker.WebViewCapability.WebMessageListener
 import com.duckduckgo.app.browser.favicon.FaviconManager
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Count
 import com.duckduckgo.autofill.api.AutofillFeature
+import com.duckduckgo.autofill.api.AutofillImportLaunchSource.PasswordManagementEmptyState
 import com.duckduckgo.autofill.api.AutofillScreenLaunchSource
 import com.duckduckgo.autofill.api.AutofillScreenLaunchSource.BrowserOverflow
 import com.duckduckgo.autofill.api.AutofillScreenLaunchSource.BrowserSnackbar
@@ -38,6 +36,7 @@ import com.duckduckgo.autofill.api.domain.app.LoginCredentials
 import com.duckduckgo.autofill.api.email.EmailManager
 import com.duckduckgo.autofill.impl.deviceauth.DeviceAuthenticator
 import com.duckduckgo.autofill.impl.encoding.UrlUnicodeNormalizerImpl
+import com.duckduckgo.autofill.impl.importing.capability.ImportGooglePasswordsCapabilityChecker
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_COPY_PASSWORD
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_COPY_USERNAME
@@ -55,6 +54,7 @@ import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_SITE_BREAK
 import com.duckduckgo.autofill.impl.reporting.AutofillBreakageReportCanShowRules
 import com.duckduckgo.autofill.impl.reporting.AutofillBreakageReportSender
 import com.duckduckgo.autofill.impl.reporting.AutofillSiteBreakageReportingDataStore
+import com.duckduckgo.autofill.impl.store.AutofillEffectDispatcher
 import com.duckduckgo.autofill.impl.store.InternalAutofillStore
 import com.duckduckgo.autofill.impl.store.NeverSavedSiteRepository
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command
@@ -67,7 +67,6 @@ import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsMa
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowDeviceUnsupportedMode
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowDisabledMode
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowListMode
-import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowListModeLegacy
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowLockedMode
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowUserPasswordCopied
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowUserUsernameCopied
@@ -75,6 +74,7 @@ import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsMa
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.CredentialMode.EditingExisting
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.ListModeCommand
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.ListModeCommand.LaunchDeleteAllPasswordsConfirmation
+import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.ListModeCommand.LaunchImportGooglePasswords
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.ListModeCommand.LaunchReportAutofillBreakageConfirmation
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.ListModeCommand.PromptUserToAuthenticateMassDeletion
 import com.duckduckgo.autofill.impl.ui.credential.management.searching.CredentialListFilter
@@ -87,7 +87,7 @@ import com.duckduckgo.autofill.impl.urlmatcher.AutofillDomainNameUrlMatcher
 import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.feature.toggles.api.FakeFeatureToggleFactory
 import com.duckduckgo.feature.toggles.api.Toggle.State
-import kotlin.reflect.KClass
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -107,6 +107,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import kotlin.reflect.KClass
 
 @SuppressLint("DenyListedApi")
 @RunWith(AndroidJUnit4::class)
@@ -131,8 +132,9 @@ class AutofillSettingsActivityScreenViewModelTest {
     private val autofillBreakageReportCanShowRules: AutofillBreakageReportCanShowRules = mock()
     private val autofillBreakageReportDataStore: AutofillSiteBreakageReportingDataStore = mock()
     private val urlMatcher = AutofillDomainNameUrlMatcher(UrlUnicodeNormalizerImpl())
-    private val webViewCapabilityChecker: WebViewCapabilityChecker = mock()
+    private val importGooglePasswordsCapabilityChecker: ImportGooglePasswordsCapabilityChecker = mock()
     private val autofillFeature = FakeFeatureToggleFactory.create(AutofillFeature::class.java)
+    private val autofillEffectDispatcher: AutofillEffectDispatcher = mock()
 
     private val testee = AutofillPasswordsManagementViewModel(
         autofillStore = mockStore,
@@ -152,8 +154,9 @@ class AutofillSettingsActivityScreenViewModelTest {
         autofillBreakageReportSender = autofillBreakageReportSender,
         autofillBreakageReportDataStore = autofillBreakageReportDataStore,
         autofillBreakageReportCanShowRules = autofillBreakageReportCanShowRules,
-        webViewCapabilityChecker = webViewCapabilityChecker,
+        importGooglePasswordsCapabilityChecker = importGooglePasswordsCapabilityChecker,
         autofillFeature = autofillFeature,
+        autofillEffectDispatcher = autofillEffectDispatcher,
     )
 
     @Before
@@ -162,11 +165,11 @@ class AutofillSettingsActivityScreenViewModelTest {
 
         runTest {
             whenever(mockStore.getAllCredentials()).thenReturn(emptyFlow())
-            whenever(mockStore.getCredentialCount()).thenReturn(flowOf(0))
+            whenever(mockStore.getCredentialCount()).thenReturn(flowOf(Result.success(0)))
             whenever(neverSavedSiteRepository.neverSaveListCount()).thenReturn(emptyFlow())
             whenever(deviceAuthenticator.isAuthenticationRequiredForAutofill()).thenReturn(true)
-            whenever(webViewCapabilityChecker.isSupported(WebMessageListener)).thenReturn(true)
-            whenever(webViewCapabilityChecker.isSupported(DocumentStartJavaScript)).thenReturn(true)
+            whenever(importGooglePasswordsCapabilityChecker.webViewCapableOfImporting()).thenReturn(true)
+            whenever(autofillEffectDispatcher.effects).thenReturn(MutableSharedFlow())
             autofillFeature.self().setRawStoredState(State(enable = true))
             autofillFeature.canImportFromGooglePasswordManager().setRawStoredState(State(enable = true))
             autofillFeature.settingsScreen().setRawStoredState(State(enable = true))
@@ -750,70 +753,88 @@ class AutofillSettingsActivityScreenViewModelTest {
     }
 
     @Test
-    fun whenScreenLaunchedFromSnackbarThenCorrectLaunchPixelSent() {
+    fun whenScreenLaunchedFromSnackbarThenCorrectLaunchPixelsSent() {
         testee.sendLaunchPixel(BrowserSnackbar)
         val expectedParams = mapOf("source" to "browser_snackbar", "has_credentials_saved" to "0")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
-    fun whenScreenLaunchedFromBrowserThenCorrectLaunchPixelSent() {
+    fun whenScreenLaunchedFromBrowserThenCorrectLaunchPixelsSent() {
         testee.sendLaunchPixel(BrowserOverflow)
         val expectedParams = mapOf("source" to "overflow_menu", "has_credentials_saved" to "0")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
-    fun whenScreenLaunchedFromSyncThenCorrectLaunchPixelSent() {
+    fun whenScreenLaunchedFromSyncThenCorrectLaunchPixelsSent() {
         testee.sendLaunchPixel(Sync)
         val expectedParams = mapOf("source" to "sync", "has_credentials_saved" to "0")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
-    fun whenScreenLaunchedFromDisablePromptThenCorrectLaunchPixelSent() {
+    fun whenScreenLaunchedFromDisablePromptThenCorrectLaunchPixelsSent() {
         testee.sendLaunchPixel(DisableInSettingsPrompt)
         val expectedParams = mapOf("source" to "save_login_disable_prompt", "has_credentials_saved" to "0")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
-    fun whenScreenLaunchedFromNewTabShortcutThenCorrectLaunchPixelSent() {
+    fun whenScreenLaunchedFromNewTabShortcutThenCorrectLaunchPixelsSent() {
         testee.sendLaunchPixel(NewTabShortcut)
         val expectedParams = mapOf("source" to "new_tab_page_shortcut", "has_credentials_saved" to "0")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
-    fun whenScreenLaunchedFromSettingsActivityThenCorrectLaunchPixelSent() {
+    fun whenScreenLaunchedFromSettingsActivityThenCorrectLaunchPixelsSent() {
         testee.sendLaunchPixel(SettingsActivity)
         val expectedParams = mapOf("source" to "settings", "has_credentials_saved" to "0")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
-    fun whenScreenLaunchedFromInternalDevSettingsActivityThenCorrectLaunchPixelSent() {
+    fun whenScreenLaunchedFromInternalDevSettingsActivityThenCorrectLaunchPixelsSent() {
         testee.sendLaunchPixel(InternalDevSettings)
         val expectedParams = mapOf("source" to "internal_dev_settings", "has_credentials_saved" to "0")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
-    fun `when screen launched from settings activity and one credential saved then correct launch pixel sent`() = runTest {
-        whenever(mockStore.getCredentialCount()).thenReturn(flowOf(1))
+    fun `when screen launched from settings activity and one credential saved then correct launch pixels sent`() = runTest {
+        whenever(mockStore.getCredentialCount()).thenReturn(flowOf(Result.success(1)))
 
         testee.sendLaunchPixel(SettingsActivity)
         val expectedParams = mapOf("source" to "settings", "has_credentials_saved" to "1")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
-    fun `when screen launched from browser menu and multiple credentials saved then correct launch pixel sent`() = runTest {
-        whenever(mockStore.getCredentialCount()).thenReturn(flowOf(7))
+    fun `when screen launched from browser menu and multiple credentials saved then correct launch pixels sent`() = runTest {
+        whenever(mockStore.getCredentialCount()).thenReturn(flowOf(Result.success(7)))
 
         testee.sendLaunchPixel(BrowserOverflow)
         val expectedParams = mapOf("source" to "overflow_menu", "has_credentials_saved" to "1")
         verify(pixel).fire(eq(AUTOFILL_MANAGEMENT_SCREEN_OPENED), eq(expectedParams), any(), eq(Count))
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED)
+        verify(pixel).fire(AutofillPixelNames.PRODUCT_TELEMETRY_SURFACE_PASSWORDS_OPENED_DAILY, type = Pixel.PixelType.Daily())
     }
 
     @Test
@@ -1018,8 +1039,8 @@ class AutofillSettingsActivityScreenViewModelTest {
     }
 
     @Test
-    fun whenImportGooglePasswordsFeatureDisabledDueToWebMessageListenerNotSupportedThenViewStateReflectsThat() = runTest {
-        whenever(webViewCapabilityChecker.isSupported(WebMessageListener)).thenReturn(false)
+    fun whenImportGooglePasswordsFeatureDisabledDueToWebViewNotSupportedThenViewStateReflectsThat() = runTest {
+        whenever(importGooglePasswordsCapabilityChecker.webViewCapableOfImporting()).thenReturn(false)
         testee.onViewCreated()
         testee.viewState.test {
             assertFalse(awaitItem().canImportFromGooglePasswords)
@@ -1028,18 +1049,7 @@ class AutofillSettingsActivityScreenViewModelTest {
     }
 
     @Test
-    fun whenImportGooglePasswordsFeatureDisabledDueToDocumentStartJavascriptNotSupportedThenViewStateReflectsThat() = runTest {
-        whenever(webViewCapabilityChecker.isSupported(DocumentStartJavaScript)).thenReturn(false)
-        testee.onViewCreated()
-        testee.viewState.test {
-            assertFalse(awaitItem().canImportFromGooglePasswords)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun whenShowListModeWithNewFeatureEnabledThenSeeNewListMode() = runTest {
-        autofillFeature.newScrollBehaviourInPasswordManagementScreen().setRawStoredState(State(enable = true))
+    fun whenShowListModeThenSeeNewListMode() = runTest {
         testee.onInitialiseListMode()
         testee.commands.test {
             awaitItem().verifyHasCommandToShowListMode()
@@ -1048,11 +1058,12 @@ class AutofillSettingsActivityScreenViewModelTest {
     }
 
     @Test
-    fun whenShowListModeWithNewScrollFeatureDisabledThenSeeLegacyListMode() = runTest {
-        autofillFeature.newScrollBehaviourInPasswordManagementScreen().setRawStoredState(State(enable = false))
-        testee.onInitialiseListMode()
-        testee.commands.test {
-            awaitItem().verifyHasCommandToShowLegacyListMode()
+    fun whenOnImportPasswordsFromGooglePasswordManagerCalledThenCorrectCommandIsAdded() = runTest {
+        testee.onImportPasswordsFromGooglePasswordManager(PasswordManagementEmptyState)
+
+        testee.commandsListView.test {
+            val commands = awaitItem()
+            assertTrue(commands.contains(LaunchImportGooglePasswords(PasswordManagementEmptyState)))
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1065,10 +1076,6 @@ class AutofillSettingsActivityScreenViewModelTest {
 
     private fun List<Command>.verifyHasCommandToShowListMode() {
         assertNotNull(this.firstOrNull { it is ShowListMode })
-    }
-
-    private fun List<Command>.verifyHasCommandToShowLegacyListMode() {
-        assertNotNull(this.firstOrNull { it is ShowListModeLegacy })
     }
 
     private fun List<ListModeCommand>.verifyDoesNotHaveCommandToShowDeleteAllConfirmation() {
@@ -1109,7 +1116,7 @@ class AutofillSettingsActivityScreenViewModelTest {
     }
 
     private suspend fun configureStoreToHaveThisManyCredentialsStored(value: Int) {
-        whenever(mockStore.getCredentialCount()).thenReturn(flowOf(value))
+        whenever(mockStore.getCredentialCount()).thenReturn(flowOf(Result.success(value)))
 
         val credentialList = mutableListOf<LoginCredentials>()
         repeat(value) { credentialList.add(someCredentials()) }

@@ -20,16 +20,18 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.duckduckgo.app.global.file.FileDeleter
-import com.duckduckgo.app.pixels.remoteconfig.AndroidBrowserConfigFeature
+import com.duckduckgo.browser.feature.toggles.AndroidBrowserConfigFeature
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.sha256
-import java.io.File
-import java.io.FileOutputStream
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.LogPriority
+import logcat.LogPriority.INFO
+import logcat.logcat
+import java.io.File
+import java.io.FileOutputStream
 
 interface FaviconPersister {
     fun faviconFile(
@@ -95,7 +97,24 @@ class FileBasedFaviconPersister(
     ) {
         withContext(dispatcherProvider.io()) {
             val persistedFile = fileForFavicon(directory, newSubfolder, newFilename)
-            file.copyTo(persistedFile, overwrite = true)
+            if (androidBrowserConfigFeature.atomicFaviconWrites().isEnabled()) {
+                val tmp = File(persistedFile.parent, "${persistedFile.name}.tmp")
+                runCatching {
+                    file.copyTo(tmp, overwrite = true)
+                    if (!tmp.renameTo(persistedFile)) {
+                        tmp.delete()
+                        logcat(LogPriority.WARN) { "FaviconPersister [copyToDirectory][atomic]: failed to rename to ${persistedFile.name}" }
+                    }
+                }.onFailure {
+                    tmp.delete()
+                }
+            } else {
+                try {
+                    file.copyTo(persistedFile, overwrite = true)
+                } catch (e: FileAlreadyExistsException) {
+                    logcat { "FaviconPersister copyToDirectory [legacy]: failed to overwrite ${persistedFile.name}: ${e.message}" }
+                }
+            }
         }
     }
 
@@ -171,7 +190,7 @@ class FileBasedFaviconPersister(
         val existingFile = fileForFavicon(directory, subFolder, domain)
 
         if (existingFile.exists()) {
-            Timber.i("Favicon favicon exists for $domain in $subFolder")
+            logcat(INFO) { "Favicon favicon exists for $domain in $subFolder" }
             val existingFavicon = BitmapFactory.decodeFile(existingFile.absolutePath)
 
             existingFavicon?.let {
@@ -201,7 +220,7 @@ class FileBasedFaviconPersister(
             val existingFile = fileForFavicon(directory, subFolder, domain)
 
             if (existingFile.exists()) {
-                Timber.i("Favicon favicon exists for $domain in $subFolder")
+                logcat(INFO) { "Favicon favicon exists for $domain in $subFolder" }
                 val existingFavicon = BitmapFactory.decodeFile(existingFile.absolutePath)
 
                 existingFavicon?.let {
@@ -213,9 +232,13 @@ class FileBasedFaviconPersister(
 
             val faviconFile = prepareDestinationFile(directory, subFolder, domain)
             runCatching {
-                FileOutputStream(faviconFile).use { outputStream ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-                    outputStream.flush()
+                if (androidBrowserConfigFeature.atomicFaviconWrites().isEnabled()) {
+                    writeBitmapAtomically(faviconFile, bitmap)
+                } else {
+                    FileOutputStream(faviconFile).use { outputStream ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                        outputStream.flush()
+                    }
                 }
             }
 
@@ -233,10 +256,27 @@ class FileBasedFaviconPersister(
         bitmap: Bitmap,
     ) {
         runCatching {
-            FileOutputStream(file).use { outputStream ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-                outputStream.flush()
+            if (androidBrowserConfigFeature.atomicFaviconWrites().isEnabled()) {
+                writeBitmapAtomically(file, bitmap)
+            } else {
+                FileOutputStream(file).use { outputStream ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                    outputStream.flush()
+                }
             }
+        }
+    }
+
+    private fun writeBitmapAtomically(file: File, bitmap: Bitmap) {
+        val tmp = File(file.parent, "${file.name}.tmp")
+        FileOutputStream(tmp).use { outputStream ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+            outputStream.flush()
+        }
+        if (!tmp.renameTo(file)) {
+            // should be very unlikely to get here; try to clean up tmp file if it happens
+            tmp.delete()
+            logcat(LogPriority.WARN) { "FaviconPersister [atomic]: failed to rename ${tmp.name} to ${file.name}" }
         }
     }
 
@@ -249,6 +289,7 @@ class FileBasedFaviconPersister(
     companion object {
         const val FAVICON_TEMP_DIR = "faviconsTemp"
         const val FAVICON_PERSISTED_DIR = "favicons"
+        const val FAVICON_WIDGET_PLACEHOLDERS_DIR = "faviconsWidgetPlaceholders"
         const val NO_SUBFOLDER = ""
     }
 }

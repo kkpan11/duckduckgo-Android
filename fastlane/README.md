@@ -61,7 +61,7 @@ Deploy APK to GitHub
 [bundle exec] fastlane android tag_and_push_release_version
 ```
 
-Create a new release branch and update the version
+Cut a local release branch, merge it into develop then main, and publish the tag last
 
 ### android release
 
@@ -86,14 +86,6 @@ Start new hotfix
 ```
 
 Finish a hotfix in progress
-
-### android asana_release_prep
-
-```sh
-[bundle exec] fastlane android asana_release_prep
-```
-
-Prepares the Asana release board with a new release task, tags tasks waiting for release etc..
 
 ----
 

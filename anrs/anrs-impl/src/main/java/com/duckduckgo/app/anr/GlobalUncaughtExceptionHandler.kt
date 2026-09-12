@@ -25,14 +25,14 @@ import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.anvil.annotations.ContributesTo
 import dagger.Module
 import dagger.Provides
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import logcat.LogPriority.ERROR
+import logcat.asLog
+import logcat.logcat
 import java.io.InterruptedIOException
 import javax.inject.Inject
 import javax.inject.Qualifier
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import logcat.LogPriority
-import logcat.asLog
-import logcat.logcat
 
 @ContributesBinding(AppScope::class)
 class GlobalUncaughtExceptionHandler @Inject constructor(
@@ -82,7 +82,7 @@ class GlobalUncaughtExceptionHandler @Inject constructor(
                     )
                 }
             } catch (e: Throwable) {
-                logcat(LogPriority.ERROR) { e.asLog() }
+                logcat(ERROR) { e.asLog() }
             } finally {
                 originalHandler.uncaughtException(thread, originalException)
             }

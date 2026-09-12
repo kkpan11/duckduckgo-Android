@@ -16,25 +16,44 @@
 
 package com.duckduckgo.remote.messaging.impl
 
-import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.CurrentTimeProvider
 import com.duckduckgo.remote.messaging.api.RemoteMessage
-import com.duckduckgo.remote.messaging.api.RemoteMessagingRepository
+import com.duckduckgo.remote.messaging.api.Surface
 import com.duckduckgo.remote.messaging.impl.mappers.MessageMapper
+import com.duckduckgo.remote.messaging.impl.store.RemoteMessageImageStore
 import com.duckduckgo.remote.messaging.store.RemoteMessageEntity
 import com.duckduckgo.remote.messaging.store.RemoteMessageEntity.Status
 import com.duckduckgo.remote.messaging.store.RemoteMessageEntity.Status.SCHEDULED
 import com.duckduckgo.remote.messaging.store.RemoteMessagesDao
 import com.duckduckgo.remote.messaging.store.RemoteMessagingConfigRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
+
+interface RemoteMessagingRepository {
+    fun getMessageById(id: String): RemoteMessage?
+    fun activeMessage(message: RemoteMessage?)
+    fun message(): RemoteMessage?
+    fun messageFlow(): Flow<RemoteMessage?>
+    suspend fun dismissMessage(id: String)
+    fun dismissedMessages(): List<String>
+    fun didShow(id: String): Boolean
+    fun markAsShown(remoteMessage: RemoteMessage)
+
+    suspend fun getRemoteMessageImageFile(surface: Surface): String?
+
+    suspend fun clearMessageImage(surface: Surface)
+
+    suspend fun getCardItemImageFilePath(itemId: String): String?
+}
 
 class AppRemoteMessagingRepository(
     private val remoteMessagingConfigRepository: RemoteMessagingConfigRepository,
     private val remoteMessagesDao: RemoteMessagesDao,
-    private val dispatchers: DispatcherProvider,
     private val messageMapper: MessageMapper,
+    private val remoteMessageImageStore: RemoteMessageImageStore,
+    private val currentTimeProvider: CurrentTimeProvider,
+    private val autoDismissEvaluator: RemoteMessageAutoDismissEvaluator,
 ) : RemoteMessagingRepository {
 
     override fun getMessageById(id: String): RemoteMessage? {
@@ -55,46 +74,71 @@ class AppRemoteMessagingRepository(
     override fun didShow(id: String) = remoteMessagesDao.messagesById(id)?.shown ?: false
 
     override fun markAsShown(remoteMessage: RemoteMessage) {
-        val message = remoteMessagesDao.messagesById(remoteMessage.id) ?: return
-        remoteMessagesDao.insert(message.copy(shown = true))
+        val messageEntity = remoteMessagesDao.messagesById(remoteMessage.id) ?: return
+        // Stamp the first-shown timestamp on the first impression only.
+        remoteMessagesDao.insert(
+            messageEntity.copy(
+                shown = true,
+                firstShownDate = messageEntity.firstShownDate ?: currentTimeProvider.currentTimeMillis(),
+                impressions = messageEntity.impressions + 1,
+            ),
+        )
     }
 
     override fun message(): RemoteMessage? {
-        val message = remoteMessagesDao.message()
-        if (message == null || message.message.isEmpty()) return null
+        val messageEntity = remoteMessagesDao.message()
+        if (messageEntity == null || messageEntity.message.isEmpty()) return null
 
-        val remoteMessage = messageMapper.fromMessage(message.message) ?: return null
-        RemoteMessage(
-            id = message.id,
-            content = remoteMessage.content,
-            emptyList(),
-            emptyList(),
-        )
+        val remoteMessage = messageMapper.fromMessage(messageEntity.message) ?: return null
+        if (autoDismissEvaluator.shouldAutoDismiss(remoteMessage, messageEntity)) {
+            markDismissed(messageEntity.id)
+            return null
+        }
         return remoteMessage
     }
 
     override fun messageFlow(): Flow<RemoteMessage?> {
-        return remoteMessagesDao.messagesFlow().distinctUntilChanged().map {
-            if (it == null || it.message.isEmpty()) return@map null
+        return remoteMessagesDao.messagesFlow()
+            .distinctUntilChangedBy { it?.id to it?.message }
+            .map { messageEntity ->
+                if (messageEntity == null || messageEntity.message.isEmpty()) return@map null
 
-            val message = messageMapper.fromMessage(it.message) ?: return@map null
-            RemoteMessage(
-                id = it.id,
-                content = message.content,
-                emptyList(),
-                emptyList(),
-            )
-        }
+                val remoteMessage = messageMapper.fromMessage(messageEntity.message) ?: return@map null
+                if (autoDismissEvaluator.shouldAutoDismiss(remoteMessage, messageEntity)) {
+                    markDismissed(messageEntity.id)
+                    return@map null
+                }
+                RemoteMessage(
+                    id = messageEntity.id,
+                    content = remoteMessage.content,
+                    emptyList(),
+                    emptyList(),
+                    remoteMessage.surfaces,
+                    remoteMessage.displayConditions,
+                )
+            }
     }
 
-    override suspend fun dismissMessage(id: String) {
-        withContext(dispatchers.io()) {
-            remoteMessagesDao.updateState(id, Status.DISMISSED)
-            remoteMessagingConfigRepository.invalidate()
-        }
+    override suspend fun dismissMessage(id: String) = markDismissed(id)
+
+    private fun markDismissed(id: String) {
+        remoteMessagesDao.updateState(id, Status.DISMISSED)
+        remoteMessagingConfigRepository.invalidate()
     }
 
     override fun dismissedMessages(): List<String> {
         return remoteMessagesDao.dismissedMessages().map { it.id }.toList()
+    }
+
+    override suspend fun getRemoteMessageImageFile(surface: Surface): String? {
+        return remoteMessageImageStore.getLocalImageFilePath(surface)
+    }
+
+    override suspend fun clearMessageImage(surface: Surface) {
+        remoteMessageImageStore.clearStoredImageFile(surface)
+    }
+
+    override suspend fun getCardItemImageFilePath(itemId: String): String? {
+        return remoteMessageImageStore.getCardItemImageFilePath(itemId)
     }
 }

@@ -20,6 +20,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import com.duckduckgo.widget.SearchAndFavoritesWidget
+import com.duckduckgo.widget.SearchOnlyWidget
 import com.duckduckgo.widget.SearchWidget
 import com.duckduckgo.widget.SearchWidgetLight
 import javax.inject.Inject
@@ -34,7 +35,10 @@ class AppWidgetCapabilities @Inject constructor(
 ) : WidgetCapabilities {
 
     override val supportsAutomaticWidgetAdd: Boolean
-        get() = AppWidgetManager.getInstance(context).isRequestPinAppWidgetSupported
+        get() {
+            val manager = AppWidgetManager.getInstance(context) ?: return false
+            return manager.isRequestPinAppWidgetSupported
+        }
 
     override val hasInstalledWidgets: Boolean
         get() = context.hasInstalledWidgets
@@ -42,9 +46,10 @@ class AppWidgetCapabilities @Inject constructor(
 
 val Context.hasInstalledWidgets: Boolean
     get() {
-        val manager = AppWidgetManager.getInstance(this)
+        val manager = AppWidgetManager.getInstance(this) ?: return false
         val hasDarkWidget = manager.getAppWidgetIds(ComponentName(this, SearchWidget::class.java)).any()
         val hasLightWidget = manager.getAppWidgetIds(ComponentName(this, SearchWidgetLight::class.java)).any()
+        val hasSearchOnlyWidget = manager.getAppWidgetIds(ComponentName(this, SearchOnlyWidget::class.java)).any()
         val hasSearchAndFavoritesWidget = manager.getAppWidgetIds(ComponentName(this, SearchAndFavoritesWidget::class.java)).any()
-        return hasDarkWidget || hasLightWidget || hasSearchAndFavoritesWidget
+        return hasDarkWidget || hasLightWidget || hasSearchOnlyWidget || hasSearchAndFavoritesWidget
     }

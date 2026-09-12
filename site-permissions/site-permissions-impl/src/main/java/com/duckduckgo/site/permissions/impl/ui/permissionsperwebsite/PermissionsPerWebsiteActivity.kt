@@ -28,6 +28,9 @@ import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.view.dialog.RadioListAlertDialogBuilder
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.common.utils.extensions.websiteFromGeoLocationsApiOrigin
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.site.permissions.impl.R
@@ -41,10 +44,17 @@ import com.duckduckgo.site.permissions.impl.ui.permissionsperwebsite.WebsitePerm
 import com.duckduckgo.site.permissions.impl.ui.permissionsperwebsite.WebsitePermissionSettingOption.DENY
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.logcat
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 class PermissionsPerWebsiteActivity : DuckDuckGoActivity() {
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private val viewModel: PermissionsPerWebsiteViewModel by bindViewModel()
     private val binding: ActivityPermissionPerWebsiteBinding by viewBinding()
@@ -56,10 +66,25 @@ class PermissionsPerWebsiteActivity : DuckDuckGoActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.SETTINGS)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
+
         setContentView(binding.root)
         setViews()
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
         observeViewModel()
         viewModel.websitePermissionSettings(url)
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyNavigationBarInsets(binding.permissionsPerWebsiteRecyclerView, drawBehindGestureNav = true)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -136,8 +161,8 @@ class PermissionsPerWebsiteActivity : DuckDuckGoActivity() {
                     override fun onPositiveButtonClicked(selectedItem: Int) {
                         val permissionSettingSelected = selectedItem.getPermissionSettingOptionFromPosition()
                         val newPermissionSetting = WebsitePermissionSetting(currentOption.icon, currentOption.title, permissionSettingSelected)
-                        Timber.d("Permissions: permissionSettingSelected $permissionSettingSelected")
-                        Timber.d("Permissions: newPermissionSetting $newPermissionSetting")
+                        logcat { "Permissions: permissionSettingSelected $permissionSettingSelected" }
+                        logcat { "Permissions: newPermissionSetting $newPermissionSetting" }
                         viewModel.onPermissionSettingSelected(newPermissionSetting, url)
                     }
                 },

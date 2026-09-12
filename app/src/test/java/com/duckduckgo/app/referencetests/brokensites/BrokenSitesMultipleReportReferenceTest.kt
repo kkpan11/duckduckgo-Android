@@ -43,12 +43,9 @@ import com.duckduckgo.privacy.config.api.Gpc
 import com.duckduckgo.privacy.config.api.PrivacyConfig
 import com.duckduckgo.privacy.config.api.PrivacyConfigData
 import com.duckduckgo.privacy.config.impl.network.JSONObjectAdapter
-import com.duckduckgo.privacyprotectionspopup.api.PrivacyProtectionsPopupExperimentExternalPixels
+import com.duckduckgo.site.permissions.impl.SitePermissionsRepository
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
-import java.net.URLEncoder
-import java.util.*
-import java.util.regex.Pattern
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -66,6 +63,9 @@ import org.mockito.kotlin.reset
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.ParameterizedRobolectricTestRunner
+import java.net.URLEncoder
+import java.util.*
+import java.util.regex.Pattern
 
 @RunWith(ParameterizedRobolectricTestRunner::class)
 class BrokenSitesMultipleReportReferenceTest(private val testCase: MultipleReportTestCase) {
@@ -93,11 +93,9 @@ class BrokenSitesMultipleReportReferenceTest(private val testCase: MultipleRepor
 
     private val networkProtectionState: NetworkProtectionState = mock()
 
-    private val privacyProtectionsPopupExperimentExternalPixels: PrivacyProtectionsPopupExperimentExternalPixels = mock {
-        runBlocking { whenever(mock.getPixelParams()).thenReturn(emptyMap()) }
-    }
-
     private val webViewVersionProvider: WebViewVersionProvider = mock()
+
+    private val sitePermissionsRepository: SitePermissionsRepository = mock()
 
     private lateinit var testBlockListFeature: TestBlockListFeature
     private lateinit var inventory: FeatureTogglesInventory
@@ -128,6 +126,7 @@ class BrokenSitesMultipleReportReferenceTest(private val testCase: MultipleRepor
     fun before() {
         MockitoAnnotations.openMocks(this)
         runBlocking { whenever(networkProtectionState.isRunning()) }.thenReturn(false)
+        runBlocking { whenever(sitePermissionsRepository.isDrmEnabledForSite(any())).thenReturn(true) }
 
         testBlockListFeature = FeatureToggles.Builder(
             FakeToggleStore(),
@@ -161,11 +160,11 @@ class BrokenSitesMultipleReportReferenceTest(private val testCase: MultipleRepor
             mock(),
             mock(),
             mockBrokenSiteLastSentReport,
-            privacyProtectionsPopupExperimentExternalPixels,
             networkProtectionState,
             webViewVersionProvider,
             ampLinks = mock(),
             inventory,
+            sitePermissionsRepository = sitePermissionsRepository,
         )
     }
 
@@ -189,6 +188,9 @@ class BrokenSitesMultipleReportReferenceTest(private val testCase: MultipleRepor
             whenever(mockPrivacyConfig.privacyConfigData()).thenReturn(
                 PrivacyConfigData(version = report.remoteConfigVersion ?: "v", eTag = report.remoteConfigEtag ?: "e"),
             )
+            runBlocking {
+                whenever(sitePermissionsRepository.isDrmEnabledForSite(report.siteURL)).thenReturn(report.drmEnabled ?: true)
+            }
 
             if (previousSite == currentSite) {
                 whenever(mockBrokenSiteLastSentReport.getLastSentDay(any())).thenReturn("2023-11-01")
@@ -208,6 +210,8 @@ class BrokenSitesMultipleReportReferenceTest(private val testCase: MultipleRepor
                 consentManaged = report.consentManaged.toBoolean(),
                 consentOptOutFailed = report.consentOptOutFailed.toBoolean(),
                 consentSelfTestFailed = report.consentSelfTestFailed.toBoolean(),
+                consentRule = null,
+                consentReloadLoop = false,
                 errorCodes = "",
                 httpErrorCodes = "",
                 loginSite = null,
@@ -215,6 +219,9 @@ class BrokenSitesMultipleReportReferenceTest(private val testCase: MultipleRepor
                 userRefreshCount = 0,
                 openerContext = null,
                 jsPerformance = null,
+                contentScopeExperiments = null,
+                debugFlags = null,
+                breakageData = report.breakageData,
             )
 
             testee.submitBrokenSiteFeedback(brokenSite, toggle = false)
@@ -283,6 +290,8 @@ class BrokenSitesMultipleReportReferenceTest(private val testCase: MultipleRepor
         val remoteConfigEtag: String?,
         val remoteConfigVersion: String?,
         val lastSentDay: String?,
+        val drmEnabled: Boolean?,
+        val breakageData: String?,
     )
 
     data class UrlParam(

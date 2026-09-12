@@ -4,6 +4,9 @@ Thank you for taking the time to contribute to DuckDuckGo! :sparkles:
 
 We are pleased to open up the project to you - our community. How can you contribute?
 
+## Internal contributors
+If you're an internal contributor please read the [contributions.md](.claude/docs/contributions.md) "API Proposals" and "Tech Design" sections. Any change in the `api` should be accompanied by an API Proposal. Any change that is more complex and involves multiple components should be accompanied by a Tech Design.
+
 ## Improve translations
 We are introducing support for additional languages and would like your help in improving the translations. Please see [improving translations](TRANSLATIONS.md) for how you can help us.
 
@@ -50,6 +53,5 @@ If your PR is failing because of that, please make sure that you follow our [sty
 You can also trigger an automatic code formatting of the code by executing:
 
 ```
-./gradleW code_format_checks
-./gradleW formatKotlin
+./gradleW app:spotlessApply
 ```

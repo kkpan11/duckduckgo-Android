@@ -21,19 +21,42 @@ import android.os.Binder
 import android.os.Bundle
 import androidx.browser.customtabs.CustomTabsService
 import androidx.browser.customtabs.CustomTabsSessionToken
-import timber.log.Timber
+import com.duckduckgo.anvil.annotations.InjectWith
+import com.duckduckgo.di.scopes.ServiceScope
+import dagger.android.AndroidInjection
+import logcat.logcat
+import javax.inject.Inject
 
+@InjectWith(ServiceScope::class)
 class DuckDuckGoCustomTabService : CustomTabsService() {
+
+    @Inject
+    lateinit var sessionRegistry: InternalCustomTabsSessionRegistry
+
+    override fun onCreate() {
+        super.onCreate()
+        AndroidInjection.inject(this)
+    }
+
     override fun warmup(flags: Long): Boolean {
-        Timber.d("warmup called with flags=$flags")
+        logcat { "warmup called with flags=$flags" }
         return true
     }
 
     override fun newSession(sessionToken: CustomTabsSessionToken): Boolean {
         val uid = Binder.getCallingUid()
         val packageName = packageManager.getPackagesForUid(uid)?.singleOrNull()
-        Timber.d("newSession called with sessionToken=$sessionToken; uid=$uid and packageName=$packageName")
+        logcat { "newSession called with sessionToken=$sessionToken; uid=$uid and packageName=$packageName" }
+        if (packageName != null) {
+            sessionRegistry.recordSession(sessionToken, packageName)
+        }
         return true
+    }
+
+    override fun cleanUpSession(sessionToken: CustomTabsSessionToken): Boolean {
+        logcat { "cleanUpSession called with sessionToken=$sessionToken" }
+        sessionRegistry.clearSession(sessionToken)
+        return super.cleanUpSession(sessionToken)
     }
 
     override fun mayLaunchUrl(
@@ -42,19 +65,17 @@ class DuckDuckGoCustomTabService : CustomTabsService() {
         extras: Bundle?,
         otherLikelyBundles: MutableList<Bundle>?,
     ): Boolean {
-        Timber.d(
-            "mayLaunchUrl called with sessionToken=$sessionToken, url=$url, extras=$extras, otherLikelyBundles=$otherLikelyBundles",
-        )
+        logcat { "mayLaunchUrl called with sessionToken=$sessionToken, url=$url, extras=$extras, otherLikelyBundles=$otherLikelyBundles" }
         return true
     }
 
     override fun extraCommand(commandName: String, args: Bundle?): Bundle? {
-        Timber.d("extraCommand called with commandName=$commandName and args=$args")
+        logcat { "extraCommand called with commandName=$commandName and args=$args" }
         return null
     }
 
     override fun updateVisuals(sessionToken: CustomTabsSessionToken, bundle: Bundle?): Boolean {
-        Timber.d("updateVisuals called with sessionToken=$sessionToken and bundle=$bundle")
+        logcat { "updateVisuals called with sessionToken=$sessionToken and bundle=$bundle" }
         return false
     }
 
@@ -62,7 +83,7 @@ class DuckDuckGoCustomTabService : CustomTabsService() {
         sessionToken: CustomTabsSessionToken,
         postMessageOrigin: Uri,
     ): Boolean {
-        Timber.d("requestPostMessageChannel called with sessionToken=$sessionToken and postMessageOrigin=$postMessageOrigin")
+        logcat { "requestPostMessageChannel called with sessionToken=$sessionToken and postMessageOrigin=$postMessageOrigin" }
         return false
     }
 
@@ -71,7 +92,7 @@ class DuckDuckGoCustomTabService : CustomTabsService() {
         message: String,
         extras: Bundle?,
     ): Int {
-        Timber.d("postMessage called with sessionToken=$sessionToken, message=$message and extras=$extras")
+        logcat { "postMessage called with sessionToken=$sessionToken, message=$message and extras=$extras" }
         return RESULT_FAILURE_DISALLOWED
     }
 
@@ -81,7 +102,7 @@ class DuckDuckGoCustomTabService : CustomTabsService() {
         origin: Uri,
         extras: Bundle?,
     ): Boolean {
-        Timber.d("validateRelationship called with sessionToken=$sessionToken, relation=$relation, origin=$origin, extras=$extras")
+        logcat { "validateRelationship called with sessionToken=$sessionToken, relation=$relation, origin=$origin, extras=$extras" }
         return true
     }
 
@@ -91,7 +112,7 @@ class DuckDuckGoCustomTabService : CustomTabsService() {
         purpose: Int,
         extras: Bundle?,
     ): Boolean {
-        Timber.d("receiveFile called with sessionToken=$sessionToken, uri=$uri, purpose=$purpose and extras=$extras")
+        logcat { "receiveFile called with sessionToken=$sessionToken, uri=$uri, purpose=$purpose and extras=$extras" }
         return false
     }
 }

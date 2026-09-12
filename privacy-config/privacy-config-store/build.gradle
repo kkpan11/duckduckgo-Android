@@ -30,13 +30,12 @@ dependencies {
 
     implementation AndroidX.core.ktx
 
-    implementation JakeWharton.timber
+    implementation "com.squareup.logcat:logcat:_"
     implementation Square.moshi
 
     // Room
     implementation AndroidX.room.runtime
     implementation AndroidX.room.rxJava2
-    implementation AndroidX.room.ktx
     ksp AndroidX.room.compiler
 
     testImplementation Testing.junit4

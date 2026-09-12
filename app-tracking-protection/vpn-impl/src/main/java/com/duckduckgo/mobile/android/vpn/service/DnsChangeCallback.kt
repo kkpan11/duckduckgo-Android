@@ -26,13 +26,13 @@ import android.net.NetworkRequest
 import com.duckduckgo.app.di.AppCoroutineScope
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.mobile.android.vpn.network.util.getActiveNetwork
-import java.net.InetAddress
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import logcat.LogPriority.ERROR
 import logcat.asLog
 import logcat.logcat
+import java.net.InetAddress
+import javax.inject.Inject
 
 class DnsChangeCallback @Inject constructor(
     private val context: Context,
@@ -44,6 +44,7 @@ class DnsChangeCallback @Inject constructor(
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?
     }
     private var lastDns: List<InetAddress>? = null
+    private var registered: Boolean = false
 
     override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
         logcat { "onLinkPropertiesChanged: $linkProperties" }
@@ -68,22 +69,27 @@ class DnsChangeCallback @Inject constructor(
     }
 
     internal fun register() {
+        if (registered) return
         kotlin.runCatching {
             val request = NetworkRequest.Builder().apply {
                 addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
                 addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             }.build()
             connectivityManager?.registerNetworkCallback(request, this)
+            registered = true
         }.onFailure {
             logcat(ERROR) { it.asLog() }
         }
     }
 
     internal fun unregister() {
+        if (!registered) return
         kotlin.runCatching {
             connectivityManager?.unregisterNetworkCallback(this)
         }.onFailure {
             logcat(ERROR) { it.asLog() }
+        }.also {
+            registered = false
         }
     }
 

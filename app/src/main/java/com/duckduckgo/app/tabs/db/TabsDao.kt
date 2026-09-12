@@ -23,9 +23,10 @@ import com.duckduckgo.app.tabs.model.TabSelectionEntity
 import com.duckduckgo.common.utils.swap
 import com.duckduckgo.di.scopes.AppScope
 import dagger.SingleInstanceIn
+import kotlinx.coroutines.flow.Flow
+import logcat.logcat
 import java.time.LocalDateTime
 import kotlin.math.max
-import kotlinx.coroutines.flow.Flow
 
 @Dao
 @SingleInstanceIn(AppScope::class)
@@ -40,20 +41,17 @@ abstract class TabsDao {
     @Query("select * from tabs inner join tab_selection on tabs.tabId = tab_selection.tabId order by position limit 1")
     abstract fun liveSelectedTab(): LiveData<TabEntity>
 
-    @Query("select * from tabs inner join tab_selection on tabs.tabId = tab_selection.tabId order by position limit 1")
-    abstract fun flowSelectedTab(): Flow<TabEntity?>
-
     @Query("select * from tabs where deletable is 0 order by position")
     abstract fun tabs(): List<TabEntity>
-
-    @Query("select * from tabs where deletable is 0 order by position")
-    abstract fun flowTabs(): Flow<List<TabEntity>>
 
     @Query("select * from tabs where deletable is 0 order by position")
     abstract fun liveTabs(): LiveData<List<TabEntity>>
 
     @Query("select * from tabs where deletable is 1 order by position")
     abstract fun flowDeletableTabs(): Flow<List<TabEntity>>
+
+    @Query("select count(*) from tabs")
+    abstract fun flowTabCount(): Flow<Int>
 
     @Query("select * from tabs where tabId = :tabId")
     abstract fun tab(tabId: String): TabEntity?
@@ -78,6 +76,17 @@ abstract class TabsDao {
 
     @Query("select tabId from tabs where deletable is 1")
     abstract fun getDeletableTabIds(): List<String>
+
+    @Transaction
+    open fun replaceTab(tabId: String, tab: TabEntity) {
+        tab(tabId)?.let { oldTab ->
+            val newTab = tab.copy(position = oldTab.position)
+            insertTabAtPosition(newTab)
+            insertTabSelection(TabSelectionEntity(tabId = newTab.tabId))
+            deleteTab(oldTab)
+            deleteBlankTabsExceptSelected()
+        }
+    }
 
     @Transaction
     open fun markTabAsDeletable(tab: TabEntity) {
@@ -156,14 +165,31 @@ abstract class TabsDao {
     @Query("delete from tabs where url is null")
     abstract fun deleteBlankTabs()
 
+    @Query("delete from tabs where url is null and tabId not in (select tabId from tab_selection)")
+    abstract fun deleteBlankTabsExceptSelected()
+
     @Query("update tabs set position = position + 1 where position >= :position")
     abstract fun incrementPositionStartingAt(position: Int)
 
     @Transaction
-    open fun addAndSelectTab(tab: TabEntity) {
-        deleteBlankTabs()
-        insertTab(tab)
-        insertTabSelection(TabSelectionEntity(tabId = tab.tabId))
+    open fun addAndSelectTab(tab: TabEntity, updateIfBlankParent: Boolean = false) {
+        try {
+            val parent = tab.sourceTabId?.let { tab(it) }
+            val newTab = if (updateIfBlankParent && parent != null && parent.url == null) {
+                /*
+                 * If the parent tab is blank, we need to update the parent tab with the previous
+                 * one. Otherwise, foreign key constrains won't be met
+                 */
+                tab.copy(sourceTabId = parent.sourceTabId, position = parent.position)
+            } else {
+                tab
+            }
+            deleteBlankTabs()
+            insertTab(newTab)
+            insertTabSelection(TabSelectionEntity(tabId = newTab.tabId))
+        } catch (e: Exception) {
+            logcat { "Error adding and selecting tab: $e" }
+        }
     }
 
     @Transaction
@@ -212,6 +238,18 @@ abstract class TabsDao {
     fun lastTab(): TabEntity? {
         return tabs().lastOrNull()
     }
+
+    @Query(
+        "select * from tabs where deletable is 0 and lastAccessTime is not null" +
+            " and url is not null and title is not null order by lastAccessTime desc limit 1",
+    )
+    abstract fun lastAccessedTab(): TabEntity?
+
+    @Query(
+        "select * from tabs where deletable is 0 and lastAccessTime is not null" +
+            " and url is not null and title is not null order by lastAccessTime desc limit 1",
+    )
+    abstract fun flowLastAccessedTab(): Flow<TabEntity?>
 
     @Query("update tabs set lastAccessTime=:lastAccessTime where tabId=:tabId")
     abstract fun updateTabLastAccess(

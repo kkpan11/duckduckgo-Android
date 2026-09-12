@@ -17,7 +17,6 @@
 package com.duckduckgo.espresso.privacy
 
 import android.webkit.WebView
-import androidx.test.core.app.*
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.IdlingRegistry
 import androidx.test.espresso.IdlingResource
@@ -30,10 +29,14 @@ import androidx.test.ext.junit.rules.activityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
 import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.R
+import com.duckduckgo.app.browser.clickMenuItem
+import com.duckduckgo.app.browser.mode.InAppNavigation
 import com.duckduckgo.espresso.*
 import com.duckduckgo.privacy.config.impl.network.JSONObjectAdapter
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
+import org.hamcrest.Matchers.allOf
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -42,25 +45,31 @@ import org.junit.Test
 class RequestBlockingTest {
 
     @get:Rule
-    var activityScenarioRule = activityScenarioRule<BrowserActivity>()
+    var activityScenarioRule = activityScenarioRule<BrowserActivity>(
+        BrowserActivity.intent(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            launchSource = InAppNavigation,
+            queryExtra = "https://privacy-test-pages.site/privacy-protections/request-blocking/?run",
+        ),
+    )
+
+    @After
+    fun tearDown() {
+        IdlingRegistry.getInstance().resources.toList().forEach { resource ->
+            IdlingRegistry.getInstance().unregister(resource)
+        }
+    }
 
     @Test @PrivacyTest
     fun whenProtectionsAreEnabledRequestBlockedCorrectly() {
         preparationsForPrivacyTest()
-
-        ActivityScenario.launch<BrowserActivity>(
-            BrowserActivity.intent(
-                InstrumentationRegistry.getInstrumentation().targetContext,
-                "https://privacy-test-pages.site/privacy-protections/request-blocking/?run",
-            ),
-        )
 
         val results = onWebView()
             .perform(script(SCRIPT))
             .get()
 
         val testJson: TestJson? = getTestJson(results.toJSONString())
-        testJson?.value?.map {
+        testJson?.value?.forEach {
             if (!enabledIgnoreIds.contains(it.id)) {
                 assertTrue("Status for ${it.id} should be not loaded or failed and is ${it.status}", nonLoadedValues.contains(it.status))
             }
@@ -72,23 +81,15 @@ class RequestBlockingTest {
         preparationsForPrivacyTest()
 
         var webView: WebView? = null
-
-        val scenario = ActivityScenario.launch<BrowserActivity>(
-            BrowserActivity.intent(
-                InstrumentationRegistry.getInstrumentation().targetContext,
-                "https://privacy-test-pages.site/privacy-protections/request-blocking/?run",
-            ),
-        )
-        scenario.onActivity {
+        activityScenarioRule.scenario.onActivity {
             webView = it.findViewById(R.id.browserWebView)
         }
 
         val idlingResourceForDisableProtections = WebViewIdlingResource(webView!!)
         IdlingRegistry.getInstance().register(idlingResourceForDisableProtections)
 
-        onView(withId(R.id.browserMenu)).perform(click())
-        onView(isRoot()).perform(waitForView(withId(R.id.privacyProtectionMenuItem)))
-        onView(withId(R.id.privacyProtectionMenuItem)).perform(click())
+        onView(allOf(withId(R.id.browserMenu), isClickable())).perform(click())
+        clickMenuItem(withText("Disable Privacy Protection"))
 
         // handle the privacy protection toggle check screen showing
         onView(isRoot()).perform(ViewActions.pressBack())
@@ -101,7 +102,7 @@ class RequestBlockingTest {
             .get()
 
         val testJson: TestJson? = getTestJson(results.toJSONString())
-        testJson?.value?.map {
+        testJson?.value?.forEach {
             if (!disabledIgnoreIds.contains(it.id)) {
                 assertEquals("Status for ${it.id} should be loaded and is ${it.status}", it.status, LOADED)
             }

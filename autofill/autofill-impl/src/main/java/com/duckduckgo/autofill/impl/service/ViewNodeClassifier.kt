@@ -22,8 +22,9 @@ import android.view.View
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface ViewNodeClassifier {
     fun classify(viewNode: ViewNode): AutofillFieldType
@@ -34,14 +35,14 @@ interface ViewNodeClassifier {
 class AutofillServiceViewNodeClassifier @Inject constructor() : ViewNodeClassifier {
     override fun classify(viewNode: ViewNode): AutofillFieldType {
         val autofillId = viewNode.autofillId
-        Timber.v("DDGAutofillService node $autofillId has autofillHints ${viewNode.autofillHints?.joinToString()}")
-        Timber.v("DDGAutofillService node $autofillId has options ${viewNode.autofillOptions?.joinToString()}")
-        Timber.v("DDGAutofillService node $autofillId has idEntry ${viewNode.idEntry}")
-        Timber.v("DDGAutofillService node $autofillId has hints ${viewNode.hint}")
-        Timber.v("DDGAutofillService node $autofillId is inputType ${viewNode.inputType and InputType.TYPE_CLASS_TEXT > 0}")
-        Timber.v("DDGAutofillService node $autofillId has inputType ${viewNode.inputType}")
-        Timber.v("DDGAutofillService node $autofillId has className ${viewNode.className}")
-        Timber.v("DDGAutofillService node $autofillId has htmlInfo.attributes ${viewNode.htmlInfo?.attributes?.joinToString()}")
+        logcat(VERBOSE) { "DDGAutofillService node $autofillId has autofillHints ${viewNode.autofillHints?.joinToString()}" }
+        logcat(VERBOSE) { "DDGAutofillService node $autofillId has options ${viewNode.autofillOptions?.joinToString()}" }
+        logcat(VERBOSE) { "DDGAutofillService node $autofillId has idEntry ${viewNode.idEntry}" }
+        logcat(VERBOSE) { "DDGAutofillService node $autofillId has hints ${viewNode.hint}" }
+        logcat(VERBOSE) { "DDGAutofillService node $autofillId is inputType ${viewNode.inputType and InputType.TYPE_CLASS_TEXT > 0}" }
+        logcat(VERBOSE) { "DDGAutofillService node $autofillId has inputType ${viewNode.inputType}" }
+        logcat(VERBOSE) { "DDGAutofillService node $autofillId has className ${viewNode.className}" }
+        logcat(VERBOSE) { "DDGAutofillService node $autofillId has htmlInfo.attributes ${viewNode.htmlInfo?.attributes?.joinToString()}" }
 
         var autofillType = getType(viewNode.autofillHints)
         if (autofillType == AutofillFieldType.UNKNOWN) {
@@ -62,10 +63,14 @@ class AutofillServiceViewNodeClassifier @Inject constructor() : ViewNodeClassifi
             if (autofillType == AutofillFieldType.UNKNOWN) {
                 val isUsername: Boolean = viewNode.htmlInfo?.attributes?.find { it.first == "type" }?.second?.containsAny(userNameKeywords) == true ||
                     viewNode.htmlInfo?.attributes
-                    ?.firstOrNull { it.first?.containsAny(listOf("autofill")) == true && it.second?.containsAny(userNameKeywords) == true } != null
+                        ?.firstOrNull {
+                            it.first?.containsAny(listOf("autofill")) == true && it.second?.containsAny(userNameKeywords) == true
+                        } != null
                 val isPassword = viewNode.htmlInfo?.attributes?.find { it.first == "type" }?.second?.containsAny(passwordKeywords) == true ||
                     viewNode.htmlInfo?.attributes
-                    ?.firstOrNull { it.first?.containsAny(listOf("autofill")) == true && it.second?.containsAny(passwordKeywords) == true } != null
+                        ?.firstOrNull {
+                            it.first?.containsAny(listOf("autofill")) == true && it.second?.containsAny(passwordKeywords) == true
+                        } != null
 
                 if (isUsername) {
                     autofillType = AutofillFieldType.USERNAME

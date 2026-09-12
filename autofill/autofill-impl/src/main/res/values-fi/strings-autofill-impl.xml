@@ -202,7 +202,6 @@
     <string name="autofillManagementHowToSyncDesktopPasswordsTitle">Tietokoneen salasanojen synkronointi</string>
     <string name="autofillManagementImportPasswordsHowToInstruction">Tuo DuckDuckGo-selaimen pöytäkoneversiossa olevat salasanat ja synkronoi eri laitteiden kanssa.</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserButtonText">Hanki pöytäkoneselain</string>
-    <string name="autofillManagementImportPasswordsGetDesktopBrowserLinkCopied">Linkki kopioitu</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserIntentTitle">Hanki DuckDuckGo-selain Macille tai Windowsille</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserIntentMessage" instruction="Placeholder is a URL">Tee yksityisiä hakuja ja estä seuranta DuckDuckGo-selaimen tietokoneversiolla. Mene tietokoneella tähän linkkiin ja lataa selain jo tänään.\n\n%1$s</string>
     <string name="autofillManagementImportPasswordsSyncWithDesktopButtonText">Synkronointi pöytäkoneen kanssa</string>
@@ -215,8 +214,6 @@
     <string name="autofillManagementImportPasswordsGetDesktopAppTitle">Hanki sovelluksen tietokoneversio</string>
     <string name="autofillManagementImportPasswordsGetDesktopAppSubtitle">Hanki DuckDuckGo Macille tai Windowsille</string>
     <string name="autofillManagementImportPasswordsGetDesktopAppInstruction">Siirry tietokoneellasi kohtaan:</string>
-    <string name="autofillManagementImportPasswordsGetDesktopAppUrl" translatable="false">duckduckgo.com/browser</string>
-    <string name="autofillManagementImportPasswordsGetDesktopAppShareDownloadButtonText">Jaa latauslinkki</string>
 
     <string name="autofillManagementReportBreakagePromptTitle">Ilmoita automaattisen täytön ongelmasta</string>
     <string name="autofillManagementReportBreakagePromptSubtitle">Tee nimetön ilmoitus automaattisen täytön ongelmista tällä sivustolla. Salasanoja ei koskaan jaeta.</string>
@@ -240,7 +237,7 @@
 
     <string name="newTabPageShortcutPasswords">Salasanat</string>
 
-    <string name="autofillImportGooglePasswordsWebFlowTitle">Tuo Google-salasanat</string>
+    <string name="autofillImportGooglePasswordsWebFlowTitle">Tuo salasanat</string>
     <string name="autofillImportGooglePasswordsSuccessMessage" instruction="Placeholder is the number of passwords imported">%1$d Googlesta tuotua salasanaa</string>
     <string name="autofillImportCsvPasswordsSuccessMessage" instruction="Placeholder is the number of passwords imported">%1$d salasanaa tuotu CSV-tiedostosta</string>
 
@@ -250,9 +247,9 @@
     <string name="autofillSyncDesktopPasswordEmptyStateButtonTitle">Synkronoi työpöytäsalasanat</string>
     <string name="autofillSyncDesktopPasswordsMenuTitle">Synkronoi työpöytäsalasanat</string>
 
-    <string name="importPasswordsChooseMethodDialogTitle">Tuo Google-salasanasi</string>
+    <string name="importPasswordsChooseMethodDialogTitle">Tuo salasanat Googlesta</string>
     <string name="importPasswordsChooseMethodDialogSubtitle">Google saattaa pyytää sinua kirjautumaan sisään tai antamaan salasanasi vahvistusta varten.</string>
-    <string name="importPasswordsChooseMethodDialogGpmButton">Avaa Google Salasanat</string>
+    <string name="importPasswordsChooseMethodDialogGpmButton">Tuo Googlesta</string>
     <string name="importPasswordsChooseMethodDialogCsvButton">Valitse CSV-tiedosto</string>
     <string name="importPasswordsChooseMethodDialogDesktopSyncButton">Tuo tietokoneen selaimesta</string>
 
@@ -280,5 +277,36 @@
     <string name="autofillSettingsImportFromGoogleLabel">Tuo salasanat Googlesta</string>
     <string name="autofillSettingsImportFromDesktopSync">Synkronoi työpöytäsalasanat</string>
     <string name="autofillSettingsResetExcludedSitesTitle">Nollaa poissuljetut sivustot</string>
+
+    <string name="passwords_import_promo_title" instruction="The &apos;br&apos; is a forced line break for English. It does not need to be included in translations.">Tuo salasanasi Googlesta DuckDuckGohon</string>
+    <string name="passwords_import_promo_subtitle">Tuo salasanasi nopeasti ja turvallisesti DuckDuckGohon. Google saattaa pyytää sinua antamaan salasanasi.</string>
+    <string name="passwords_import_promo_action">Tuo Googlesta</string>
+    <string name="passwords_import_promo_in_browser_title">Tuo salasanasi Googlesta DuckDuckGohon</string>
+    <string name="passwords_import_promo_in_browser_secondary_action_button">Älä kysy uudelleen</string>
+    <string name="passwords_import_promo_in_settings_title">Tuo salasanat Googlesta</string>
+    <string name="passwords_import_promo_in_settings_dismiss_text">Piilota</string>
+
+    <!-- Import Bookmarks Strings -->
+    <string name="importToDuckDuckGo">Tuo DuckDuckGo:hon</string>
+    <string name="importBookmarksFromGoogleChromeFolderName">Tuotu Chromesta</string>
+    <string name="importBookmarksFromGooglePreImportDialogTitle">Tuo kirjanmerkit Googlesta</string>
+    <string name="importBookmarksFromGooglePreImportDialogInstruction">Google saattaa pyytää sinua kirjautumaan sisään tai antamaan salasanasi vahvistusta varten.</string>
+    <string name="importBookmarksFromGooglePreImportDialogImportButton">Tuo Googlesta</string>
+    <string name="importBookmarksFromGooglePreImportDialogSelectFileButton">Valitse kirjanmerkkitiedosto…</string>
+    <string name="importBookmarksFromGoogleWebFlowTitle">Kirjanmerkkien tuominen</string>
+    <string name="importBookmarksProgressTitle">Tuodaan Googlesta…</string>
+    <string name="importBookmarksProgressSubtitle">Pidä tämä näyttö auki ja odota hetki – tämän ei pitäisi kestää enempää kuin minuutin tai kaksi.</string>
+    <string name="importBookmarksProgressInfoMessage1">Google saattaa pyytää sinua kirjautumaan sisään tai antamaan salasanasi vahvistusta varten.</string>
+    <string name="importBookmarksProgressInfoMessage2">Google saattaa lähettää sinulle sähköpostiviestin, jossa vahvistetaan, että kirjanmerkkisi viedään.</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogTitle">Peruutetaanko tuonti?</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogMessage">Kirjanmerkkejäsi ei tuoda, jos peruutat nyt.</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogCancelImport">Peruuta tuonti</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogContinue">Jatka</string>
+    <string name="importBookmarksFromGoogleSuccessBookmarksCount" instruction="Placeholder is the number of bookmarks that were imported">Kirjanmerkit: %1$d</string>
+    <string name="importBookmarksSuccessTitle">@string/importToDuckDuckGo</string>
+    <string name="importBookmarksFinalDoneButton">Sulje</string>
+    <string name="importBookmarksErrorTitle">@string/importToDuckDuckGo</string>
+    <string name="importBookmarksErrorGenericMessage">Jokin meni pieleen</string>
+    <string name="importBookmarksErrorGenericMessageSecondary">Varmista, että sinulla on yhteys internetiin ja yritä uudelleen.</string>
 
 </resources>

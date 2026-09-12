@@ -19,7 +19,6 @@ package com.duckduckgo.subscriptions.impl.services
 import com.duckduckgo.anvil.annotations.ContributesNonCachingServiceApi
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.subscriptions.impl.auth.AuthRequired
-import com.duckduckgo.subscriptions.impl.model.Entitlement
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -36,20 +35,10 @@ interface SubscriptionsService {
     suspend fun portal(): PortalResponse
 
     @AuthRequired
-    @GET("https://subscriptions.duckduckgo.com/api/v1/offer-status")
-    suspend fun offerStatus(): OfferStatusResponse
-
-    @AuthRequired
     @POST("https://subscriptions.duckduckgo.com/api/purchase/confirm/google")
     suspend fun confirm(
         @Body confirmationBody: ConfirmationBody,
     ): ConfirmationResponse
-
-    @AuthRequired
-    @POST("https://subscriptions.duckduckgo.com/api/feedback")
-    suspend fun feedback(
-        @Body feedbackBody: FeedbackBody,
-    ): FeedbackResponse
 
     @GET("https://subscriptions.duckduckgo.com/api/products/{sku}/features")
     suspend fun features(@Path("sku") sku: String): FeaturesResponse
@@ -65,6 +54,15 @@ data class SubscriptionResponse(
     val platform: String,
     val status: String,
     val activeOffers: List<ActiveOfferResponse>,
+    val pendingPlans: List<PendingPlanResponse> = emptyList(),
+)
+
+data class PendingPlanResponse(
+    val productId: String,
+    val billingPeriod: String,
+    val effectiveAt: Long,
+    val status: String,
+    val tier: String,
 )
 
 data class ActiveOfferResponse(
@@ -89,30 +87,6 @@ data class ConfirmationEntitlement(
     val name: String,
 )
 
-fun List<ConfirmationEntitlement>.toEntitlements(): List<Entitlement> {
-    return this.map { Entitlement(it.name, it.product) }
-}
-
-data class FeedbackBody(
-    val userEmail: String,
-    val platform: String = "android",
-    val feedbackSource: String,
-    val problemCategory: String,
-    val customMetadata: String?,
-    val feedbackText: String?,
-    val appName: String?,
-    val appPackage: String?,
-    val problemSubCategory: String?,
-)
-
-data class FeedbackResponse(
-    val message: String,
-)
-
 data class FeaturesResponse(
     val features: List<String>,
-)
-
-data class OfferStatusResponse(
-    val hadTrial: Boolean,
 )

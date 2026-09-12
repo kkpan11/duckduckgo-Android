@@ -22,6 +22,7 @@ import com.duckduckgo.autofill.store.CredentialsSyncMetadataEntity
 import com.duckduckgo.autofill.sync.CredentialsSyncDataPersister.Adapters.Companion.updatesAdapter
 import com.duckduckgo.autofill.sync.persister.CredentialsMergeStrategy
 import com.duckduckgo.common.utils.checkMainThread
+import com.duckduckgo.common.utils.formatters.time.SyncDateProvider
 import com.duckduckgo.di.DaggerMap
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.sync.api.engine.SyncChangesResponse
@@ -35,8 +36,9 @@ import com.squareup.anvil.annotations.ContributesMultibinding
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import logcat.LogPriority.INFO
+import logcat.logcat
 import javax.inject.*
-import timber.log.Timber
 
 @ContributesMultibinding(scope = AppScope::class, boundType = SyncableDataPersister::class)
 class CredentialsSyncDataPersister @Inject constructor(
@@ -59,11 +61,11 @@ class CredentialsSyncDataPersister @Inject constructor(
         if (appBuildConfig.isInternalBuild()) checkMainThread()
 
         return if (changes.type == CREDENTIALS) {
-            Timber.d("Sync-autofill-Persist: received remote changes ${changes.jsonString}")
-            Timber.d("Sync-autofill-Persist: received remote changes, merging with resolution $conflictResolution")
+            logcat { "Sync-autofill-Persist: received remote changes ${changes.jsonString}" }
+            logcat { "Sync-autofill-Persist: received remote changes, merging with resolution $conflictResolution" }
             credentialsSyncFeatureListener.onSuccess(changes)
             val result = process(changes, conflictResolution)
-            Timber.d("Sync-autofill-Persist: merging credentials finished with $result")
+            logcat { "Sync-autofill-Persist: merging credentials finished with $result" }
             return result
         } else {
             Success(false)
@@ -81,14 +83,14 @@ class CredentialsSyncDataPersister @Inject constructor(
         conflictResolution: SyncConflictResolution,
     ): SyncMergeResult {
         if (changes.jsonString.isEmpty()) {
-            Timber.d("Sync-autofill-Persist: merging completed, no entries to merge")
+            logcat { "Sync-autofill-Persist: merging completed, no entries to merge" }
             return Success(false)
         }
 
         val response = kotlin.runCatching {
             updatesAdapter.fromJson(changes.jsonString)!!
         }.getOrElse {
-            Timber.d("Sync-autofill-Persist: failed to parse remote changes")
+            logcat { "Sync-autofill-Persist: failed to parse remote changes" }
             return SyncMergeResult.Error(reason = "Error parsing credentials ${it.message}")
         }
 
@@ -97,7 +99,7 @@ class CredentialsSyncDataPersister @Inject constructor(
         if (result is Success) {
             if (conflictResolution == SyncConflictResolution.DEDUPLICATION) {
                 credentialsSyncMetadata.getAllCredentials().filter { it.modified_at != null }.forEach {
-                    Timber.i("Sync-autofill-Persist: post-dedup adding to syncmetadata localId ${it.localId}")
+                    logcat(INFO) { "Sync-autofill-Persist: post-dedup adding to syncmetadata localId ${it.localId}" }
                     credentialsSyncMetadata.addOrUpdate(
                         CredentialsSyncMetadataEntity(localId = it.localId, modified_at = SyncDateProvider.now(), deleted_at = null),
                     )
@@ -115,11 +117,11 @@ class CredentialsSyncDataPersister @Inject constructor(
     ): SyncMergeResult {
         credentialsSyncStore.serverModifiedSince = credentials.last_modified
         credentialsSyncStore.clientModifiedSince = credentialsSyncStore.startTimeStamp
-        Timber.d("Sync-autofill-Persist: updating credentials server last_modified to ${credentialsSyncStore.serverModifiedSince}")
-        Timber.d("Sync-autofill-Persist: updating credentials client last_modified to ${credentialsSyncStore.clientModifiedSince}")
+        logcat { "Sync-autofill-Persist: updating credentials server last_modified to ${credentialsSyncStore.serverModifiedSince}" }
+        logcat { "Sync-autofill-Persist: updating credentials client last_modified to ${credentialsSyncStore.clientModifiedSince}" }
 
         return if (credentials.entries.isEmpty()) {
-            Timber.d("Sync-autofill-Persist: merging completed, no entries to merge")
+            logcat { "Sync-autofill-Persist: merging completed, no entries to merge" }
             Success(false)
         } else {
             strategies[conflictResolution]?.processEntries(
@@ -161,6 +163,7 @@ data class CredentialsSyncRemoteUpdates(
     val credentials: credentialsSyncEntries,
 )
 
+@Suppress("ktlint:standard:class-naming")
 data class credentialsSyncEntries(
     val entries: List<CredentialsSyncEntryResponse>,
     val last_modified: String,

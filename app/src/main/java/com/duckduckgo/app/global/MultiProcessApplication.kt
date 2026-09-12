@@ -16,10 +16,8 @@
 
 package com.duckduckgo.app.global
 
-import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
-import android.os.Build
 import android.os.Process
 
 abstract class MultiProcessApplication : Application() {
@@ -28,6 +26,13 @@ abstract class MultiProcessApplication : Application() {
 
     final override fun onCreate() {
         super.onCreate()
+
+        // Isolated processes (e.g. AndroidX PDF sandbox) have no permissions of their own:
+        // most system services return null and bindService() is forbidden. Our Dagger graph
+        // cannot initialise in this environment, so skip all app init and let the isolated
+        // service run with just the base Application.
+        if (isIsolatedProcess) return
+
         if (isMainProcessCached) {
             onMainProcessCreate()
         } else {
@@ -55,14 +60,8 @@ inline fun Context.runInSecondaryProcessNamed(
     }
 }
 
-val Context.currentProcessName: String?
-    get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        Application.getProcessName()
-    } else {
-        processNameFromSystemService()
-    }
+val Context.isIsolatedProcess: Boolean
+    get() = Process.isIsolated()
 
-private fun Context.processNameFromSystemService(): String {
-    val am = this.getSystemService(Application.ACTIVITY_SERVICE) as ActivityManager?
-    return am?.runningAppProcesses?.firstOrNull { it.pid == Process.myPid() }?.processName.orEmpty()
-}
+val Context.currentProcessName: String?
+    get() = Application.getProcessName()

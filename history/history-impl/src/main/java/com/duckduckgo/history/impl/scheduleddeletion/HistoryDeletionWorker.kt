@@ -31,12 +31,13 @@ import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.history.impl.InternalNavigationHistory
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.DAYS
 import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import timber.log.Timber
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -62,7 +63,7 @@ class HistoryDeletionWorker @Inject constructor(
         private const val WORKER_DELETE_HISTORY = "com.duckduckgo.history.delete.worker"
 
         private fun scheduleWorker(workManager: WorkManager) {
-            Timber.v("Scheduling the HistoryDeletionWorker")
+            logcat(VERBOSE) { "Scheduling the HistoryDeletionWorker" }
 
             val request = PeriodicWorkRequestBuilder<RealHistoryDeletionWorker>(repeatInterval = 1L, repeatIntervalTimeUnit = DAYS)
                 .addTag(WORKER_DELETE_HISTORY)
@@ -84,7 +85,7 @@ class RealHistoryDeletionWorker(
     lateinit var historyDeletionWorker: HistoryDeletionWorker
 
     override suspend fun doWork(): Result {
-        Timber.v("Deleting old history entries")
+        logcat(VERBOSE) { "Deleting old history entries" }
 
         historyDeletionWorker.clearOldHistoryEntries()
 

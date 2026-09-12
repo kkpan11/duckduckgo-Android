@@ -18,7 +18,7 @@ package com.duckduckgo.app.browser.weblocalstorage
 
 import android.content.Context
 import com.duckduckgo.app.fire.fireproofwebsite.data.FireproofWebsiteRepository
-import com.duckduckgo.app.pixels.remoteconfig.AndroidBrowserConfigFeature
+import com.duckduckgo.browser.feature.toggles.AndroidBrowserConfigFeature
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
@@ -27,18 +27,21 @@ import dagger.Lazy
 import dagger.Module
 import dagger.Provides
 import dagger.SingleInstanceIn
-import java.io.File
-import java.nio.charset.StandardCharsets
-import javax.inject.Inject
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import logcat.logcat
 import org.iq80.leveldb.DB
 import org.iq80.leveldb.Options
 import org.iq80.leveldb.impl.Iq80DBFactory.factory
-import timber.log.Timber
+import java.io.File
+import java.nio.charset.StandardCharsets
+import javax.inject.Inject
 
 interface WebLocalStorageManager {
-    fun clearWebLocalStorage()
+    /**
+     * Clears non-allowed-domain keys from web local storage (LevelDB).
+     * Allowed domains (configured remotely + fireproofed) are preserved.
+     */
+    suspend fun clearWebLocalStorage()
 }
 
 @ContributesBinding(AppScope::class)
@@ -50,51 +53,55 @@ class DuckDuckGoWebLocalStorageManager @Inject constructor(
     private val dispatcherProvider: DispatcherProvider,
 ) : WebLocalStorageManager {
 
-    private var domains = emptyList<String>()
-    private var matchingRegex = emptyList<String>()
+    override suspend fun clearWebLocalStorage() {
+        withContext(dispatcherProvider.io()) {
+            val settings = androidBrowserConfigFeature.webLocalStorage().getSettings()
+            val webLocalStorageSettings = webLocalStorageSettingsJsonParser.parseJson(settings)
 
-    override fun clearWebLocalStorage() = runBlocking {
-        val settings = androidBrowserConfigFeature.webLocalStorage().getSettings()
-        val webLocalStorageSettings = webLocalStorageSettingsJsonParser.parseJson(settings)
+            val fireproofedDomains = fireproofWebsiteRepository.fireproofWebsitesSync().map { it.domain }
 
-        val fireproofedDomains = if (androidBrowserConfigFeature.fireproofedWebLocalStorage().isEnabled()) {
-            withContext(dispatcherProvider.io()) {
-                fireproofWebsiteRepository.fireproofWebsitesSync().map { it.domain }
-            }
-        } else {
-            emptyList()
-        }
+            val domains = webLocalStorageSettings.domains.list + fireproofedDomains
+            val matchingRegex = webLocalStorageSettings.matchingRegex.list
 
-        domains = webLocalStorageSettings.domains.list + fireproofedDomains
-        matchingRegex = webLocalStorageSettings.matchingRegex.list
+            logcat { "WebLocalStorageManager: Allowed domains: $domains" }
+            logcat { "WebLocalStorageManager: Matching regex: $matchingRegex" }
 
-        Timber.d("WebLocalStorageManager: Allowed domains: $domains")
-        Timber.d("WebLocalStorageManager: Matching regex: $matchingRegex")
+            val db = databaseProvider.get()
+            db.iterator().use { iterator ->
+                iterator.seekToFirst()
 
-        val db = databaseProvider.get()
-        db.iterator().use { iterator ->
-            iterator.seekToFirst()
+                while (iterator.hasNext()) {
+                    val entry = iterator.next()
+                    val key = String(entry.key, StandardCharsets.UTF_8)
 
-            while (iterator.hasNext()) {
-                val entry = iterator.next()
-                val key = String(entry.key, StandardCharsets.UTF_8)
-
-                if (!isAllowedKey(key)) {
-                    db.delete(entry.key)
-                    Timber.d("WebLocalStorageManager: Deleted key: $key")
+                    val domainForMatchingAllowedKey =
+                        getDomainForMatchingAllowedKey(key, domains, matchingRegex)
+                    if (domainForMatchingAllowedKey == null) {
+                        db.delete(entry.key)
+                        logcat { "WebLocalStorageManager: Deleted key: $key" }
+                    }
                 }
             }
+
+            logcat { "WebLocalStorageManager: finished deleting local storage data" }
         }
     }
 
-    private fun isAllowedKey(key: String): Boolean {
-        val regexPatterns = domains.flatMap { domain ->
+    private fun getDomainForMatchingAllowedKey(
+        key: String,
+        domains: List<String>,
+        matchingRegex: List<String>,
+    ): String? {
+        for (domain in domains) {
             val escapedDomain = Regex.escape(domain)
-            matchingRegex.map { pattern ->
+            val regexPatterns = matchingRegex.map { pattern ->
                 pattern.replace("{domain}", escapedDomain)
             }
+            if (regexPatterns.any { pattern -> Regex(pattern).matches(key) }) {
+                return domain
+            }
         }
-        return regexPatterns.any { pattern -> Regex(pattern).matches(key) }
+        return null
     }
 }
 

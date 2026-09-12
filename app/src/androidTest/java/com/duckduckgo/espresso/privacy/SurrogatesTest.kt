@@ -17,7 +17,6 @@
 package com.duckduckgo.espresso.privacy
 
 import android.webkit.WebView
-import androidx.test.core.app.*
 import androidx.test.espresso.*
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions
@@ -28,10 +27,14 @@ import androidx.test.ext.junit.rules.activityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
 import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.R
+import com.duckduckgo.app.browser.clickMenuItem
+import com.duckduckgo.app.browser.mode.InAppNavigation
 import com.duckduckgo.espresso.*
 import com.duckduckgo.privacy.config.impl.network.JSONObjectAdapter
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
+import org.hamcrest.Matchers.allOf
+import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -40,21 +43,27 @@ import org.junit.Test
 class SurrogatesTest {
 
     @get:Rule
-    var activityScenarioRule = activityScenarioRule<BrowserActivity>()
+    var activityScenarioRule = activityScenarioRule<BrowserActivity>(
+        BrowserActivity.intent(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            launchSource = InAppNavigation,
+            queryExtra = "https://privacy-test-pages.site/privacy-protections/surrogates/",
+        ),
+    )
+
+    @After
+    fun tearDown() {
+        IdlingRegistry.getInstance().resources.toList().forEach { resource ->
+            IdlingRegistry.getInstance().unregister(resource)
+        }
+    }
 
     @Test @PrivacyTest
     fun whenProtectionsAreEnabledSurrogatesAreLoaded() {
         preparationsForPrivacyTest()
 
         var webView: WebView? = null
-
-        val scenario = ActivityScenario.launch<BrowserActivity>(
-            BrowserActivity.intent(
-                InstrumentationRegistry.getInstrumentation().targetContext,
-                "https://privacy-test-pages.site/privacy-protections/surrogates/",
-            ),
-        )
-        scenario.onActivity {
+        activityScenarioRule.scenario.onActivity {
             webView = it.findViewById(R.id.browserWebView)
         }
 
@@ -67,7 +76,7 @@ class SurrogatesTest {
 
         val testJson: TestJson? = getTestJson(results.toJSONString())
 
-        testJson?.value?.map {
+        testJson?.value?.forEach {
             if (compatibleIds.contains(it.id)) {
                 assertTrue("Loaded for ${it.id} should be loaded and is ${it.loaded}", it.loaded)
             }
@@ -79,25 +88,23 @@ class SurrogatesTest {
         preparationsForPrivacyTest()
 
         var webView: WebView? = null
-
-        val scenario = ActivityScenario.launch<BrowserActivity>(
-            BrowserActivity.intent(
-                InstrumentationRegistry.getInstrumentation().targetContext,
-                "https://privacy-test-pages.site/privacy-protections/surrogates/",
-            ),
-        )
-        scenario.onActivity {
+        activityScenarioRule.scenario.onActivity {
             webView = it.findViewById(R.id.browserWebView)
         }
 
         val idlingResourceForDisableProtections = WebViewIdlingResource(webView!!)
         IdlingRegistry.getInstance().register(idlingResourceForDisableProtections)
 
-        onView(withId(R.id.browserMenu)).perform(ViewActions.click())
-        onView(isRoot()).perform(waitForView(withId(R.id.privacyProtectionMenuItem)))
-        onView(withId(R.id.privacyProtectionMenuItem)).perform(ViewActions.click())
+        onView(allOf(withId(R.id.browserMenu), isClickable())).perform(ViewActions.click())
+        // Protections may already be disabled for privacy-test-pages.site if a previous test in
+        // the same run left that state behind — the user allowlist persists across tests and is
+        // only cleared between orchestrated (CI) runs, not local connectedAndroidTest runs. When
+        // already disabled, the menu shows "Enable Privacy Protection" instead, and we're already
+        // in the state under test, so skip the disable click rather than failing to find it.
+        runCatching { clickMenuItem(withText("Disable Privacy Protection")) }
 
-        // handle the privacy protection toggle check screen showing
+        // Dismiss the privacy protection toggle check screen (if we disabled) or the menu (if it
+        // was already disabled).
         onView(isRoot()).perform(ViewActions.pressBack())
 
         val idlingResourceForScript: IdlingResource = WebViewIdlingResource(webView!!)
@@ -109,7 +116,7 @@ class SurrogatesTest {
 
         val testJson: TestJson? = getTestJson(results.toJSONString())
 
-        testJson?.value?.map {
+        testJson?.value?.forEach {
             if (compatibleIds.contains(it.id)) {
                 assertFalse("Loaded for ${it.id} should not be loaded and is ${it.loaded}", it.loaded)
             }

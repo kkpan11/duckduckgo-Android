@@ -26,37 +26,40 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.duckduckgo.anvil.annotations.ContributeToActivityStarter
 import com.duckduckgo.anvil.annotations.InjectWith
-import com.duckduckgo.browser.api.ui.BrowserScreens.FeedbackActivityWithEmptyParams
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.DuckDuckGoFragment
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.ActivityScope
+import com.duckduckgo.feedback.api.FeedbackScreenNoParams
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.duckduckgo.navigation.api.getActivityParams
-import com.duckduckgo.subscriptions.api.PrivacyProFeedbackScreens.GeneralPrivacyProFeedbackScreenNoParams
-import com.duckduckgo.subscriptions.api.PrivacyProFeedbackScreens.PrivacyProAppFeedbackScreenWithParams
-import com.duckduckgo.subscriptions.api.PrivacyProFeedbackScreens.PrivacyProFeedbackScreenWithParams
+import com.duckduckgo.subscriptions.api.SubscriptionFeedbackScreens.GeneralSubscriptionFeedbackScreenNoParams
+import com.duckduckgo.subscriptions.api.SubscriptionFeedbackScreens.SubscriptionAppFeedbackScreenWithParams
+import com.duckduckgo.subscriptions.api.SubscriptionFeedbackScreens.SubscriptionFeedbackScreenWithParams
 import com.duckduckgo.subscriptions.impl.R
 import com.duckduckgo.subscriptions.impl.databinding.ActivityFeedbackBinding
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.Command
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.Command.FeedbackCancelled
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.Command.FeedbackCompleted
-import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.Command.FeedbackFailed
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.Command.ShowHelpPages
+import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.Command.ShowSupportPage
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.FeedbackFragmentState
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.FeedbackMetadata
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackViewModel.ViewState
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionsWebViewActivityWithParams
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionsWebViewActivityWithParams.ToolbarConfig.CustomTitle
-import javax.inject.Inject
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
-@ContributeToActivityStarter(PrivacyProFeedbackScreenWithParams::class)
-@ContributeToActivityStarter(PrivacyProAppFeedbackScreenWithParams::class)
-@ContributeToActivityStarter(GeneralPrivacyProFeedbackScreenNoParams::class)
+@ContributeToActivityStarter(SubscriptionFeedbackScreenWithParams::class)
+@ContributeToActivityStarter(SubscriptionAppFeedbackScreenWithParams::class)
+@ContributeToActivityStarter(GeneralSubscriptionFeedbackScreenNoParams::class)
 class SubscriptionFeedbackActivity :
     DuckDuckGoActivity(),
     SubscriptionFeedbackGeneralFragment.Listener,
@@ -67,6 +70,13 @@ class SubscriptionFeedbackActivity :
 
     @Inject
     lateinit var globalActivityStarter: GlobalActivityStarter
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
+
     private val binding: ActivityFeedbackBinding by viewBinding()
     private val viewModel: SubscriptionFeedbackViewModel by bindViewModel()
 
@@ -75,8 +85,15 @@ class SubscriptionFeedbackActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.MISC)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
         setContentView(binding.root)
         setupToolbar(toolbar)
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
         observeViewModel()
         handleInitialState()
         onBackPressedDispatcher.addCallback(
@@ -89,31 +106,37 @@ class SubscriptionFeedbackActivity :
         )
     }
 
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyNavigationBarInsets(binding.feedbackFragmentContainer, drawBehindGestureNav = true)
+    }
+
     private fun handleInitialState() {
         val generalFeedbackParams =
-            intent.getActivityParams(GeneralPrivacyProFeedbackScreenNoParams::class.java)
+            intent.getActivityParams(GeneralSubscriptionFeedbackScreenNoParams::class.java)
         if (generalFeedbackParams != null) {
             viewModel.allowUserToChooseFeedbackType()
             return
         }
 
         val feedbackScreenParams =
-            intent.getActivityParams(PrivacyProFeedbackScreenWithParams::class.java)
+            intent.getActivityParams(SubscriptionFeedbackScreenWithParams::class.java)
         if (feedbackScreenParams != null) {
             viewModel.allowUserToChooseReportType(feedbackScreenParams.feedbackSource)
             return
         }
 
-        intent.getActivityParams(PrivacyProAppFeedbackScreenWithParams::class.java)?.let {
+        intent.getActivityParams(SubscriptionAppFeedbackScreenWithParams::class.java)?.let {
             viewModel.allowUserToReportAppIssue(it.appName, it.appPackageName)
         }
     }
 
     override fun onBrowserFeedbackClicked() {
-        globalActivityStarter.start(this, FeedbackActivityWithEmptyParams)
+        globalActivityStarter.start(this, FeedbackScreenNoParams)
     }
 
-    override fun onPproFeedbackClicked() {
+    override fun onSubscriptionFeedbackClicked() {
         viewModel.onProFeedbackSelected()
     }
 
@@ -131,13 +154,16 @@ class SubscriptionFeedbackActivity :
 
     override fun onUserSubmit(
         description: String,
-        email: String?,
     ) {
-        viewModel.onSubmitFeedback(description, email)
+        viewModel.onSubmitFeedback(description)
     }
 
     override fun onFaqsOpened() {
         viewModel.onFaqOpenedFromSubmit()
+    }
+
+    override fun onContactSupportOpened() {
+        viewModel.onContactSupportFromSubmit()
     }
 
     private fun observeViewModel() {
@@ -155,9 +181,6 @@ class SubscriptionFeedbackActivity :
 
     private fun handleCommands(command: Command) {
         when (command) {
-            is FeedbackFailed ->
-                Toast.makeText(applicationContext, R.string.feedbackSubmitFailedMessage, Toast.LENGTH_LONG).show()
-
             is FeedbackCancelled -> finish()
             is FeedbackCompleted -> {
                 Toast.makeText(applicationContext, R.string.feedbackSubmitCompletedMessage, Toast.LENGTH_LONG).show()
@@ -165,6 +188,15 @@ class SubscriptionFeedbackActivity :
             }
 
             is ShowHelpPages -> {
+                globalActivityStarter.start(
+                    this,
+                    SubscriptionsWebViewActivityWithParams(
+                        url = command.url,
+                        toolbarConfig = CustomTitle(""), // empty toolbar
+                    ),
+                )
+            }
+            is ShowSupportPage -> {
                 globalActivityStarter.start(
                     this,
                     SubscriptionsWebViewActivityWithParams(

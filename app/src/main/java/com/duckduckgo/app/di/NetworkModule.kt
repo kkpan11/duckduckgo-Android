@@ -17,34 +17,21 @@
 package com.duckduckgo.app.di
 
 import android.content.Context
-import com.duckduckgo.app.feedback.api.FeedbackService
-import com.duckduckgo.app.feedback.api.FeedbackSubmitter
-import com.duckduckgo.app.feedback.api.FireAndForgetFeedbackSubmitter
-import com.duckduckgo.app.feedback.api.SubReasonApiMapper
 import com.duckduckgo.app.global.api.*
-import com.duckduckgo.app.statistics.pixels.Pixel
-import com.duckduckgo.app.statistics.store.StatisticsDataStore
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.common.utils.AppUrl.Url
-import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.common.utils.plugins.pixel.PixelInterceptorPlugin
 import com.duckduckgo.di.scopes.AppScope
-import com.duckduckgo.experiments.api.VariantManager
 import com.duckduckgo.user.agent.api.UserAgentProvider
+import com.squareup.anvil.annotations.ContributesTo
 import com.squareup.moshi.Moshi
 import dagger.Lazy
 import dagger.Module
 import dagger.Provides
 import dagger.SingleInstanceIn
-import java.io.File
-import java.io.IOException
-import java.net.Proxy
-import java.net.ProxySelector
-import java.net.SocketAddress
-import java.net.URI
-import javax.inject.Named
-import kotlinx.coroutines.CoroutineScope
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -52,9 +39,16 @@ import retrofit2.Retrofit
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
-import timber.log.Timber
+import java.io.File
+import java.io.IOException
+import java.net.Proxy
+import java.net.ProxySelector
+import java.net.SocketAddress
+import java.net.URI
+import javax.inject.Named
 
 @Module
+@ContributesTo(AppScope::class)
 class NetworkModule {
 
     @Provides
@@ -110,7 +104,7 @@ class NetworkModule {
             }
             // shall be the last one as it is logging the pixel request url that goes out
             .addInterceptor { chain: Interceptor.Chain ->
-                Timber.v("Pixel url request: ${chain.request().url}")
+                logcat(VERBOSE) { "Pixel url request: ${chain.request().url}" }
                 return@addInterceptor chain.proceed(chain.request())
             }
             .build()
@@ -160,28 +154,6 @@ class NetworkModule {
     fun pixelReQueryInterceptor(): PixelReQueryInterceptor {
         return PixelReQueryInterceptor()
     }
-
-    @Provides
-    fun feedbackSubmitter(
-        feedbackService: FeedbackService,
-        variantManager: VariantManager,
-        apiKeyMapper: SubReasonApiMapper,
-        statisticsStore: StatisticsDataStore,
-        pixel: Pixel,
-        @AppCoroutineScope appCoroutineScope: CoroutineScope,
-        appBuildConfig: AppBuildConfig,
-        dispatcherProvider: DispatcherProvider,
-    ): FeedbackSubmitter =
-        FireAndForgetFeedbackSubmitter(
-            feedbackService,
-            variantManager,
-            apiKeyMapper,
-            statisticsStore,
-            pixel,
-            appCoroutineScope,
-            appBuildConfig,
-            dispatcherProvider,
-        )
 
     companion object {
         private const val CACHE_SIZE: Long = 10 * 1024 * 1024 // 10MB

@@ -19,15 +19,23 @@ package com.duckduckgo.app.onboarding.ui
 import com.duckduckgo.app.browser.defaultbrowsing.DefaultBrowserDetector
 import com.duckduckgo.app.global.DefaultRoleBrowserDialog
 import com.duckduckgo.app.onboarding.ui.OnboardingPageBuilder.OnboardingPageBlueprint
+import com.duckduckgo.app.onboarding.ui.OnboardingPageBuilder.OnboardingPageBlueprint.BrandDesignUpdateDefaultBrowserPageBlueprint
+import com.duckduckgo.app.onboarding.ui.OnboardingPageBuilder.OnboardingPageBlueprint.BrandDesignUpdateWelcomePageBlueprint
+import com.duckduckgo.app.onboarding.ui.OnboardingPageBuilder.OnboardingPageBlueprint.ConfigDrivenWelcomePageBlueprint
 import com.duckduckgo.app.onboarding.ui.OnboardingPageBuilder.OnboardingPageBlueprint.DefaultBrowserBlueprint
-import com.duckduckgo.app.onboarding.ui.OnboardingPageBuilder.OnboardingPageBlueprint.ExperimentWelcomeBluePrint
+import com.duckduckgo.app.onboarding.ui.OnboardingPageBuilder.OnboardingPageBlueprint.WelcomePageBlueprint
+import com.duckduckgo.app.onboarding.ui.page.BrandDesignUpdateDefaultBrowserPage
+import com.duckduckgo.app.onboarding.ui.page.BrandDesignUpdateWelcomePage
 import com.duckduckgo.app.onboarding.ui.page.DefaultBrowserPage
 import com.duckduckgo.app.onboarding.ui.page.OnboardingPageFragment
 import com.duckduckgo.app.onboarding.ui.page.WelcomePage
+import com.duckduckgo.app.onboarding.ui.page.configdriven.ConfigDrivenWelcomePageFragment
 
 interface OnboardingPageManager {
     fun pageCount(): Int
     fun buildPageBlueprints()
+    fun buildBrandDesignUpdatePageBlueprints()
+    fun buildConfigDrivenPageBlueprints()
     fun buildPage(position: Int): OnboardingPageFragment?
 }
 
@@ -44,17 +52,36 @@ class OnboardingPageManagerWithTrackerBlocking(
     override fun buildPageBlueprints() {
         pages.clear()
 
-        pages.add(ExperimentWelcomeBluePrint)
+        pages.add(WelcomePageBlueprint)
 
         if (shouldShowDefaultBrowserPage()) {
             pages.add((DefaultBrowserBlueprint))
         }
     }
 
+    override fun buildBrandDesignUpdatePageBlueprints() {
+        pages.clear()
+        pages += BrandDesignUpdateWelcomePageBlueprint
+        if (shouldShowDefaultBrowserPage()) {
+            pages += BrandDesignUpdateDefaultBrowserPageBlueprint
+        }
+    }
+
+    override fun buildConfigDrivenPageBlueprints() {
+        pages.clear()
+        pages += ConfigDrivenWelcomePageBlueprint
+        if (shouldShowDefaultBrowserPage()) {
+            pages += BrandDesignUpdateDefaultBrowserPageBlueprint
+        }
+    }
+
     override fun buildPage(position: Int): OnboardingPageFragment? {
         return when (pages.getOrNull(position)) {
-            is ExperimentWelcomeBluePrint -> buildExperimentWelcomePage()
+            is WelcomePageBlueprint -> buildWelcomePage()
             is DefaultBrowserBlueprint -> buildDefaultBrowserPage()
+            is BrandDesignUpdateWelcomePageBlueprint -> buildBrandDesignUpdateWelcomePage()
+            is ConfigDrivenWelcomePageBlueprint -> buildConfigDrivenWelcomePage()
+            is BrandDesignUpdateDefaultBrowserPageBlueprint -> buildBrandDesignUpdateDefaultBrowserPage()
             else -> null
         }
     }
@@ -69,7 +96,19 @@ class OnboardingPageManagerWithTrackerBlocking(
         return onboardingPageBuilder.buildDefaultBrowserPage()
     }
 
-    private fun buildExperimentWelcomePage(): WelcomePage {
-        return onboardingPageBuilder.buildExperimentWelcomePage()
+    private fun buildWelcomePage(): WelcomePage {
+        return onboardingPageBuilder.buildWelcomePage()
+    }
+
+    private fun buildBrandDesignUpdateWelcomePage(): BrandDesignUpdateWelcomePage {
+        return onboardingPageBuilder.buildBrandDesignUpdateWelcomePage()
+    }
+
+    private fun buildConfigDrivenWelcomePage(): ConfigDrivenWelcomePageFragment {
+        return onboardingPageBuilder.buildConfigDrivenWelcomePage()
+    }
+
+    private fun buildBrandDesignUpdateDefaultBrowserPage(): BrandDesignUpdateDefaultBrowserPage {
+        return onboardingPageBuilder.buildBrandDesignUpdateDefaultBrowserPage()
     }
 }

@@ -16,11 +16,15 @@
 
 package com.duckduckgo.subscriptions.impl
 
+import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.LIST_OF_PLUS_PLANS
+import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.LIST_OF_PRO_PLANS
+
 object SubscriptionsConstants {
 
     // List of subscriptions
     const val BASIC_SUBSCRIPTION = "ddg_privacy_pro"
-    val LIST_OF_PRODUCTS = listOf(BASIC_SUBSCRIPTION)
+    const val ADVANCED_SUBSCRIPTION = "ddg_subscription_pro"
+    val LIST_OF_PRODUCTS = listOf(BASIC_SUBSCRIPTION, ADVANCED_SUBSCRIPTION)
 
     // List of plans
     const val YEARLY_PLAN_US = "ddg-privacy-pro-yearly-renews-us"
@@ -28,9 +32,39 @@ object SubscriptionsConstants {
     const val YEARLY_PLAN_ROW = "ddg-privacy-pro-yearly-renews-row"
     const val MONTHLY_PLAN_ROW = "ddg-privacy-pro-monthly-renews-row"
 
-    // List of offers
+    val LIST_MONTHLY_PLUS_PLANS = listOf(MONTHLY_PLAN_US, MONTHLY_PLAN_ROW)
+    val LIST_YEARLY_PLUS_PLANS = listOf(YEARLY_PLAN_US, YEARLY_PLAN_ROW)
+
+    val LIST_OF_PLUS_PLANS = LIST_MONTHLY_PLUS_PLANS + LIST_YEARLY_PLUS_PLANS
+
+    const val YEARLY_PRO_PLAN_US = "ddg-subscription-pro-yearly-renews-us"
+    const val MONTHLY_PRO_PLAN_US = "ddg-subscription-pro-monthly-renews-us"
+    const val YEARLY_PRO_PLAN_ROW = "ddg-subscription-pro-yearly-renews-row"
+    const val MONTHLY_PRO_PLAN_ROW = "ddg-subscription-pro-monthly-renews-row"
+
+    val LIST_MONTHLY_PRO_PLANS = listOf(MONTHLY_PRO_PLAN_US, MONTHLY_PRO_PLAN_ROW)
+    val LIST_YEARLY_PRO_PLANS = listOf(YEARLY_PRO_PLAN_US, YEARLY_PRO_PLAN_ROW)
+
+    val LIST_OF_PRO_PLANS = LIST_MONTHLY_PRO_PLANS + LIST_YEARLY_PRO_PLANS
+
+    // List of offers (Plus free trial)
     const val MONTHLY_FREE_TRIAL_OFFER_US = "ddg-privacy-pro-freetrial-monthly-renews-us"
     const val YEARLY_FREE_TRIAL_OFFER_US = "ddg-privacy-pro-freetrial-yearly-renews-us"
+    const val MONTHLY_FREE_TRIAL_OFFER_ROW = "ddg-privacy-pro-freetrial-monthly-renews-row"
+    const val YEARLY_FREE_TRIAL_OFFER_ROW = "ddg-privacy-pro-freetrial-yearly-renews-row"
+    val LIST_OF_PLUS_FREE_TRIAL_OFFERS =
+        listOf(MONTHLY_FREE_TRIAL_OFFER_US, YEARLY_FREE_TRIAL_OFFER_US, MONTHLY_FREE_TRIAL_OFFER_ROW, YEARLY_FREE_TRIAL_OFFER_ROW)
+
+    // List of offers (Pro free trial)
+    const val MONTHLY_PRO_FREE_TRIAL_OFFER_US = "ddg-subscription-pro-freetrial-monthly-renews-us"
+    const val YEARLY_PRO_FREE_TRIAL_OFFER_US = "ddg-subscription-pro-freetrial-yearly-renews-us"
+    const val MONTHLY_PRO_FREE_TRIAL_OFFER_ROW = "ddg-subscription-pro-freetrial-monthly-renews-row"
+    const val YEARLY_PRO_FREE_TRIAL_OFFER_ROW = "ddg-subscription-pro-freetrial-yearly-renews-row"
+    val LIST_OF_PRO_FREE_TRIAL_OFFERS =
+        listOf(MONTHLY_PRO_FREE_TRIAL_OFFER_US, YEARLY_PRO_FREE_TRIAL_OFFER_US, MONTHLY_PRO_FREE_TRIAL_OFFER_ROW, YEARLY_PRO_FREE_TRIAL_OFFER_ROW)
+
+    // Combined list of all free trial offers
+    val LIST_OF_FREE_TRIAL_OFFERS = LIST_OF_PLUS_FREE_TRIAL_OFFERS + LIST_OF_PRO_FREE_TRIAL_OFFERS
 
     // List of features
     const val LEGACY_FE_NETP = "vpn"
@@ -41,6 +75,7 @@ object SubscriptionsConstants {
     const val ITR = "Identity Theft Restoration"
     const val ROW_ITR = "Global Identity Theft Restoration"
     const val PIR = "Data Broker Protection"
+    const val DUCK_AI = "Duck.ai"
 
     // Platform
     const val PLATFORM = "android"
@@ -50,10 +85,70 @@ object SubscriptionsConstants {
     const val YEARLY = "Yearly"
 
     // URLs
-    const val BUY_URL = "https://duckduckgo.com/subscriptions"
-    const val ACTIVATE_URL = "https://duckduckgo.com/subscriptions/activation-flow"
     const val ITR_URL = "https://duckduckgo.com/identity-theft-restoration"
+    const val ITR_SUMMARY_OF_BENEFITS_URL =
+        "https://duckduckgo.com/static-assets/files/pages/identity-theft-restoration/Summary_of_Benefits.pdf"
     const val FAQS_URL = "https://duckduckgo.com/duckduckgo-help-pages/privacy-pro/"
-    const val PRIVACY_PRO_ETLD = "duckduckgo.com"
-    const val PRIVACY_PRO_PATH = "pro"
+    const val PARTNER_BENEFITS_URL = "https://duckduckgo.com/partner-benefits"
+    const val SUBSCRIPTIONS_ETLD = "duckduckgo.com"
+    const val FEATURE_PAGE_QUERY_PARAM_KEY = "featurePage"
+    const val ORIGIN_QUERY_PARAM_KEY = "origin"
+    const val SUBSCRIPTIONS_PATH = "pro"
+    const val PRIVACY_SUBSCRIPTIONS_PATH = "subscriptions"
+
+    // Subscription-funnel origin for the app-settings "Get Subscription" entry point. Used both to
+    // launch the buy webview (ProSettingView) and on the app-settings click pixel (SubscriptionPixelSender).
+    const val ORIGIN_APP_SETTINGS = "funnel_appsettings_android"
+
+    // Allowlist of funnel entry-point origins permitted on subscription telemetry and on the `?origin=`
+    // param of the URL loaded in the subscriptions webview. The origin can arrive from a web-supplied
+    // URL param or JS message, so it is bounded to this set.
+    // TODO: Consider moving this list to the remove privacy configuration if it will change regularly.
+    val FUNNEL_ORIGIN_ALLOWLIST = setOf(
+        "funnel_addressbar_android__aitoggle",
+        "funnel_addressbar_android__modelpicker",
+        "funnel_addressbar_android__reasoningdropdown",
+        "funnel_appmenu_android",
+        "funnel_appsettings_android",
+        "funnel_duckai_android__freelabel",
+        "funnel_duckai_android__modelpicker",
+        "funnel_duckai_android__reasoningdropdown",
+        "funnel_duckai_android__switchmodel",
+        "funnel_modal_android__skippedonboardingupsell",
+        "funnel_modal_android__subscriptionnudge",
+        "funnel_onboarding_android",
+        "funnel_playstore",
+        "funnel_purchase_offer_page_android",
+        "funnel_restore_android__viewplans",
+        "funnel_subscriptionsettings_android__viewplans",
+    )
+}
+
+enum class SubscriptionTier(val value: String) {
+    PLUS("plus"),
+    PRO("pro"),
+    UNKNOWN("unknown"),
+    ;
+
+    val productId: String
+        get() = when (this) {
+            PLUS -> SubscriptionsConstants.BASIC_SUBSCRIPTION
+            PRO -> SubscriptionsConstants.ADVANCED_SUBSCRIPTION
+            UNKNOWN -> SubscriptionsConstants.BASIC_SUBSCRIPTION // fallback to basic
+        }
+
+    companion object {
+        private val PLAN_TO_TIER: Map<SubscriptionTier, List<String>> = mapOf(
+            PLUS to LIST_OF_PLUS_PLANS,
+            PRO to LIST_OF_PRO_PLANS,
+        )
+
+        fun fromPlanId(planId: String): SubscriptionTier {
+            return PLAN_TO_TIER.entries.find { it.value.contains(planId) }?.key ?: UNKNOWN
+        }
+
+        fun fromTierString(tierString: String): SubscriptionTier {
+            return entries.find { it.value == tierString } ?: UNKNOWN
+        }
+    }
 }

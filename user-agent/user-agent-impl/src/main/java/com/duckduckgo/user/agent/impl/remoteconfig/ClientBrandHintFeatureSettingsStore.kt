@@ -23,8 +23,9 @@ import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 @ContributesBinding(AppScope::class)
 @RemoteFeatureStoreNamed(ClientBrandHintFeature::class)
@@ -35,7 +36,7 @@ class ClientBrandHintFeatureSettingsStore @Inject constructor(
     private val jsonAdapter by lazy { buildJsonAdapter() }
 
     override fun store(jsonString: String) {
-        Timber.v("ClientBrandHintProvider: store $jsonString")
+        logcat(VERBOSE) { "ClientBrandHintProvider: store $jsonString" }
         jsonAdapter.fromJson(jsonString)?.let {
             repository.updateAllSettings(it)
         }

@@ -18,7 +18,7 @@ package com.duckduckgo.history.impl
 
 import android.content.Context
 import androidx.room.Room
-import com.duckduckgo.app.di.AppCoroutineScope
+import androidx.room.RoomDatabase
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.history.impl.store.ALL_MIGRATIONS
@@ -29,7 +29,6 @@ import com.squareup.anvil.annotations.ContributesTo
 import dagger.Module
 import dagger.Provides
 import dagger.SingleInstanceIn
-import kotlinx.coroutines.CoroutineScope
 
 @Module
 @ContributesTo(AppScope::class)
@@ -40,16 +39,20 @@ class HistoryModule {
     fun provideHistoryRepository(
         historyDatabase: HistoryDatabase,
         dispatcherProvider: DispatcherProvider,
-        @AppCoroutineScope appCoroutineScope: CoroutineScope,
         historyDataStore: HistoryDataStore,
     ): HistoryRepository {
-        return RealHistoryRepository(historyDatabase.historyDao(), dispatcherProvider, appCoroutineScope, historyDataStore)
+        return RealHistoryRepository(
+            historyDatabase.historyDao(),
+            dispatcherProvider,
+            historyDataStore,
+        )
     }
 
     @SingleInstanceIn(AppScope::class)
     @Provides
     fun provideDatabase(context: Context): HistoryDatabase {
         return Room.databaseBuilder(context, HistoryDatabase::class.java, "history.db")
+            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .fallbackToDestructiveMigration()
             .addMigrations(*ALL_MIGRATIONS)
             .build()

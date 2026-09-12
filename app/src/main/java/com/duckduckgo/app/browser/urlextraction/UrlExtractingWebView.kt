@@ -21,7 +21,11 @@ import android.content.Context
 import android.webkit.WebSettings
 import android.webkit.WebView
 import com.duckduckgo.app.browser.BuildConfig
+import com.duckduckgo.browsermode.api.BrowserMode
+import com.duckduckgo.browsermode.api.WebViewModeInitializer
 import com.duckduckgo.user.agent.api.UserAgentProvider
+import logcat.LogPriority.WARN
+import logcat.logcat
 
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 class UrlExtractingWebView(
@@ -29,18 +33,22 @@ class UrlExtractingWebView(
     webViewClient: UrlExtractingWebViewClient,
     userAgentProvider: UserAgentProvider,
     urlExtractor: DOMUrlExtractor,
+    webViewModeInitializer: WebViewModeInitializer,
+    browserMode: BrowserMode,
 ) : WebView(context) {
 
     var urlExtractionListener: UrlExtractionListener? = null
     lateinit var initialUrl: String
 
     init {
+        webViewModeInitializer.bind(this, browserMode).onFailure {
+            logcat(WARN) { "URL extractor WebView profile bind failed for $browserMode: ${it.message}" }
+        }
         settings.apply {
             userAgentString = userAgentProvider.userAgent()
             javaScriptEnabled = true
             domStorageEnabled = true
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            disableWebSql(this)
             loadsImagesAutomatically = false
         }
         setWebViewClient(webViewClient)
@@ -52,13 +60,6 @@ class UrlExtractingWebView(
         urlExtractor.addUrlExtraction(this) { extractedUrl ->
             urlExtractionListener?.onUrlExtracted(initialUrl, extractedUrl)
         }
-    }
-
-    /**
-     * Explicitly disable database to try protect against Magellan WebSQL/SQLite vulnerability
-     */
-    private fun disableWebSql(settings: WebSettings) {
-        settings.databaseEnabled = false
     }
 
     override fun loadUrl(url: String) {

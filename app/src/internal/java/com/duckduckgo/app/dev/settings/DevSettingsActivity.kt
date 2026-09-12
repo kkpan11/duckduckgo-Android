@@ -32,6 +32,7 @@ import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.R.layout
 import com.duckduckgo.app.browser.databinding.ActivityDevSettingsBinding
+import com.duckduckgo.app.browser.mode.InAppNavigation
 import com.duckduckgo.app.browser.webview.WebContentDebuggingFeature
 import com.duckduckgo.app.dev.settings.DevSettingsViewModel.Command
 import com.duckduckgo.app.dev.settings.DevSettingsViewModel.Command.ChangePrivacyConfigUrl
@@ -39,7 +40,6 @@ import com.duckduckgo.app.dev.settings.DevSettingsViewModel.Command.CustomTabs
 import com.duckduckgo.app.dev.settings.DevSettingsViewModel.Command.Notifications
 import com.duckduckgo.app.dev.settings.DevSettingsViewModel.Command.OpenUASelector
 import com.duckduckgo.app.dev.settings.DevSettingsViewModel.Command.SendTdsIntent
-import com.duckduckgo.app.dev.settings.DevSettingsViewModel.Command.ShowSavedSitesClearedConfirmation
 import com.duckduckgo.app.dev.settings.DevSettingsViewModel.Command.Tabs
 import com.duckduckgo.app.dev.settings.customtabs.CustomTabsInternalSettingsActivity
 import com.duckduckgo.app.dev.settings.db.UAOverride
@@ -49,18 +49,22 @@ import com.duckduckgo.app.dev.settings.tabs.DevTabsActivity
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.menu.PopupMenu
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.feature.toggles.api.Toggle
 import com.duckduckgo.privacy.config.internal.PrivacyConfigInternalSettingsActivity
-import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 class DevSettingsActivity : DuckDuckGoActivity() {
 
     @Inject
     lateinit var webContentDebuggingFeature: WebContentDebuggingFeature
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private val binding: ActivityDevSettingsBinding by viewBinding()
 
@@ -80,11 +84,19 @@ class DevSettingsActivity : DuckDuckGoActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableTransparentEdgeToEdge()
         setContentView(binding.root)
+        configureEdgeToEdgeInsets()
         setupToolbar(binding.includeToolbar.toolbar)
 
         configureUiEventHandlers()
         observeViewModel()
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.contentScrollView)
     }
 
     override fun onStart() {
@@ -101,15 +113,11 @@ class DevSettingsActivity : DuckDuckGoActivity() {
                 Thread.sleep(10000)
             }
         }
-        binding.clearSavedSites.setOnClickListener {
-            viewModel.clearSavedSites()
-        }
         binding.overrideUserAgentSelector.setOnClickListener { viewModel.onUserAgentSelectorClicked() }
         binding.overridePrivacyRemoteConfigUrl.setOnClickListener { viewModel.onRemotePrivacyUrlClicked() }
         binding.customTabs.setOnClickListener { viewModel.customTabsClicked() }
         binding.notifications.setOnClickListener { viewModel.notificationsClicked() }
         binding.tabs.setOnClickListener { viewModel.tabsClicked() }
-        binding.showTabSwitcherAnimatedTile.setOnClickListener { viewModel.showAnimatedTileClicked() }
     }
 
     private fun observeViewModel() {
@@ -135,7 +143,6 @@ class DevSettingsActivity : DuckDuckGoActivity() {
         when (it) {
             is SendTdsIntent -> sendTdsIntent()
             is OpenUASelector -> showUASelector()
-            is ShowSavedSitesClearedConfirmation -> showSavedSitesClearedConfirmation()
             is ChangePrivacyConfigUrl -> showChangePrivacyUrl()
             is CustomTabs -> showCustomTabs()
             Notifications -> showNotifications()
@@ -145,7 +152,7 @@ class DevSettingsActivity : DuckDuckGoActivity() {
     }
 
     private fun goToUrl(url: String) {
-        startActivity(BrowserActivity.intent(this, url))
+        startActivity(BrowserActivity.intent(this, launchSource = InAppNavigation, queryExtra = url))
         finish()
     }
 
@@ -165,10 +172,6 @@ class DevSettingsActivity : DuckDuckGoActivity() {
             onMenuItemClicked(view.findViewById(R.id.webView)) { viewModel.onUserAgentSelected(UAOverride.WEBVIEW) }
         }
         popup.show(binding.root, binding.overrideUserAgentSelector)
-    }
-
-    private fun showSavedSitesClearedConfirmation() {
-        Toast.makeText(this, getString(R.string.devSettingsClearSavedSitesConfirmation), Toast.LENGTH_SHORT).show()
     }
 
     private fun showChangePrivacyUrl() {

@@ -22,11 +22,10 @@ import com.duckduckgo.privacy.config.api.PrivacyFeatureName
 import com.duckduckgo.privacy.config.impl.features.trackerallowlist.RealTrackerAllowlist
 import com.duckduckgo.privacy.config.store.TrackerAllowlistEntity
 import com.duckduckgo.privacy.config.store.features.trackerallowlist.TrackerAllowlistRepository
+import com.duckduckgo.privacy.config.store.features.trackerallowlist.buildRulesByDomain
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
-import java.lang.reflect.ParameterizedType
-import java.util.concurrent.CopyOnWriteArrayList
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -34,6 +33,7 @@ import org.junit.runner.RunWith
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.robolectric.ParameterizedRobolectricTestRunner
+import java.lang.reflect.ParameterizedType
 
 @RunWith(ParameterizedRobolectricTestRunner::class)
 class TrackerAllowlistReferenceTest(private val testCase: TestCase) {
@@ -95,7 +95,7 @@ class TrackerAllowlistReferenceTest(private val testCase: TestCase) {
     private fun mockAllowlist() {
         val jsonAdapter: JsonAdapter<TrackerAllowlistEntity> =
             moshi.adapter(TrackerAllowlistEntity::class.java)
-        val exceptions = CopyOnWriteArrayList<TrackerAllowlistEntity>()
+        val exceptions = mutableListOf<TrackerAllowlistEntity>()
         val jsonObject: JSONObject =
             FileUtilities.getJsonObjectFromFile(
                 javaClass.classLoader!!,
@@ -106,7 +106,7 @@ class TrackerAllowlistReferenceTest(private val testCase: TestCase) {
             val allowlistEntity = jsonAdapter.fromJson(jsonObject.get(it).toString())
             exceptions.add(allowlistEntity!!.copy(domain = it))
         }
-        whenever(mockTrackerAllowlistRepository.exceptions).thenReturn(exceptions)
+        whenever(mockTrackerAllowlistRepository.rulesByDomain).thenReturn(buildRulesByDomain(exceptions))
     }
 
     data class TestCase(

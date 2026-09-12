@@ -32,9 +32,11 @@ import com.duckduckgo.privacy.config.store.features.trackingparameters.TrackingP
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
 import dagger.WrongScope
+import logcat.LogPriority.ERROR
+import logcat.asLog
+import logcat.logcat
 import java.lang.UnsupportedOperationException
 import javax.inject.Inject
-import timber.log.Timber
 
 @WrongScope("This should be one instance per BrowserTabFragment", FragmentScope::class)
 @ContributesBinding(AppScope::class)
@@ -99,7 +101,7 @@ class RealTrackingParameters @Inject constructor(
             lastCleanedUrl = cleanedUrl
             cleanedUrl
         } catch (exception: UnsupportedOperationException) {
-            Timber.e("Tracking Parameter Removal: ${exception.message}")
+            logcat(ERROR) { "Tracking Parameter Removal: ${exception.asLog()}" }
             null
         }
     }

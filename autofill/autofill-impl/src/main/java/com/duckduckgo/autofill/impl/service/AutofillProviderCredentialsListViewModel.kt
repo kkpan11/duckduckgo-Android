@@ -28,7 +28,6 @@ import com.duckduckgo.autofill.impl.store.InternalAutofillStore
 import com.duckduckgo.autofill.impl.ui.credential.management.searching.CredentialListFilter
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.ActivityScope
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +35,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.*
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class AutofillProviderCredentialsListViewModel @Inject constructor(
@@ -76,7 +77,7 @@ class AutofillProviderCredentialsListViewModel @Inject constructor(
             pixel.fire(AUTOFILL_SERVICE_PASSWORDS_SEARCH_INPUT)
             hasPreviouslySearched = true
         }
-        Timber.v("Search query changed: %s", searchText)
+        logcat(VERBOSE) { "Search query changed: $searchText" }
         searchQueryFilter.value = searchText
         _viewState.value = _viewState.value.copy(credentialSearchQuery = searchText)
     }

@@ -23,8 +23,10 @@ import com.duckduckgo.experiments.api.VariantConfig
 import com.duckduckgo.experiments.api.VariantManager
 import com.duckduckgo.experiments.impl.reinstalls.REINSTALL_VARIANT
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.INFO
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 @WorkerThread
 @ContributesBinding(AppScope::class)
@@ -49,7 +51,7 @@ class VariantManagerImpl @Inject constructor(
 
     override fun updateVariants(variants: List<VariantConfig>) {
         val activeVariants = variants.toVariants()
-        Timber.d("Variants update $variants")
+        logcat { "Variants update $variants" }
         val currentVariantKey = experimentVariantRepository.getUserVariant()
 
         updateUserVariant(activeVariants, currentVariantKey)
@@ -75,13 +77,13 @@ class VariantManagerImpl @Inject constructor(
 
         val keyInActiveVariants = activeVariants.map { it.key }.contains(currentVariantKey)
         if (!keyInActiveVariants) {
-            Timber.i("Variant $currentVariantKey no longer an active variant; user will now use default variant")
+            logcat(INFO) { "Variant $currentVariantKey no longer an active variant; user will now use default variant" }
             val newVariant = DEFAULT_VARIANT
             experimentVariantRepository.updateVariant(newVariant.key)
             return
         }
 
-        Timber.i("Variant $currentVariantKey is still in use, no need to update")
+        logcat(INFO) { "Variant $currentVariantKey is still in use; no need to update" }
     }
 
     private fun List<VariantConfig>.toVariants(): List<Variant> {
@@ -109,7 +111,7 @@ class VariantManagerImpl @Inject constructor(
         if (!compliesWithFilters || appBuildConfig.isDefaultVariantForced) {
             newVariant = DEFAULT_VARIANT
         }
-        Timber.i("Current variant is null; allocating new one ${newVariant.key}")
+        logcat(INFO) { "Current variant is null; allocating new one ${newVariant.key}" }
         experimentVariantRepository.updateVariant(newVariant.key)
         return newVariant
     }
@@ -117,7 +119,7 @@ class VariantManagerImpl @Inject constructor(
     private fun generateVariant(activeVariants: List<Variant>): Variant {
         val weightSum = activeVariants.sumByDouble { it.weight }
         if (weightSum == 0.0) {
-            Timber.v("No variants active; allocating default")
+            logcat(VERBOSE) { "No variants active; allocating default" }
             return DEFAULT_VARIANT
         }
         val randomizedIndex = indexRandomizer.random(activeVariants)
@@ -125,15 +127,6 @@ class VariantManagerImpl @Inject constructor(
     }
 
     companion object {
-
-        /**
-         * Since March 7th 2024 there are two choice screens on Android
-         * Once for Search choice (existing since 2021) and Browser Choice (new since 2024)
-         * We want to be able to measure installs and retention from both screens separately
-         * https://app.asana.com/0/0/1206729008769473/f
-         */
-        const val RESERVED_EU_SEARCH_CHOICE_AUCTION_VARIANT = "ml"
-        const val RESERVED_EU_BROWSER_CHOICE_AUCTION_VARIANT = "mm"
 
         // this will be returned when there are no other active experiments
         val DEFAULT_VARIANT = Variant(key = "", filterBy = { noFilter() })

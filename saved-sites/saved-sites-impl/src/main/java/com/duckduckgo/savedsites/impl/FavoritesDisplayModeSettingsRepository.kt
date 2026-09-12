@@ -29,13 +29,14 @@ import com.duckduckgo.sync.api.SyncState.OFF
 import com.duckduckgo.sync.api.SyncStateMonitor
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
-import javax.inject.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.INFO
+import logcat.logcat
+import javax.inject.*
 
 interface FavoritesDisplayModeSettingsRepository {
     var favoritesDisplayMode: FavoritesDisplayMode
@@ -133,7 +134,7 @@ class RealFavoritesDisplayModeSettingsRepository @Inject constructor(
             FavoritesDisplayMode.NATIVE -> {
                 val isDesktopFavorite = savedSitesRelationsDao.relationsByEntityId(entityId)
                     .find { it.folderId == SavedSitesNames.FAVORITES_DESKTOP_ROOT } != null
-                Timber.i("Sync-Bookmarks: Deleting $entityId, isDesktopFavorite: $isDesktopFavorite")
+                logcat(INFO) { "Sync-Bookmarks: Deleting $entityId, isDesktopFavorite: $isDesktopFavorite" }
                 if (isDesktopFavorite) {
                     listOf(SavedSitesNames.FAVORITES_MOBILE_ROOT)
                 } else {

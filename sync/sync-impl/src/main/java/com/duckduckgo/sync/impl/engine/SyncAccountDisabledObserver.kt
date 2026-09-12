@@ -24,10 +24,11 @@ import com.duckduckgo.di.scopes.*
 import com.duckduckgo.sync.api.engine.*
 import com.duckduckgo.sync.store.*
 import com.squareup.anvil.annotations.*
-import javax.inject.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import timber.log.*
+import logcat.LogPriority.INFO
+import logcat.logcat
+import javax.inject.*
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -47,7 +48,7 @@ class SyncAccountDisabledObserver @Inject constructor(
             .distinctUntilChanged()
             .onEach { signedIn ->
                 if (!signedIn) {
-                    Timber.i("Sync disabled, notify engine")
+                    logcat(INFO) { "Sync disabled, notify engine" }
                     syncEngine.onSyncDisabled()
                 }
             }

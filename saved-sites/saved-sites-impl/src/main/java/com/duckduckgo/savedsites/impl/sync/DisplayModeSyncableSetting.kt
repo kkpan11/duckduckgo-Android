@@ -23,8 +23,9 @@ import com.duckduckgo.sync.settings.api.SyncSettingsListener
 import com.duckduckgo.sync.settings.api.SyncableSetting
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
+import logcat.LogPriority.INFO
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 @SingleInstanceIn(AppScope::class)
 @ContributesMultibinding(scope = AppScope::class, boundType = SyncableSetting::class)
@@ -42,18 +43,18 @@ class DisplayModeSyncableSetting @Inject constructor(
     }
 
     override fun save(value: String?): Boolean {
-        Timber.i("Sync-Settings-Display-Mode: save, value received $value")
+        logcat(INFO) { "Sync-Settings-Display-Mode: save value received $value" }
         val displayMode = FavoritesDisplayMode.values().firstOrNull { it.value == value } ?: return false
-        Timber.i("Sync-Settings-Display-Mode: save, storing($displayMode)")
+        logcat(INFO) { "Sync-Settings-Display-Mode: save storing $displayMode" }
         savedSitesSettingsStore.favoritesDisplayMode = displayMode
         listener.invoke()
         return true
     }
 
     override fun deduplicate(value: String?): Boolean {
-        Timber.i("Sync-Settings-Display-Mode: deduplicate, value received $value")
+        logcat(INFO) { "Sync-Settings-Display-Mode: deduplicate value received $value" }
         val displayMode = FavoritesDisplayMode.values().firstOrNull { it.value == value } ?: return false
-        Timber.i("Sync-Settings-Display-Mode: deduplicate, storing ($displayMode)")
+        logcat(INFO) { "Sync-Settings-Display-Mode: deduplicate storing $displayMode" }
         savedSitesSettingsStore.favoritesDisplayMode = displayMode
         listener.invoke()
         return true
@@ -64,7 +65,7 @@ class DisplayModeSyncableSetting @Inject constructor(
     }
 
     override fun onSettingChanged() {
-        Timber.i("Sync-Settings-Display-Mode: notify Setting Changed")
+        logcat(INFO) { "Sync-Settings-Display-Mode: notify Setting Changed" }
         syncSettingsListener.onSettingChanged(key)
     }
 

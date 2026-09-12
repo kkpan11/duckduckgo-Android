@@ -29,13 +29,13 @@ import com.duckduckgo.mobile.android.vpn.service.VpnServiceCallbacks
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor
 import com.duckduckgo.networkprotection.impl.rekey.RealNetPRekeyer
 import com.squareup.anvil.annotations.ContributesMultibinding
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import logcat.LogPriority
+import logcat.LogPriority.WARN
 import logcat.logcat
+import javax.inject.Inject
 
 @InjectWith(VpnScope::class)
 @ContributesMultibinding(
@@ -64,7 +64,7 @@ class DebugRekeyReceiver @Inject constructor(
             }
 
             else -> {
-                logcat(LogPriority.WARN) { "Unknown action" }
+                logcat(WARN) { "Unknown action" }
                 pendingResult?.finish()
             }
         }

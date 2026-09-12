@@ -31,13 +31,13 @@ import com.duckduckgo.mobile.android.vpn.model.VpnTrackerWithEntity
 import com.duckduckgo.mobile.android.vpn.pixels.DeviceShieldPixels
 import com.duckduckgo.mobile.android.vpn.stats.AppTrackerBlockingStatsRepository
 import com.duckduckgo.mobile.android.vpn.ui.tracker_activity.model.TrackingSignal
-import java.time.LocalDateTime
-import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDateTime
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class AppTPCompanyTrackersViewModel @Inject constructor(
@@ -183,7 +183,7 @@ class AppTPCompanyTrackersViewModel @Inject constructor(
     )
 
     internal sealed class Command {
-        object RestartVpn : Command()
+        data object RestartVpn : Command()
     }
 
     enum class BannerState {

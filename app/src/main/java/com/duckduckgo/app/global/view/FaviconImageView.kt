@@ -25,15 +25,16 @@ import androidx.core.content.ContextCompat.getColor
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import com.bumptech.glide.Glide
-import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.duckduckgo.common.utils.baseHost
-import com.duckduckgo.mobile.android.R as CommonR
+import logcat.LogPriority.ERROR
+import logcat.asLog
+import logcat.logcat
+import okio.ByteString.Companion.encodeUtf8
 import java.io.File
 import java.util.*
 import kotlin.math.absoluteValue
-import okio.ByteString.Companion.encodeUtf8
-import timber.log.Timber
+import com.duckduckgo.mobile.android.R as CommonR
 
 fun ImageView.loadFavicon(
     file: File,
@@ -45,14 +46,12 @@ fun ImageView.loadFavicon(
         Glide.with(context).clear(this@loadFavicon)
         Glide.with(context)
             .load(file)
-            .diskCacheStrategy(DiskCacheStrategy.NONE)
-            .skipMemoryCache(true)
-            .transform(RoundedCorners(10))
+            .transform(RoundedCorners(context.resources.getDimensionPixelSize(CommonR.dimen.verySmallShapeCornerRadius)))
             .placeholder(defaultDrawable)
             .error(defaultDrawable)
             .into(this)
     }.onFailure {
-        Timber.e(it, "Error loading favicon")
+        logcat(ERROR) { "Error loading favicon: ${it.asLog()}" }
     }
 }
 
@@ -64,16 +63,18 @@ fun ImageView.loadFavicon(
     runCatching {
         val defaultDrawable = generateDefaultDrawable(this.context, domain, placeholder)
         Glide.with(context).clear(this)
-        Glide.with(context)
-            .load(bitmap)
-            .diskCacheStrategy(DiskCacheStrategy.NONE)
-            .skipMemoryCache(true)
-            .transform(RoundedCorners(10))
-            .placeholder(defaultDrawable)
-            .error(defaultDrawable)
-            .into(this)
+        if (bitmap != null) {
+            Glide.with(context)
+                .load(bitmap)
+                .transform(RoundedCorners(context.resources.getDimensionPixelSize(CommonR.dimen.verySmallShapeCornerRadius)))
+                .placeholder(defaultDrawable)
+                .error(defaultDrawable)
+                .into(this)
+        } else {
+            setImageDrawable(defaultDrawable)
+        }
     }.onFailure {
-        Timber.e(it, "Error loading favicon")
+        logcat(ERROR) { "Error loading favicon: ${it.asLog()}" }
     }
 }
 
@@ -81,7 +82,7 @@ fun ImageView.loadDefaultFavicon(domain: String) {
     runCatching {
         this.setImageDrawable(generateDefaultDrawable(this.context, domain))
     }.onFailure {
-        Timber.e(it, "Error loading default favicon")
+        logcat(ERROR) { "Error loading default favicon: ${it.asLog()}" }
     }
 }
 
@@ -95,7 +96,7 @@ fun generateDefaultDrawable(
     context: Context,
     domain: String,
     overridePlaceholderCharacter: String? = null,
-    @DimenRes cornerRadius: Int = CommonR.dimen.keyline_0,
+    @DimenRes cornerRadius: Int = CommonR.dimen.verySmallShapeCornerRadius,
 ): Drawable {
     return object : Drawable() {
         private val baseHost: String = domain.toUri().baseHost ?: ""

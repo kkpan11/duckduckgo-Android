@@ -19,6 +19,7 @@ package com.duckduckgo.privacy.config.impl.observers
 import android.content.Context
 import androidx.annotation.WorkerThread
 import androidx.lifecycle.LifecycleOwner
+import com.duckduckgo.anvil.annotations.PriorityKey
 import com.duckduckgo.app.di.AppCoroutineScope
 import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
 import com.duckduckgo.common.utils.DispatcherProvider
@@ -30,12 +31,13 @@ import com.duckduckgo.privacy.config.impl.network.JSONObjectAdapter
 import com.squareup.anvil.annotations.ContributesMultibinding
 import com.squareup.moshi.Moshi
 import dagger.SingleInstanceIn
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @WorkerThread
 @SingleInstanceIn(AppScope::class)
+@PriorityKey(50)
 @ContributesMultibinding(
     scope = AppScope::class,
     boundType = MainProcessLifecycleObserver::class,

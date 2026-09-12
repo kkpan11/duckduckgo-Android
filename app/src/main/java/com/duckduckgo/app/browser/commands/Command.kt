@@ -24,8 +24,10 @@ import android.view.View
 import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
+import androidx.annotation.AttrRes
+import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
-import com.duckduckgo.app.autocomplete.api.AutoComplete.AutoCompleteSuggestion
+import androidx.annotation.StringRes
 import com.duckduckgo.app.browser.BrowserTabViewModel.FileChooserRequestedParams
 import com.duckduckgo.app.browser.ErrorNavigationState
 import com.duckduckgo.app.browser.SpecialUrlDetector.UrlType.AppLink
@@ -35,12 +37,15 @@ import com.duckduckgo.app.browser.WebViewErrorResponse
 import com.duckduckgo.app.browser.history.NavigationHistoryEntry
 import com.duckduckgo.app.browser.model.BasicAuthenticationCredentials
 import com.duckduckgo.app.browser.model.BasicAuthenticationRequest
+import com.duckduckgo.app.browser.viewstate.BrowserViewState
 import com.duckduckgo.app.browser.viewstate.SavedSiteChangedViewState
 import com.duckduckgo.app.cta.ui.BrokenSitePromptDialogCta
 import com.duckduckgo.app.cta.ui.DaxBubbleCta
 import com.duckduckgo.app.cta.ui.OnboardingDaxDialogCta
 import com.duckduckgo.app.fire.fireproofwebsite.data.FireproofWebsiteEntity
+import com.duckduckgo.app.trackerdetection.model.Entity
 import com.duckduckgo.autofill.api.domain.app.LoginCredentials
+import com.duckduckgo.browser.api.autocomplete.AutoComplete.AutoCompleteSuggestion
 import com.duckduckgo.browser.api.brokensite.BrokenSiteData
 import com.duckduckgo.js.messaging.api.JsCallbackData
 import com.duckduckgo.js.messaging.api.SubscriptionEventData
@@ -48,9 +53,15 @@ import com.duckduckgo.malicioussiteprotection.api.MaliciousSiteProtection.Feed
 import com.duckduckgo.privacy.dashboard.api.ui.DashboardOpener
 import com.duckduckgo.savedsites.api.models.SavedSite
 import com.duckduckgo.site.permissions.api.SitePermissionsManager.SitePermissions
+import org.json.JSONObject
 
 sealed class Command {
     class OpenInNewTab(
+        val query: String,
+        val sourceTabId: String? = null,
+    ) : Command()
+
+    class OpenInFireTab(
         val query: String,
         val sourceTabId: String? = null,
     ) : Command()
@@ -60,33 +71,93 @@ sealed class Command {
         val sourceTabId: String? = null,
     ) : Command()
 
-    class OpenInNewBackgroundTab(val query: String) : Command()
-    object LaunchNewTab : Command()
-    object ResetHistory : Command()
-    class LaunchPrivacyPro(val uri: Uri) : Command()
-    class DialNumber(val telephoneNumber: String) : Command()
-    class SendSms(val telephoneNumber: String) : Command()
-    class SendEmail(val emailAddress: String) : Command()
-    object ShowKeyboard : Command()
-    object HideKeyboard : Command()
-    class ShowFullScreen(val view: View) : Command()
+    class OpenInNewBackgroundTab(
+        val query: String,
+    ) : Command()
+
+    object NavigateBackInCustomTab : Command()
+
+    data object LaunchNewTab : Command()
+
+    data object ResetHistory : Command()
+
+    class LaunchSubscription(
+        val uri: Uri,
+    ) : Command()
+
+    data object LaunchVpnManagement : Command()
+
+    class DialNumber(
+        val telephoneNumber: String,
+    ) : Command()
+
+    class SendSms(
+        val telephoneNumber: String,
+    ) : Command()
+
+    class SendEmail(
+        val emailAddress: String,
+    ) : Command()
+
+    data object ShowKeyboard : Command()
+
+    data object HideKeyboard : Command()
+
+    data object HideKeyboardForChat : Command()
+
+    data object DropAddressBarFocus : Command()
+
+    class ShowFullScreen(
+        val view: View,
+    ) : Command()
+
     class DownloadImage(
         val url: String,
         val requestUserConfirmation: Boolean,
     ) : Command()
 
-    class ShowSavedSiteAddedConfirmation(val savedSiteChangedViewState: SavedSiteChangedViewState) : Command()
-    class ShowEditSavedSiteDialog(val savedSiteChangedViewState: SavedSiteChangedViewState) : Command()
-    class DeleteSavedSiteConfirmation(val savedSite: SavedSite) : Command()
-    class DeleteFavoriteConfirmation(val savedSite: SavedSite) : Command()
+    class ShowSavedSiteAddedConfirmation(
+        val savedSiteChangedViewState: SavedSiteChangedViewState,
+    ) : Command()
 
-    class ShowFireproofWebSiteConfirmation(val fireproofWebsiteEntity: FireproofWebsiteEntity) : Command()
-    class DeleteFireproofConfirmation(val fireproofWebsiteEntity: FireproofWebsiteEntity) : Command()
-    class RefreshAndShowPrivacyProtectionEnabledConfirmation(val domain: String) : Command()
-    class RefreshAndShowPrivacyProtectionDisabledConfirmation(val domain: String) : Command()
-    object AskToDisableLoginDetection : Command()
-    class AskToFireproofWebsite(val fireproofWebsite: FireproofWebsiteEntity) : Command()
-    class AskToAutomateFireproofWebsite(val fireproofWebsite: FireproofWebsiteEntity) : Command()
+    class ShowEditSavedSiteDialog(
+        val savedSiteChangedViewState: SavedSiteChangedViewState,
+    ) : Command()
+
+    class DeleteSavedSiteConfirmation(
+        val savedSite: SavedSite,
+    ) : Command()
+
+    class DeleteFavoriteConfirmation(
+        val savedSite: SavedSite,
+    ) : Command()
+
+    class ShowFireproofWebSiteConfirmation(
+        val fireproofWebsiteEntity: FireproofWebsiteEntity,
+    ) : Command()
+
+    class DeleteFireproofConfirmation(
+        val fireproofWebsiteEntity: FireproofWebsiteEntity,
+    ) : Command()
+
+    class RefreshAndShowPrivacyProtectionEnabledConfirmation(
+        val domain: String,
+    ) : Command()
+
+    class RefreshAndShowPrivacyProtectionDisabledConfirmation(
+        val domain: String,
+    ) : Command()
+
+    data object AskToDisableLoginDetection : Command()
+
+    class AskToFireproofWebsite(
+        val fireproofWebsite: FireproofWebsiteEntity,
+    ) : Command()
+
+    class AskToAutomateFireproofWebsite(
+        val fireproofWebsite: FireproofWebsiteEntity,
+    ) : Command()
+
     class ShareLink(
         val url: String,
         val title: String = "",
@@ -98,15 +169,28 @@ sealed class Command {
     ) : Command()
 
     class PrintLink(
-        val url: String,
+        val documentName: String,
         val mediaSize: MediaSize,
     ) : Command()
 
-    class CopyLink(val url: String) : Command()
-    class FindInPageCommand(val searchTerm: String) : Command()
-    class BrokenSiteFeedback(val data: BrokenSiteData) : Command()
-    class ToggleReportFeedback(val opener: DashboardOpener) : Command()
-    object DismissFindInPage : Command()
+    class CopyLink(
+        val url: String,
+    ) : Command()
+
+    class FindInPageCommand(
+        val searchTerm: String,
+    ) : Command()
+
+    class BrokenSiteFeedback(
+        val data: BrokenSiteData,
+    ) : Command()
+
+    class ToggleReportFeedback(
+        val opener: DashboardOpener,
+    ) : Command()
+
+    data object DismissFindInPage : Command()
+
     class ShowFileChooser(
         val filePathCallback: ValueCallback<Array<Uri>>,
         val fileChooserParams: FileChooserRequestedParams,
@@ -117,14 +201,17 @@ sealed class Command {
         val fileChooserParams: FileChooserRequestedParams,
         val inputAction: String,
     ) : Command()
+
     class ShowImageCamera(
         val filePathCallback: ValueCallback<Array<Uri>>,
         val fileChooserParams: FileChooserRequestedParams,
     ) : Command()
+
     class ShowVideoCamera(
         val filePathCallback: ValueCallback<Array<Uri>>,
         val fileChooserParams: FileChooserRequestedParams,
     ) : Command()
+
     class ShowSoundRecorder(
         val filePathCallback: ValueCallback<Array<Uri>>,
         val fileChooserParams: FileChooserRequestedParams,
@@ -133,38 +220,67 @@ sealed class Command {
     class HandleNonHttpAppLink(
         val nonHttpAppLink: NonHttpAppLink,
         val headers: Map<String, String>,
+        val showConfirmation: Boolean = true,
     ) : Command()
 
-    class ShowAppLinkPrompt(val appLink: AppLink) : Command()
-    class OpenAppLink(val appLink: AppLink) : Command()
-    class ExtractUrlFromCloakedAmpLink(val initialUrl: String) : Command()
-    class LoadExtractedUrl(val extractedUrl: String) : Command()
+    class ShowAppLinkPrompt(
+        val appLink: AppLink,
+    ) : Command()
+
+    class OpenAppLink(
+        val appLink: AppLink,
+        val finishCustomTabOnLaunch: Boolean = false,
+    ) : Command()
+
+    class ExtractUrlFromCloakedAmpLink(
+        val initialUrl: String,
+    ) : Command()
+
+    class LoadExtractedUrl(
+        val extractedUrl: String,
+    ) : Command()
+
     class AddHomeShortcut(
         val title: String,
         val url: String,
         val icon: Bitmap? = null,
     ) : Command()
 
-    class SubmitUrl(val url: String) : Command()
-    class LaunchPlayStore(val appPackage: String) : Command()
-    object LaunchDefaultBrowser : Command()
-    object LaunchAppTPOnboarding : Command()
-    object LaunchAddWidget : Command()
-    class RequiresAuthentication(val request: BasicAuthenticationRequest) : Command()
+    class SubmitUrl(
+        val url: String,
+    ) : Command()
+
+    class LaunchPlayStore(
+        val appPackage: String,
+    ) : Command()
+
+    data object LaunchDefaultBrowser : Command()
+
+    data object LaunchAppTPOnboarding : Command()
+
+    data object LaunchAddWidgetOnboarding : Command()
+
+    class RequiresAuthentication(
+        val request: BasicAuthenticationRequest,
+    ) : Command()
+
     class SaveCredentials(
         val request: BasicAuthenticationRequest,
         val credentials: BasicAuthenticationCredentials,
     ) : Command()
 
-    object GenerateWebViewPreviewImage : Command()
-    object LaunchTabSwitcher : Command()
-    object HideWebContent : Command()
-    object ShowWebContent : Command()
+    data object GenerateWebViewPreviewImage : Command()
+
+    data object LaunchTabSwitcher : Command()
+
+    data object HideWebContent : Command()
+
+    data object ShowWebContent : Command()
+
     class ShowWebPageTitle(
         val title: String,
-        val url: String?,
-        val showDuckPlayerIcon: Boolean = false,
     ) : Command()
+
     class RefreshUserAgent(
         val url: String?,
         val isDesktop: Boolean,
@@ -175,7 +291,10 @@ sealed class Command {
         val action: () -> Unit,
     ) : Command()
 
-    class ShowDomainHasPermissionMessage(val domain: String) : Command()
+    class ShowDomainHasPermissionMessage(
+        val domain: String,
+    ) : Command()
+
     class ConvertBlobToDataUri(
         val url: String,
         val mimeType: String,
@@ -188,22 +307,42 @@ sealed class Command {
         val requestUserConfirmation: Boolean,
     ) : Command()
 
-    object ChildTabClosed : Command()
+    data object ChildTabClosed : Command()
 
-    class CopyAliasToClipboard(val alias: String) : Command()
+    class CopyAliasToClipboard(
+        val alias: String,
+    ) : Command()
+
     class InjectEmailAddress(
         val duckAddress: String,
         val originalUrl: String,
         val autoSaveLogin: Boolean,
     ) : Command()
 
-    class ShowEmailProtectionChooseEmailPrompt(val address: String) : Command()
-    object ShowEmailProtectionInContextSignUpPrompt : Command()
-    class CancelIncomingAutofillRequest(val url: String) : Command()
-    data class LaunchAutofillSettings(val privacyProtectionEnabled: Boolean) : Command()
-    class EditWithSelectedQuery(val query: String) : Command()
-    class ShowBackNavigationHistory(val history: List<NavigationHistoryEntry>) : Command()
-    object EmailSignEvent : Command()
+    class ShowEmailProtectionChooseEmailPrompt(
+        val address: String,
+    ) : Command()
+
+    data object ShowEmailProtectionInContextSignUpPrompt : Command()
+
+    class CancelIncomingAutofillRequest(
+        val url: String,
+    ) : Command()
+
+    data class LaunchAutofillSettings(
+        val privacyProtectionEnabled: Boolean,
+    ) : Command()
+
+    class EditWithSelectedQuery(
+        val query: String,
+    ) : Command()
+
+    class ShowBackNavigationHistory(
+        val history: List<NavigationHistoryEntry>,
+    ) : Command()
+
+    data object EmailSignEvent : Command()
+
     class ShowSitePermissionsDialog(
         val permissionsToRequest: SitePermissions,
         val request: PermissionRequest,
@@ -239,38 +378,177 @@ sealed class Command {
         val feed: Feed,
     ) : Command()
 
-    data class OpenBrokenSiteLearnMore(val url: String) : Command()
-    data class ReportBrokenSiteError(val url: String) : Command()
+    data class OpenBrokenSiteLearnMore(
+        val url: String,
+    ) : Command()
+
+    data class ReportBrokenSiteError(
+        val url: String,
+    ) : Command()
 
     // TODO (cbarreiro) Rename to SendResponseToCSS
-    data class SendResponseToJs(val data: JsCallbackData) : Command()
-    data class SendResponseToDuckPlayer(val data: JsCallbackData) : Command()
-    data class SendSubscriptions(val cssData: SubscriptionEventData, val duckPlayerData: SubscriptionEventData) : Command()
-    data class WebShareRequest(val data: JsCallbackData) : Command()
-    data class ScreenLock(val data: JsCallbackData) : Command()
-    object ScreenUnlock : Command()
+    data class SendResponseToJs(
+        val data: JsCallbackData,
+    ) : Command()
+
+    data class SendResponseToDuckPlayer(
+        val data: JsCallbackData,
+    ) : Command()
+
+    data class SendSubscriptions(
+        val cssData: SubscriptionEventData,
+        val duckPlayerData: SubscriptionEventData,
+    ) : Command()
+
+    data class WebShareRequest(
+        val data: JsCallbackData,
+    ) : Command()
+
+    data class WebViewCompatWebShareRequest(
+        val data: JsCallbackData,
+        val onResponse: suspend (JSONObject) -> Unit,
+    ) : Command()
+
+    data class ScreenLock(
+        val data: JsCallbackData,
+    ) : Command()
+
+    data class WebViewCompatScreenLock(
+        val data: JsCallbackData,
+        val onResponse: suspend (JSONObject) -> Unit,
+    ) : Command()
+
+    data object ScreenUnlock : Command()
+
+    data class UiLockChanged(val locked: Boolean) : Command()
+
+    data class SetContentAllowsSwipeToRefresh(val allowed: Boolean) : Command()
+
     data object ShowFaviconsPrompt : Command()
-    data class ShowSSLError(val handler: SslErrorHandler, val error: SslErrorResponse) : Command()
+
+    data class ShowSSLError(
+        val handler: SslErrorHandler,
+        val error: SslErrorResponse,
+    ) : Command()
+
     data object HideSSLError : Command()
+
     class LaunchScreen(
         val screen: String,
         val payload: String,
     ) : Command()
-    data class HideOnboardingDaxDialog(val onboardingCta: OnboardingDaxDialogCta) : Command()
-    data class HideBrokenSitePromptCta(val brokenSitePromptDialogCta: BrokenSitePromptDialogCta) : Command()
-    data class HideOnboardingDaxBubbleCta(val daxBubbleCta: DaxBubbleCta) : Command()
-    data class ShowRemoveSearchSuggestionDialog(val suggestion: AutoCompleteSuggestion) : Command()
+
+    data class HideOnboardingDaxDialog(
+        val onboardingCta: OnboardingDaxDialogCta,
+    ) : Command()
+
+    data class HideBrokenSitePromptCta(
+        val brokenSitePromptDialogCta: BrokenSitePromptDialogCta,
+    ) : Command()
+
+    data class HideOnboardingDaxBubbleCta(
+        val daxBubbleCta: DaxBubbleCta,
+    ) : Command()
+
+    data class ShowRemoveSearchSuggestionDialog(
+        val suggestion: AutoCompleteSuggestion,
+    ) : Command()
+
     data object AutocompleteItemRemoved : Command()
-    object OpenDuckPlayerSettings : Command()
-    object OpenDuckPlayerOverlayInfo : Command()
-    object OpenDuckPlayerPageInfo : Command()
-    class SetBrowserBackground(@DrawableRes val backgroundRes: Int) : Command()
-    class SetOnboardingDialogBackground(@DrawableRes val backgroundRes: Int) : Command()
-    data class LaunchFireDialogFromOnboardingDialog(val onboardingCta: OnboardingDaxDialogCta) : Command()
-    data class SwitchToTab(val tabId: String) : Command()
+
+    data object OpenDuckPlayerSettings : Command()
+
+    data object OpenDuckPlayerOverlayInfo : Command()
+
+    data object OpenDuckPlayerPageInfo : Command()
+
+    class SetBrowserBackground(
+        @DrawableRes val backgroundRes: Int,
+        val useRebrandBackground: Boolean = false,
+        @AttrRes val backgroundColorAttr: Int = 0,
+        val fillHeightDp: Float = 0f,
+        val fillMaxHeightFraction: Float = 1f,
+    ) : Command()
+
+    class SetOnboardingDialogBackground(
+        @DrawableRes val backgroundRes: Int,
+    ) : Command()
+
+    class SetOnboardingDialogBackgroundColor(
+        @ColorRes val colorRes: Int,
+    ) : Command()
+
+    data object ReinflateBrandDesignContextualDialog : Command()
+
+    data class LaunchFireDialogFromOnboardingDialog(
+        val onboardingCta: OnboardingDaxDialogCta,
+    ) : Command()
+
+    data object LaunchDuckAiOnboardingFireDialog : Command()
+
+    data class SwitchToTab(
+        val tabId: String,
+    ) : Command()
+
     data object CloseCustomTab : Command()
+
+    /**
+     * Finishes only the [CustomTabActivity] (not the whole task). Used when the custom tab is being
+     * dismissed while another activity (e.g. the Duck Chat host) is being launched into the same task,
+     * where [CloseCustomTab]'s `finishAndRemoveTask()` would tear down that activity too.
+     */
+    data object FinishCustomTab : Command()
+
     data class LaunchPopupMenu(val anchorToNavigationBar: Boolean) : Command()
-    data class ShowAutoconsentAnimation(val isCosmetic: Boolean) : Command()
+
+    data class ShowAutoconsentAnimation(
+        val isCosmetic: Boolean,
+    ) : Command()
+
     data object LaunchBookmarksActivity : Command()
-    data object StartTrackersExperimentShieldPopAnimation : Command()
+
+    data object RefreshOmnibar : Command()
+
+    data object LaunchDuckChatHistory : Command()
+
+    data class ExtractSerpLogo(
+        val currentUrl: String,
+    ) : Command()
+
+    data class ShowSerpEasterEggLogo(
+        val logoUrl: String,
+    ) : Command()
+
+    data class EnqueueCookiesAnimation(
+        val isCosmetic: Boolean,
+    ) : Command()
+    data object PageStarted : Command()
+
+    data class EnableDuckAIFullScreen(val browserViewState: BrowserViewState) : Command()
+    data class DuckAIFullScreenDisabled(val url: String) : Command()
+
+    data class ShowDuckAIContextualMode(val tabId: String, val sourceUrl: String?) : Command()
+
+    data class StartAddressBarTrackersAnimation(val trackerEntities: List<Entity>?) : Command()
+
+    data class StartAdBlockingAnimation(
+        @DrawableRes val icon: Int,
+        @StringRes val text: Int,
+    ) : Command()
+
+    data class PageContextReceived(
+        val tabId: String,
+        val pageContext: String,
+    ) : Command()
+
+    data class ShowToast(@param:StringRes val textResId: Int) : Command()
+
+    data class ShowPdfInTab(
+        val url: String,
+        val cachedFileUri: Uri,
+    ) : Command()
+
+    data object ShowPdfDownloadTooltip : Command()
+
+    data object ExpandOmnibar : Command()
 }

@@ -19,6 +19,7 @@ package com.duckduckgo.subscriptions.impl.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.duckduckgo.anvil.annotations.ContributesViewModel
+import com.duckduckgo.app.di.AppCoroutineScope
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.subscriptions.api.SubscriptionStatus
@@ -26,6 +27,7 @@ import com.duckduckgo.subscriptions.impl.RealSubscriptionsManager.Companion.SUBS
 import com.duckduckgo.subscriptions.impl.RealSubscriptionsManager.RecoverSubscriptionResult
 import com.duckduckgo.subscriptions.impl.SubscriptionsChecker
 import com.duckduckgo.subscriptions.impl.SubscriptionsManager
+import com.duckduckgo.subscriptions.impl.auth.AuthClient
 import com.duckduckgo.subscriptions.impl.pixels.SubscriptionPixelSender
 import com.duckduckgo.subscriptions.impl.repository.isExpired
 import com.duckduckgo.subscriptions.impl.ui.RestoreSubscriptionViewModel.Command.Error
@@ -34,7 +36,8 @@ import com.duckduckgo.subscriptions.impl.ui.RestoreSubscriptionViewModel.Command
 import com.duckduckgo.subscriptions.impl.ui.RestoreSubscriptionViewModel.Command.RestoreFromEmail
 import com.duckduckgo.subscriptions.impl.ui.RestoreSubscriptionViewModel.Command.SubscriptionNotFound
 import com.duckduckgo.subscriptions.impl.ui.RestoreSubscriptionViewModel.Command.Success
-import javax.inject.Inject
+import com.duckduckgo.subscriptions.impl.wideevents.SubscriptionRestoreWideEvent
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -44,6 +47,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class RestoreSubscriptionViewModel @Inject constructor(
@@ -51,6 +56,9 @@ class RestoreSubscriptionViewModel @Inject constructor(
     private val subscriptionsChecker: SubscriptionsChecker,
     private val dispatcherProvider: DispatcherProvider,
     private val pixelSender: SubscriptionPixelSender,
+    private val authClient: AuthClient,
+    @AppCoroutineScope private val appCoroutineScope: CoroutineScope,
+    private val subscriptionRestoreWideEvent: SubscriptionRestoreWideEvent,
 ) : ViewModel() {
 
     private val command = Channel<Command>(1, DROP_OLDEST)
@@ -58,6 +66,7 @@ class RestoreSubscriptionViewModel @Inject constructor(
 
     private val _viewState = MutableStateFlow(ViewState())
     val viewState = _viewState.asStateFlow()
+
     data class ViewState(
         val email: String? = null,
     )
@@ -70,19 +79,22 @@ class RestoreSubscriptionViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
-    fun restoreFromStore() {
+    fun restoreFromStore(isOriginWeb: Boolean) {
         pixelSender.reportActivateSubscriptionRestorePurchaseClick()
         viewModelScope.launch(dispatcherProvider.io()) {
-            when (val subscription = subscriptionsManager.recoverSubscriptionFromStore()) {
+            subscriptionRestoreWideEvent.onGooglePlayRestoreFlowStarted(isOriginWeb)
+            when (val restoreResult = subscriptionsManager.recoverSubscriptionFromStore()) {
                 is RecoverSubscriptionResult.Success -> {
                     subscriptionsChecker.runChecker()
                     pixelSender.reportRestoreUsingStoreSuccess()
                     pixelSender.reportSubscriptionActivated()
+                    subscriptionRestoreWideEvent.onGooglePlayRestoreSuccess()
                     command.send(Success)
                 }
 
                 is RecoverSubscriptionResult.Failure -> {
-                    when (subscription.message) {
+                    subscriptionRestoreWideEvent.onGooglePlayRestoreFailure(error = restoreResult.message)
+                    when (restoreResult.message) {
                         SUBSCRIPTION_NOT_FOUND_ERROR -> {
                             if (subscriptionStatus.isExpired()) {
                                 subscriptionsManager.signOut()
@@ -101,18 +113,35 @@ class RestoreSubscriptionViewModel @Inject constructor(
         }
     }
 
-    fun restoreFromEmail() {
+    fun restoreFromEmail(isOriginWeb: Boolean) {
         pixelSender.reportActivateSubscriptionEnterEmailClick()
         viewModelScope.launch {
+            subscriptionRestoreWideEvent.onEmailRestoreFlowStarted(isOriginWeb)
             command.send(RestoreFromEmail)
         }
+        warmUpJwksCache()
     }
 
     fun onSubscriptionRestoredFromEmail() = viewModelScope.launch {
+        subscriptionRestoreWideEvent.onEmailRestoreSuccess()
         if (subscriptionStatus.isExpired()) {
             command.send(FinishAndGoToSubscriptionSettings)
         } else {
             command.send(FinishAndGoToOnboarding)
+        }
+    }
+
+    /*
+        We'll need JWKs to validate auth tokens returned by FE after the user completes activation flow using email.
+        Prefetching them is optional, but it reduces the risk of failure when the network connection is unstable.
+     */
+    private fun warmUpJwksCache() {
+        appCoroutineScope.launch {
+            try {
+                authClient.getJwks()
+            } catch (e: Exception) {
+                logcat { "Failed to warm-up JWKs cache, e: ${e.stackTraceToString()}" }
+            }
         }
     }
 

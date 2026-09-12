@@ -32,12 +32,12 @@ import com.duckduckgo.di.scopes.ReceiverScope
 import com.duckduckgo.mobile.android.vpn.Vpn
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
 import com.squareup.anvil.annotations.ContributesMultibinding
-import javax.inject.Inject
-import kotlin.properties.Delegates
 import kotlinx.coroutines.*
-import logcat.LogPriority
+import logcat.LogPriority.ERROR
 import logcat.asLog
 import logcat.logcat
+import javax.inject.Inject
+import kotlin.properties.Delegates
 
 @InjectWith(ReceiverScope::class)
 @ContributesMultibinding(
@@ -147,7 +147,7 @@ class VpnCallStateReceiver @Inject constructor(
         runCatching {
             currentListener = _listener
         }.onFailure { t ->
-            logcat(LogPriority.ERROR) { "CALL_STATE error registering: ${t.asLog()}" }
+            logcat(ERROR) { "CALL_STATE error registering: ${t.asLog()}" }
         }
     }
 

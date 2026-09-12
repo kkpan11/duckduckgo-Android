@@ -1,6 +1,7 @@
 package com.duckduckgo.sync.impl.ui.qrcode
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -12,26 +13,32 @@ class SyncBarcodeUrlTest {
 
     @Test
     fun whenDeviceNamePopulatedThenIncludedInUrl() {
-        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", urlEncodedDeviceName = "iPhone")
+        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", deviceName = "iPhone")
         assertEquals("${URL_BASE}code=ABC-123&deviceName=iPhone", url.asUrl())
     }
 
     @Test
     fun whenDeviceNameBlankStringThenNotIncludedInUrl() {
-        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", urlEncodedDeviceName = " ")
+        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", deviceName = " ")
         assertEquals("${URL_BASE}code=ABC-123", url.asUrl())
     }
 
     @Test
     fun whenDeviceNameEmptyStringThenNotIncludedInUrl() {
-        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", urlEncodedDeviceName = "")
+        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", deviceName = "")
         assertEquals("${URL_BASE}code=ABC-123", url.asUrl())
     }
 
     @Test
     fun whenDeviceNameNullThenNotIncludedInUrl() {
-        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", urlEncodedDeviceName = null)
+        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", deviceName = null)
         assertEquals("${URL_BASE}code=ABC-123", url.asUrl())
+    }
+
+    @Test
+    fun whenDeviceNameContainsSpaceCharacterThenStillHasASpaceInProperty() {
+        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", deviceName = "iPhone 16")
+        assertEquals("iPhone 16", url.deviceName)
     }
 
     @Test
@@ -42,9 +49,59 @@ class SyncBarcodeUrlTest {
     }
 
     @Test
+    fun whenDeviceNameProvidedThenIsSuccessfullyExtracted() {
+        val url = SyncBarcodeUrl.parseUrl("${URL_BASE}code=ABC-123&deviceName=iPhone+16")
+        assertEquals("iPhone 16", url!!.deviceName)
+    }
+
+    @Test
     fun whenCodeMissingProvidedThenIsNull() {
         val url = SyncBarcodeUrl.parseUrl(URL_BASE)
         assertNull(url)
+    }
+
+    @Test
+    fun whenDeviceNameContainsSpacesThenIsUrlEncoded() = runTest {
+        val url = SyncBarcodeUrl(webSafeB64EncodedCode = "ABC-123", deviceName = "iPhone 16")
+        assertEquals("${URL_BASE}code=ABC-123&deviceName=iPhone+16", url.asUrl())
+    }
+
+    @Test
+    fun whenV2CodeParamProvidedThenIsSuccessfullyExtractedAsV2() {
+        val url = SyncBarcodeUrl.parseUrl("${URL_BASE}code2=ABC-V2")
+        assertNotNull(url)
+        assertEquals("ABC-V2", url!!.webSafeB64EncodedCode)
+        assertEquals(SyncBarcodeUrl.ProtocolVersion.V2, url.protocolVersion)
+    }
+
+    @Test
+    fun whenV1CodeParamProvidedThenProtocolVersionIsV1() {
+        val url = SyncBarcodeUrl.parseUrl("${URL_BASE}code=ABC-V1")
+        assertEquals(SyncBarcodeUrl.ProtocolVersion.V1, url!!.protocolVersion)
+    }
+
+    @Test
+    fun whenV2UrlBuiltThenUsesCode2Param() {
+        val url = SyncBarcodeUrl(
+            webSafeB64EncodedCode = "ABC-V2",
+            protocolVersion = SyncBarcodeUrl.ProtocolVersion.V2,
+        )
+        assertEquals("${URL_BASE}code2=ABC-V2", url.asUrl())
+    }
+
+    @Test
+    fun whenV2UrlHasDeviceNameThenIncludedInRebuiltUrl() {
+        val url = SyncBarcodeUrl.parseUrl("${URL_BASE}code2=ABC-V2&deviceName=Android")
+        assertEquals("Android", url!!.deviceName)
+        assertEquals("${URL_BASE}code2=ABC-V2&deviceName=Android", url.asUrl())
+    }
+
+    @Test
+    fun whenUrlContainsBothCodeAndCode2ThenV2Wins() {
+        // Malformed URL but defensible behavior — prefer v2 (the newer protocol).
+        val url = SyncBarcodeUrl.parseUrl("${URL_BASE}code=v1stale&code2=v2current")
+        assertEquals("v2current", url!!.webSafeB64EncodedCode)
+        assertEquals(SyncBarcodeUrl.ProtocolVersion.V2, url.protocolVersion)
     }
 
     companion object {

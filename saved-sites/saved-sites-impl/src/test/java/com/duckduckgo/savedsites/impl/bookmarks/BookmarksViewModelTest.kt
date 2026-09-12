@@ -16,10 +16,14 @@
 
 package com.duckduckgo.savedsites.impl.bookmarks
 
+import android.annotation.SuppressLint
+import android.content.Intent
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.lifecycle.Observer
 import com.duckduckgo.app.browser.favicon.FaviconManager
 import com.duckduckgo.app.statistics.pixels.Pixel
+import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Daily
+import com.duckduckgo.autofill.api.ImportFromGoogle
 import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.common.test.InstantSchedulersRule
 import com.duckduckgo.savedsites.api.SavedSitesRepository
@@ -33,13 +37,14 @@ import com.duckduckgo.savedsites.api.models.SavedSitesNames
 import com.duckduckgo.savedsites.api.models.SavedSitesNames.BOOKMARKS_ROOT
 import com.duckduckgo.savedsites.api.service.SavedSitesManager
 import com.duckduckgo.savedsites.impl.SavedSitesPixelName
+import com.duckduckgo.savedsites.impl.SavedSitesPixelParameters
 import com.duckduckgo.savedsites.impl.bookmarks.BookmarksAdapter.BookmarkItem
-import com.duckduckgo.savedsites.impl.bookmarks.BookmarksAdapter.BookmarksItemTypes
 import com.duckduckgo.savedsites.impl.store.BookmarksDataStore
 import com.duckduckgo.savedsites.impl.store.SortingMode.MANUAL
 import com.duckduckgo.savedsites.impl.store.SortingMode.NAME
 import com.duckduckgo.sync.api.engine.SyncEngine
 import com.duckduckgo.sync.api.favicons.FaviconsFetchingPrompt
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -50,6 +55,7 @@ import org.junit.Test
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.kotlin.*
 
+@SuppressLint("DenyListedApi")
 class BookmarksViewModelTest {
 
     @get:Rule
@@ -63,6 +69,8 @@ class BookmarksViewModelTest {
     @get:Rule
     @Suppress("unused")
     val coroutineRule = CoroutineTestRule()
+
+    private val importFromGoogle: ImportFromGoogle = mock()
 
     private val commandCaptor = argumentCaptor<BookmarksViewModel.Command>()
     private val viewStateCaptor = argumentCaptor<BookmarksViewModel.ViewState>()
@@ -91,6 +99,14 @@ class BookmarksViewModelTest {
     private val bookmarkFolder = BookmarkFolder(id = "folder1", name = "folder", parentId = SavedSitesNames.BOOKMARKS_ROOT, 0, 0, "timestamp")
     private val bookmarkFolderItem = BookmarkFolderItem(0, bookmarkFolder, true)
 
+    private val favoritesFlow = MutableStateFlow(listOf(favorite))
+    private val savedSitesFlow = MutableStateFlow(
+        SavedSites(
+            listOf(favorite),
+            listOf(bookmark, bookmarkFolder, bookmarkFolder, bookmarkFolder),
+        ),
+    )
+
     private val testee: BookmarksViewModel by lazy {
         val model = BookmarksViewModel(
             savedSitesRepository,
@@ -101,6 +117,7 @@ class BookmarksViewModelTest {
             faviconsFetchingPrompt,
             bookmarksDataStore,
             coroutineRule.testDispatcherProvider,
+            importFromGoogle,
             coroutineRule.testScope,
         )
         model.viewState.observeForever(viewStateObserver)
@@ -110,16 +127,9 @@ class BookmarksViewModelTest {
 
     @Before
     fun before() = runTest {
-        whenever(savedSitesRepository.getFavorites()).thenReturn(flowOf(listOf(favorite)))
+        whenever(savedSitesRepository.getFavorites()).thenReturn(favoritesFlow)
 
-        whenever(savedSitesRepository.getSavedSites(anyString())).thenReturn(
-            flowOf(
-                SavedSites(
-                    listOf(favorite),
-                    listOf(bookmark, bookmarkFolder, bookmarkFolder, bookmarkFolder),
-                ),
-            ),
-        )
+        whenever(savedSitesRepository.getSavedSites(anyString())).thenReturn(savedSitesFlow)
 
         whenever(bookmarksDataStore.getSortingMode()).thenReturn(NAME)
         testee.fetchBookmarksAndFolders(SavedSitesNames.BOOKMARKS_ROOT)
@@ -129,6 +139,18 @@ class BookmarksViewModelTest {
     fun after() {
         testee.viewState.removeObserver(viewStateObserver)
         testee.command.removeObserver(commandObserver)
+    }
+
+    @Test
+    fun whenInitSendBookmarksPressedPixels() {
+        verify(pixel).fire(SavedSitesPixelName.MENU_ACTION_BOOKMARKS_PRESSED.pixelName)
+        verify(pixel).fire(
+            SavedSitesPixelName.MENU_ACTION_BOOKMARKS_PRESSED_DAILY.pixelName,
+            parameters = mapOf(SavedSitesPixelParameters.SORT_MODE to bookmarksDataStore.getSortingMode().name),
+            type = Daily(),
+        )
+        verify(pixel).fire(SavedSitesPixelName.PRODUCT_TELEMETRY_SURFACE_BOOKMARKS_OPENED.pixelName)
+        verify(pixel).fire(SavedSitesPixelName.PRODUCT_TELEMETRY_SURFACE_BOOKMARKS_OPENED_DAILY.pixelName, type = Daily())
     }
 
     @Test
@@ -476,8 +498,7 @@ class BookmarksViewModelTest {
     }
 
     @Test
-    fun whenSortingByNameSelectedThenListIsSorted() {
-        val items = mutableListOf<BookmarksItemTypes>()
+    fun whenSortingByNameSelectedThenListIsSorted() = runTest {
         val folderNews = BookmarkFolder(id = "folderA", name = "News", parentId = SavedSitesNames.BOOKMARKS_ROOT, 0, 0, "timestamp")
         val folderSports = BookmarkFolder(id = "folderB", name = "Sports", parentId = SavedSitesNames.BOOKMARKS_ROOT, 0, 0, "timestamp")
         val bookmarkAs = Bookmark(id = "bookmarkA", title = "As", url = "www.example.com", parentId = SavedSitesNames.BOOKMARKS_ROOT, "timestamp")
@@ -497,20 +518,59 @@ class BookmarksViewModelTest {
             "timestamp",
         )
 
-        items.add(BookmarkItem(bookmarkAs))
-        items.add(BookmarkItem(bookmarkReddit))
-        items.add(BookmarkItem(bookmarkCnn))
-        items.add(BookmarkItem(bookmarkTheGuardian))
-        items.add(BookmarksAdapter.BookmarkFolderItem(folderSports))
-        items.add(BookmarksAdapter.BookmarkFolderItem(folderNews))
+        savedSitesFlow.value = SavedSites(
+            emptyList(),
+            listOf(bookmarkAs, bookmarkReddit, bookmarkCnn, bookmarkTheGuardian, folderSports, folderNews),
+        )
+        testee.fetchBookmarksAndFolders(BOOKMARKS_ROOT)
 
-        val sortedElements = testee.sortElements(items, NAME)
+        testee.onSortingModeSelected(NAME)
+
+        val sortedElements = testee.itemsToDisplay.value
         assertEquals((sortedElements[0] as BookmarkItem).bookmark, bookmarkAs)
         assertEquals((sortedElements[1] as BookmarkItem).bookmark, bookmarkCnn)
         assertEquals((sortedElements[2] as BookmarksAdapter.BookmarkFolderItem).bookmarkFolder, folderNews)
         assertEquals((sortedElements[3] as BookmarkItem).bookmark, bookmarkReddit)
         assertEquals((sortedElements[4] as BookmarksAdapter.BookmarkFolderItem).bookmarkFolder, folderSports)
         assertEquals((sortedElements[5] as BookmarkItem).bookmark, bookmarkTheGuardian)
+    }
+
+    @Test
+    fun whenSortingManualSelectedThenListIsSorted() = runTest {
+        val folderNews = BookmarkFolder(id = "folderA", name = "News", parentId = SavedSitesNames.BOOKMARKS_ROOT, 0, 0, "timestamp")
+        val folderSports = BookmarkFolder(id = "folderB", name = "Sports", parentId = SavedSitesNames.BOOKMARKS_ROOT, 0, 0, "timestamp")
+        val bookmarkAs = Bookmark(id = "bookmarkA", title = "As", url = "www.example.com", parentId = SavedSitesNames.BOOKMARKS_ROOT, "timestamp")
+        val bookmarkCnn = Bookmark(id = "bookmarCnn", title = "Cnn", url = "www.example.com", parentId = SavedSitesNames.BOOKMARKS_ROOT, "timestamp")
+        val bookmarkReddit = Bookmark(
+            id = "bookmarReddit",
+            title = "Reddit",
+            url = "www.example.com",
+            parentId = SavedSitesNames.BOOKMARKS_ROOT,
+            "timestamp",
+        )
+        val bookmarkTheGuardian = Bookmark(
+            id = "bookmarT",
+            title = "The Guardian",
+            url = "www.example.com",
+            parentId = SavedSitesNames.BOOKMARKS_ROOT,
+            "timestamp",
+        )
+
+        savedSitesFlow.value = SavedSites(
+            emptyList(),
+            listOf(bookmarkAs, bookmarkReddit, bookmarkCnn, bookmarkTheGuardian, folderSports, folderNews),
+        )
+        testee.fetchBookmarksAndFolders(BOOKMARKS_ROOT)
+
+        testee.onSortingModeSelected(MANUAL)
+
+        val sortedElements = testee.itemsToDisplay.value
+        assertEquals((sortedElements[0] as BookmarkItem).bookmark, bookmarkAs)
+        assertEquals((sortedElements[1] as BookmarkItem).bookmark, bookmarkReddit)
+        assertEquals((sortedElements[2] as BookmarkItem).bookmark, bookmarkCnn)
+        assertEquals((sortedElements[3] as BookmarkItem).bookmark, bookmarkTheGuardian)
+        assertEquals((sortedElements[4] as BookmarksAdapter.BookmarkFolderItem).bookmarkFolder, folderSports)
+        assertEquals((sortedElements[5] as BookmarksAdapter.BookmarkFolderItem).bookmarkFolder, folderNews)
     }
 
     @Test
@@ -552,12 +612,28 @@ class BookmarksViewModelTest {
     }
 
     @Test
-    fun whenImportBookmarksClickedThenPixelAndCommandSent() {
+    fun whenImportBookmarksClickedThenPixelSent() {
         testee.onImportBookmarksClicked()
 
         verify(pixel).fire(SavedSitesPixelName.BOOKMARK_MENU_IMPORT_CLICKED)
+    }
+
+    @Test
+    fun whenImportBookmarksClickedAndFeatureEnabledThenShowDialog() = runTest {
+        whenever(importFromGoogle.getBookmarksImportLaunchIntent()).thenReturn(Intent())
+        testee.onImportBookmarksClicked()
+
         verify(commandObserver).onChanged(commandCaptor.capture())
-        assertEquals(BookmarksViewModel.Command.LaunchBookmarkImport, commandCaptor.lastValue)
+        assertEquals(BookmarksViewModel.Command.ShowBookmarkImportDialog, commandCaptor.lastValue)
+    }
+
+    @Test
+    fun whenImportBookmarksClickedAndFeatureDisabledThenLaunchFileImport() = runTest {
+        whenever(importFromGoogle.getBookmarksImportLaunchIntent()).thenReturn(null)
+        testee.onImportBookmarksClicked()
+
+        verify(commandObserver).onChanged(commandCaptor.capture())
+        assertEquals(BookmarksViewModel.Command.LaunchBookmarkImportFile, commandCaptor.lastValue)
     }
 
     @Test

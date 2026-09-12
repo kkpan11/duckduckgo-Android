@@ -28,6 +28,7 @@
         layout="@layout/include_default_toolbar" />
 
     <LinearLayout
+        android:id="@+id/contentContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
@@ -38,7 +39,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:layout_marginTop="32dp"
-            app:srcCompat="@drawable/contact_us" />
+            app:srcCompat="@drawable/critical_update_128" />
 
         <com.duckduckgo.common.ui.view.text.DaxTextView
             android:id="@+id/statusTitle"

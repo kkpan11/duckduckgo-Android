@@ -12,7 +12,7 @@ import org.mockito.kotlin.whenever
 class SubscriptionsToggleTargetMatcherPluginTest {
 
     private val subscriptions: Subscriptions = mock()
-    private val matcher = SubscriptionsToggleTargetMatcherPlugin(subscriptions)
+    private val matcher = SubscriptionsToggleTargetMatcherPlugin { subscriptions }
 
     @Test
     fun whenIsEligibleAndNullTargetThenReturnTrue() = runTest {
@@ -57,7 +57,7 @@ class SubscriptionsToggleTargetMatcherPluginTest {
     }
 
     companion object {
-        private val NULL_TARGET = Toggle.State.Target(null, null, null, null, null, null)
+        private val NULL_TARGET = Toggle.State.Target(null, null, null, null, null, null, null)
         private val ELIGIBLE_TARGET = NULL_TARGET.copy(isPrivacyProEligible = true)
         private val NOT_ELIGIBLE_TARGET = NULL_TARGET.copy(isPrivacyProEligible = false)
     }

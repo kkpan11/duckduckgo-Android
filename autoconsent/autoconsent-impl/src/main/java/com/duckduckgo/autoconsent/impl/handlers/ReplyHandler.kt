@@ -20,7 +20,9 @@ object ReplyHandler {
     fun constructReply(message: String): String {
         return """
             (function() {
-                window.autoconsentMessageCallback($message, window.origin);
+                if (typeof window.autoconsentMessageCallback === 'function') {
+                    window.autoconsentMessageCallback($message, window.origin);
+                }
             })();
         """.trimIndent()
     }

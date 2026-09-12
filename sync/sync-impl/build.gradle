@@ -18,6 +18,8 @@ plugins {
     id 'com.android.library'
     id 'kotlin-android'
     id 'com.squareup.anvil'
+    id 'com.google.devtools.ksp'
+    id 'kotlin-parcelize'
 }
 
 apply from: "$rootProject.projectDir/gradle/android-library.gradle"
@@ -31,30 +33,38 @@ android {
 }
 
 dependencies {
+    ksp project(':anvil-ksp')
     implementation project(path: ':di')
     implementation project(':browser-api')
     implementation project(path: ':common-utils')
-    implementation project(path: ':common-ui')
+    implementation project(':data-store-api')
+    implementation project(path: ':design-system')
     implementation project(path: ':sync-api')
     implementation project(path: ':sync-store')
     implementation project(path: ':sync-lib')
     implementation project(path: ':saved-sites-api')
     implementation project(':feature-toggles-api')
     implementation project(':navigation-api')
+    implementation project(':desktop-app-promotion-api')
     implementation project(':remote-messaging-api')
     implementation project(path: ':autofill-api')
     implementation project(path: ':settings-api') // temporary until we release new settings
+    implementation project(path: ':attributed-metrics-api')
 
     implementation project(path: ':app-build-config-api')
     implementation project(path: ':privacy-config-api')
     implementation project(':statistics-api')
+    implementation project(':content-scope-scripts-api')
+    implementation project(':js-messaging-api')
+    implementation project(':duckchat-api')
+    implementation project(':persistent-storage-api')
+    implementation project(':browser-mode-api')
 
-    anvil project(path: ':anvil-compiler')
     implementation project(path: ':anvil-annotations')
 
     implementation AndroidX.appCompat
     implementation Google.android.material
-    implementation JakeWharton.timber
+    implementation "com.squareup.logcat:logcat:_"
 
     implementation KotlinX.coroutines.core
     implementation AndroidX.fragment.ktx
@@ -68,6 +78,13 @@ dependencies {
     implementation 'com.google.zxing:core:_'
     implementation "androidx.datastore:datastore-preferences:_"
 
+    // JWE crypto (for scoped access credentials)
+    implementation "io.jsonwebtoken:jjwt-api:_"
+    runtimeOnly "io.jsonwebtoken:jjwt-impl:_"
+    runtimeOnly("io.jsonwebtoken:jjwt-orgjson:_") {
+        exclude(group: 'org.json', module: 'json') // provided by Android natively
+    }
+
     // Shimmer
     implementation "com.facebook.shimmer:shimmer:_"
 
@@ -77,7 +94,9 @@ dependencies {
 
     // Room
     implementation AndroidX.room.runtime
-    implementation AndroidX.room.ktx
+
+    // Lottie
+    implementation "com.airbnb.android:lottie:_"
 
     // Testing dependencies
     testImplementation "org.mockito.kotlin:mockito-kotlin:_"
@@ -91,6 +110,7 @@ dependencies {
     testImplementation AndroidX.archCore.testing
     testImplementation "org.jetbrains.kotlin:kotlin-reflect:_"
     testImplementation 'org.json:json:_'
+    testImplementation "com.google.testparameterinjector:test-parameter-injector:_"
 
     testImplementation project(path: ':common-test')
     testImplementation project(path: ':feature-toggles-test')
@@ -119,6 +139,9 @@ android {
     }
     compileOptions {
         coreLibraryDesugaringEnabled = true
+    }
+    buildFeatures {
+        buildConfig = true
     }
     defaultConfig {
         if (project.hasProperty("$syncDisableAuthRequirementBuildFlag")) {

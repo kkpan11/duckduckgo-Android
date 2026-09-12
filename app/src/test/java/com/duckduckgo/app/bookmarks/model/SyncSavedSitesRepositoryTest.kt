@@ -55,8 +55,6 @@ import com.duckduckgo.savedsites.store.SavedSitesRelationsDao
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import junit.framework.TestCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -67,6 +65,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 @RunWith(AndroidJUnit4::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -213,7 +213,7 @@ class SyncSavedSitesRepositoryTest {
         savedSitesRelationsDao.insertList(relation)
 
         val removedEntities = entities.toMutableList()
-        val removedEntity = removedEntities.removeFirst()
+        val removedEntity = removedEntities.removeAt(0)
 
         val removedEntitiesIds = removedEntities.map { it.entityId }
         val childrenJSON = stringListAdapter.toJson(removedEntitiesIds)
@@ -320,7 +320,7 @@ class SyncSavedSitesRepositoryTest {
         savedSitesRelationsDao.insertList(folderRelation)
 
         val updatedChildren = bookmarks.toMutableList()
-        val removedChildren = updatedChildren.removeFirst()
+        val removedChildren = updatedChildren.removeAt(0)
 
         repository.replaceBookmarkFolder(folder, updatedChildren.map { it.entityId })
 

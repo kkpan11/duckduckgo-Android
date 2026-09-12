@@ -22,8 +22,8 @@ import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import javax.inject.Inject
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 data class Domains(val list: List<String> = emptyList())
 data class MatchingRegex(val list: List<String> = emptyList())
@@ -50,26 +50,26 @@ class WebLocalStorageSettingsJsonParserImpl @Inject constructor(
     }
 
     override suspend fun parseJson(json: String?): WebLocalStorageSettings = withContext(dispatcherProvider.io()) {
-        if (json == null) return@withContext WebLocalStorageSettings(Domains(), MatchingRegex())
+        if (json == null) return@withContext WebLocalStorageSettings()
 
         kotlin.runCatching {
             val parsed = jsonAdapter.fromJson(json)
             val domains = parsed?.asDomains() ?: Domains()
             val matchingRegex = parsed?.asMatchingRegex() ?: MatchingRegex()
             WebLocalStorageSettings(domains, matchingRegex)
-        }.getOrDefault(WebLocalStorageSettings(Domains(), MatchingRegex()))
+        }.getOrDefault(WebLocalStorageSettings())
     }
 
     private fun SettingsJson.asDomains(): Domains {
-        return Domains(domains.map { it })
+        return Domains(domains ?: emptyList())
     }
 
     private fun SettingsJson.asMatchingRegex(): MatchingRegex {
-        return MatchingRegex(matchingRegex.map { it })
+        return MatchingRegex(matchingRegex ?: emptyList())
     }
 
     private data class SettingsJson(
-        val domains: List<String>,
-        val matchingRegex: List<String>,
+        val domains: List<String>?,
+        val matchingRegex: List<String>?,
     )
 }

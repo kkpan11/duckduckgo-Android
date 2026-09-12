@@ -25,6 +25,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.widget.Toolbar
+import androidx.core.os.BundleCompat
 import androidx.fragment.app.setFragmentResult
 import androidx.fragment.app.setFragmentResultListener
 import androidx.lifecycle.Lifecycle
@@ -33,19 +34,26 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import com.duckduckgo.anvil.annotations.InjectWith
-import com.duckduckgo.app.statistics.pixels.Pixel
-import com.duckduckgo.autofill.api.AutofillCapabilityChecker
 import com.duckduckgo.autofill.api.AutofillFragmentResultsPlugin
+import com.duckduckgo.autofill.api.AutofillImportLaunchSource
+import com.duckduckgo.autofill.api.AutofillImportLaunchSource.Unknown
 import com.duckduckgo.autofill.api.BrowserAutofill
 import com.duckduckgo.autofill.api.CredentialAutofillDialogFactory
 import com.duckduckgo.autofill.api.domain.app.LoginCredentials
 import com.duckduckgo.autofill.api.domain.app.LoginTriggerType
+import com.duckduckgo.autofill.api.domain.app.LoginTriggerType.AUTOPROMPT
+import com.duckduckgo.autofill.impl.InternalCallback
 import com.duckduckgo.autofill.impl.R
+import com.duckduckgo.autofill.impl.configuration.InternalBrowserAutofillConfigurator
 import com.duckduckgo.autofill.impl.databinding.FragmentImportGooglePasswordsWebflowBinding
 import com.duckduckgo.autofill.impl.importing.blob.GooglePasswordBlobConsumer
 import com.duckduckgo.autofill.impl.importing.gpm.feature.AutofillImportPasswordConfigStore
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordResult.Companion.RESULT_KEY
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordResult.Companion.RESULT_KEY_DETAILS
+import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.Command.InjectCredentialsFromReauth
+import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.Command.NoCredentialsAvailable
+import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.Command.PromptUserToSelectFromStoredCredentials
+import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.Factory
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.UserCannotImportReason
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.ViewState.Initializing
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.ViewState.LoadStartPage
@@ -54,34 +62,36 @@ import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsW
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.ViewState.UserFinishedCannotImport
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.ViewState.UserFinishedImportFlow
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowViewModel.ViewState.WebContentShowing
-import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowWebViewClient.NewPageCallback
-import com.duckduckgo.autofill.impl.importing.gpm.webflow.autofill.NoOpAutofillCallback
+import com.duckduckgo.autofill.impl.importing.gpm.webflow.ImportGooglePasswordsWebFlowWebViewClient.WebFlowCallback
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.autofill.NoOpAutofillEventListener
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.autofill.NoOpEmailProtectionInContextSignupFlowListener
 import com.duckduckgo.autofill.impl.importing.gpm.webflow.autofill.NoOpEmailProtectionUserPromptListener
+import com.duckduckgo.autofill.impl.jsbridge.request.SupportedAutofillInputSubType
+import com.duckduckgo.autofill.impl.jsbridge.request.SupportedAutofillInputSubType.PASSWORD
+import com.duckduckgo.autofill.impl.store.ReAuthenticationDetails
+import com.duckduckgo.browsermode.api.BrowserMode
 import com.duckduckgo.common.ui.DuckDuckGoFragment
 import com.duckduckgo.common.utils.DispatcherProvider
-import com.duckduckgo.common.utils.FragmentViewModelFactory
 import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.di.scopes.FragmentScope
 import com.duckduckgo.user.agent.api.UserAgentProvider
-import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.LogPriority.WARN
+import logcat.logcat
+import javax.inject.Inject
 
 @InjectWith(FragmentScope::class)
 class ImportGooglePasswordsWebFlowFragment :
     DuckDuckGoFragment(R.layout.fragment_import_google_passwords_webflow),
-    NewPageCallback,
-    NoOpAutofillCallback,
+    WebFlowCallback,
+    InternalCallback,
     NoOpEmailProtectionInContextSignupFlowListener,
     NoOpEmailProtectionUserPromptListener,
     NoOpAutofillEventListener,
     GooglePasswordBlobConsumer.Callback {
-
     @Inject
     lateinit var userAgentProvider: UserAgentProvider
 
@@ -89,13 +99,7 @@ class ImportGooglePasswordsWebFlowFragment :
     lateinit var dispatchers: DispatcherProvider
 
     @Inject
-    lateinit var pixel: Pixel
-
-    @Inject
-    lateinit var viewModelFactory: FragmentViewModelFactory
-
-    @Inject
-    lateinit var autofillCapabilityChecker: AutofillCapabilityChecker
+    lateinit var viewModelFactory: Factory
 
     @Inject
     lateinit var credentialAutofillDialogFactory: CredentialAutofillDialogFactory
@@ -110,18 +114,24 @@ class ImportGooglePasswordsWebFlowFragment :
     lateinit var passwordBlobConsumer: GooglePasswordBlobConsumer
 
     @Inject
-    lateinit var passwordImporterScriptLoader: PasswordImporterScriptLoader
+    lateinit var googleImporterScriptLoader: GoogleImporterScriptLoader
 
     @Inject
-    lateinit var browserAutofillConfigurator: BrowserAutofill.Configurator
+    lateinit var browserAutofillConfigurator: InternalBrowserAutofillConfigurator
 
     @Inject
     lateinit var importPasswordConfig: AutofillImportPasswordConfigStore
 
     private var binding: FragmentImportGooglePasswordsWebflowBinding? = null
 
+    private val launchSource: AutofillImportLaunchSource
+        get() = BundleCompat.getParcelable(arguments ?: Bundle(), KEY_LAUNCH_SOURCE, AutofillImportLaunchSource::class.java) ?: Unknown
+
     private val viewModel by lazy {
-        ViewModelProvider(requireActivity(), viewModelFactory)[ImportGooglePasswordsWebFlowViewModel::class.java]
+        ViewModelProvider(
+            requireActivity(),
+            Factory.Provider(viewModelFactory, launchSource),
+        )[ImportGooglePasswordsWebFlowViewModel::class.java]
     }
 
     override fun onCreateView(
@@ -142,6 +152,7 @@ class ImportGooglePasswordsWebFlowFragment :
         configureWebView()
         configureBackButtonHandler()
         observeViewState()
+        observeCommands()
         viewModel.onViewCreated()
     }
 
@@ -173,8 +184,53 @@ class ImportGooglePasswordsWebFlowFragment :
                         // no-op
                     }
                 }
+            }.launchIn(lifecycleScope)
+    }
+
+    private fun observeCommands() {
+        viewModel.commands
+            .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
+            .onEach { command ->
+                logcat { "Received command: ${command::class.simpleName}" }
+                when (command) {
+                    is InjectCredentialsFromReauth -> {
+                        injectReauthenticationCredentials(url = command.url, username = command.username, password = command.password)
+                    }
+                    is NoCredentialsAvailable -> {
+                        // Inject null to indicate no credentials available
+                        browserAutofill.injectCredentials(null)
+                    }
+
+                    is PromptUserToSelectFromStoredCredentials -> {
+                        showCredentialChooserDialog(command.originalUrl, command.credentials, command.triggerType)
+                    }
+                }
+            }.launchIn(lifecycleScope)
+    }
+
+    private suspend fun injectReauthenticationCredentials(
+        url: String?,
+        username: String?,
+        password: String?,
+    ) {
+        withContext(dispatchers.main()) {
+            binding?.webView?.let {
+                if (it.url != url) {
+                    logcat(WARN) { "WebView url has changed since autofill request; bailing" }
+                    return@withContext
+                }
+
+                val credentials =
+                    LoginCredentials(
+                        domain = url,
+                        username = username,
+                        password = password,
+                    )
+
+                logcat { "Injecting re-authentication credentials" }
+                browserAutofill.injectCredentials(credentials)
             }
-            .launchIn(lifecycleScope)
+        }
     }
 
     private fun exitFlowAsCancellation(stage: String) {
@@ -182,16 +238,18 @@ class ImportGooglePasswordsWebFlowFragment :
     }
 
     private fun exitFlowAsSuccess() {
-        val resultBundle = Bundle().also {
-            it.putParcelable(RESULT_KEY_DETAILS, ImportGooglePasswordResult.Success)
-        }
+        val resultBundle =
+            Bundle().also {
+                it.putParcelable(RESULT_KEY_DETAILS, ImportGooglePasswordResult.Success)
+            }
         setFragmentResult(RESULT_KEY, resultBundle)
     }
 
     private fun exitFlowAsImpossibleToImport(reason: UserCannotImportReason) {
-        val resultBundle = Bundle().also {
-            it.putParcelable(RESULT_KEY_DETAILS, ImportGooglePasswordResult.Error(reason))
-        }
+        val resultBundle =
+            Bundle().also {
+                it.putParcelable(RESULT_KEY_DETAILS, ImportGooglePasswordResult.Error(reason))
+            }
         setFragmentResult(RESULT_KEY, resultBundle)
     }
 
@@ -257,19 +315,24 @@ class ImportGooglePasswordsWebFlowFragment :
                 this@ImportGooglePasswordsWebFlowFragment,
                 this@ImportGooglePasswordsWebFlowFragment,
                 CUSTOM_FLOW_TAB_ID,
+                // Password import is an independent Regular-mode flow; Fire mode never offers to import.
+                BrowserMode.REGULAR,
             )
         }
 
         autofillFragmentResultListeners.getPlugins().forEach { plugin ->
             setFragmentResultListener(plugin.resultKey(CUSTOM_FLOW_TAB_ID)) { _, result ->
                 context?.let { ctx ->
-                    plugin.processResult(
-                        result = result,
-                        context = ctx,
-                        tabId = CUSTOM_FLOW_TAB_ID,
-                        fragment = this@ImportGooglePasswordsWebFlowFragment,
-                        autofillCallback = this@ImportGooglePasswordsWebFlowFragment,
-                    )
+                    lifecycleScope.launch {
+                        plugin.processResult(
+                            result = result,
+                            context = ctx,
+                            tabId = CUSTOM_FLOW_TAB_ID,
+                            fragment = this@ImportGooglePasswordsWebFlowFragment,
+                            autofillCallback = this@ImportGooglePasswordsWebFlowFragment,
+                            webView = binding?.webView,
+                        )
+                    }
                 }
             }
         }
@@ -279,16 +342,16 @@ class ImportGooglePasswordsWebFlowFragment :
         it.setDownloadListener { url, _, _, _, _ ->
             if (url.startsWith("blob:")) {
                 lifecycleScope.launch {
-                    passwordBlobConsumer.postMessageToConvertBlobToDataUri(url)
+                    passwordBlobConsumer.postMessageToConvertBlobToDataUri(it, url)
                 }
             }
         }
     }
 
-    @SuppressLint("RequiresFeature")
+    @SuppressLint("RequiresFeature", "AddDocumentStartJavaScriptUsage")
     private suspend fun configurePasswordImportJavascript(webView: WebView) {
         if (importPasswordConfig.getConfig().canInjectJavascript) {
-            val script = passwordImporterScriptLoader.getScript()
+            val script = googleImporterScriptLoader.getScriptForPasswordImport()
             WebViewCompat.addDocumentStartJavaScript(webView, script, setOf("*"))
         }
     }
@@ -296,8 +359,39 @@ class ImportGooglePasswordsWebFlowFragment :
     private fun getToolbar() = (activity as ImportGooglePasswordsWebFlowActivity).binding.includeToolbar.toolbar
 
     override fun onPageStarted(url: String?) {
-        binding?.let {
-            browserAutofillConfigurator.configureAutofillForCurrentPage(it.webView, url)
+        lifecycleScope.launch(dispatchers.main()) {
+            binding?.let {
+                val reauthDetails = url?.let { viewModel.getReauthData(url) } ?: ReAuthenticationDetails()
+                // Password import is an independent Regular-mode flow; Fire mode never offers to import.
+                browserAutofillConfigurator.configureAutofillForCurrentPage(it.webView, url, reauthDetails, BrowserMode.REGULAR)
+            }
+        }
+    }
+
+    override fun onWebViewCrash() {
+        viewModel.onWebViewCrash()
+    }
+
+    private suspend fun showCredentialChooserDialog(
+        originalUrl: String,
+        credentials: List<LoginCredentials>,
+        triggerType: LoginTriggerType,
+    ) {
+        withContext(dispatchers.main()) {
+            val url = binding?.webView?.url ?: return@withContext
+            if (url != originalUrl) {
+                logcat(WARN) { "WebView url has changed since autofill request; bailing" }
+                return@withContext
+            }
+
+            val dialog =
+                credentialAutofillDialogFactory.autofillSelectCredentialsDialog(
+                    url,
+                    credentials,
+                    triggerType,
+                    CUSTOM_FLOW_TAB_ID,
+                )
+            dialog.show(childFragmentManager, SELECT_CREDENTIALS_FRAGMENT_TAG)
         }
     }
 
@@ -306,21 +400,26 @@ class ImportGooglePasswordsWebFlowFragment :
         credentials: List<LoginCredentials>,
         triggerType: LoginTriggerType,
     ) {
-        withContext(dispatchers.main()) {
-            val url = binding?.webView?.url ?: return@withContext
-            if (url != originalUrl) {
-                Timber.w("WebView url has changed since autofill request; bailing")
-                return@withContext
-            }
+        viewModel.onStoredCredentialsAvailable(originalUrl, credentials, triggerType, scenarioAllowsReAuthentication = false)
+    }
 
-            val dialog = credentialAutofillDialogFactory.autofillSelectCredentialsDialog(
-                url,
-                credentials,
-                triggerType,
-                CUSTOM_FLOW_TAB_ID,
-            )
-            dialog.show(childFragmentManager, SELECT_CREDENTIALS_FRAGMENT_TAG)
-        }
+    override suspend fun onCredentialsAvailableToInjectWithReauth(
+        originalUrl: String,
+        credentials: List<LoginCredentials>,
+        triggerType: LoginTriggerType,
+        requestSubType: SupportedAutofillInputSubType,
+    ) {
+        val reauthAllowed = requestSubType == PASSWORD && triggerType == AUTOPROMPT
+        viewModel.onStoredCredentialsAvailable(originalUrl, credentials, triggerType, reauthAllowed)
+    }
+
+    override fun noCredentialsAvailable(originalUrl: String) {
+        viewModel.onNoStoredCredentialsAvailable(originalUrl)
+    }
+
+    override suspend fun promptUserToImportPassword(originalUrl: String) {
+        logcat { "Autofill-import: we don't prompt the user to import in this flow" }
+        viewModel.onNoStoredCredentialsAvailable(originalUrl)
     }
 
     override suspend fun onCsvAvailable(csv: String) {
@@ -331,26 +430,54 @@ class ImportGooglePasswordsWebFlowFragment :
         viewModel.onCsvError()
     }
 
+    override suspend fun onCredentialsAvailableToSave(
+        currentUrl: String,
+        credentials: LoginCredentials,
+    ) {
+        viewModel.onCredentialsAvailableToSave(currentUrl, credentials)
+    }
+
     override fun onShareCredentialsForAutofill(
         originalUrl: String,
         selectedCredentials: LoginCredentials,
     ) {
         if (binding?.webView?.url != originalUrl) {
-            Timber.w("WebView url has changed since autofill request; bailing")
+            logcat(WARN) { "WebView url has changed since autofill request; bailing" }
             return
         }
+
         browserAutofill.injectCredentials(selectedCredentials)
+        viewModel.onCredentialsAutofilled(originalUrl, selectedCredentials.password)
     }
 
     override fun onNoCredentialsChosenForAutofill(originalUrl: String) {
         if (binding?.webView?.url != originalUrl) {
-            Timber.w("WebView url has changed since autofill request; bailing")
+            logcat(WARN) { "WebView url has changed since autofill request; bailing" }
             return
         }
         browserAutofill.injectCredentials(null)
     }
 
+    override suspend fun onGeneratedPasswordAvailableToUse(
+        originalUrl: String,
+        username: String?,
+        generatedPassword: String,
+    ) {
+        // no-op, password generation not used in this flow
+    }
+
+    override fun onCredentialsSaved(savedCredentials: LoginCredentials) {
+        // no-op, credentials are handled by the ViewModel
+    }
+
     companion object {
+        fun newInstance(source: AutofillImportLaunchSource): ImportGooglePasswordsWebFlowFragment {
+            return ImportGooglePasswordsWebFlowFragment().apply {
+                arguments = Bundle().apply { putParcelable(KEY_LAUNCH_SOURCE, source) }
+            }
+        }
+
+        private const val KEY_LAUNCH_SOURCE = "launchSource"
         private const val CUSTOM_FLOW_TAB_ID = "import-passwords-webflow"
         private const val SELECT_CREDENTIALS_FRAGMENT_TAG = "autofillSelectCredentialsDialog"
     }

@@ -22,22 +22,24 @@ import com.duckduckgo.downloads.api.DownloadFailReason.ConnectionRefused
 import com.duckduckgo.downloads.api.DownloadFailReason.Other
 import com.duckduckgo.downloads.api.FileDownloader
 import com.duckduckgo.downloads.api.model.DownloadItem
+import com.duckduckgo.downloads.impl.feature.FileDownloadFeature
 import com.duckduckgo.downloads.store.DownloadStatus.STARTED
-import java.io.File
-import javax.inject.Inject
-import kotlin.math.exp
-import kotlin.math.floor
-import kotlin.random.Random
 import logcat.asLog
 import logcat.logcat
 import okhttp3.ResponseBody
 import okio.Buffer
 import okio.sink
+import java.io.File
+import javax.inject.Inject
+import kotlin.math.exp
+import kotlin.math.floor
+import kotlin.random.Random
 
 class UrlFileDownloader @Inject constructor(
     private val downloadFileService: DownloadFileService,
     private val urlFileDownloadCallManager: UrlFileDownloadCallManager,
     private val cookieManagerWrapper: CookieManagerWrapper,
+    private val fileDownloadFeature: FileDownloadFeature,
 ) {
 
     @WorkerThread
@@ -50,7 +52,7 @@ class UrlFileDownloader @Inject constructor(
         val directory = pendingFileDownload.directory
         val call = downloadFileService.downloadFile(
             urlString = url,
-            cookie = cookieManagerWrapper.getCookie(url).orEmpty(),
+            cookie = cookieManagerWrapper.getCookie(url, pendingFileDownload.browserMode).handleNull(),
         )
         val downloadId = Random.nextLong()
         urlFileDownloadCallManager.add(downloadId, call)
@@ -115,8 +117,16 @@ class UrlFileDownloader @Inject constructor(
     ): Boolean {
         logcat { "Writing streaming response body to disk $fileName" }
 
-        // ensure content length never 0
-        val contentLength = if (body.contentLength() > 0) body.contentLength() else -1
+        val contentLength = body.contentLength().takeIf { it > 0 }
+        val calculateProgress: (Long) -> Int = if (contentLength != null) {
+            // Calculate real progress when content length is known
+            { bytesWritten -> (bytesWritten * 100 / contentLength).toInt() }
+        } else {
+            // Calculate fake progress when content length is not known
+            var progressSteps = 0.0
+            { floor(calculateFakeProgress(progressSteps) * 100.0).toInt().also { progressSteps += 0.0001 } }
+        }
+
         val file = directory.getOrCreate(fileName)
         val sink = file.sink()
         val source = body.source()
@@ -124,15 +134,16 @@ class UrlFileDownloader @Inject constructor(
         var totalRead = 0L
         val buffer = Buffer()
         val success = try {
-            var progressSteps = 0.0
+            var progress = 0
             while (!source.exhausted()) {
                 val didRead = source.read(buffer, READ_SIZE_BYTES)
                 totalRead += didRead
                 sink.write(buffer, didRead)
-                val fakeProgress = floor(calculateFakeProgress(progressSteps) * 100.0).toInt().also { progressSteps += 0.0001 }
-                val calculatedProgress = (totalRead * 100 / contentLength)
-                val progress = if (calculatedProgress < 0L) fakeProgress else calculatedProgress
-                downloadCallback.onProgress(downloadId, fileName, progress.toInt())
+                val newProgress = calculateProgress(totalRead)
+                if (newProgress != progress) {
+                    progress = newProgress
+                    downloadCallback.onProgress(downloadId, fileName, progress)
+                }
             }
             true
         } catch (t: Throwable) {
@@ -155,6 +166,17 @@ class UrlFileDownloader @Inject constructor(
         if (!this.exists()) this.mkdirs()
         if (!file.exists()) file.createNewFile()
         return file
+    }
+
+    private fun String?.handleNull(): String? {
+        if (this != null) return this
+
+        // if there are no cookies, we omit sending the cookie header when ff is enabled
+        return if (fileDownloadFeature.omitEmptyCookieHeader().isEnabled()) {
+            null
+        } else {
+            "" // legacy behavior, we send an empty cookie header
+        }
     }
 
     /**

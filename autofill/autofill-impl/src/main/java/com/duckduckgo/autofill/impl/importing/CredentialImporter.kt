@@ -18,6 +18,7 @@ package com.duckduckgo.autofill.impl.importing
 
 import android.os.Parcelable
 import com.duckduckgo.app.di.AppCoroutineScope
+import com.duckduckgo.autofill.api.AutofillImportLaunchSource
 import com.duckduckgo.autofill.api.domain.app.LoginCredentials
 import com.duckduckgo.autofill.impl.importing.CredentialImporter.ImportResult
 import com.duckduckgo.autofill.impl.importing.CredentialImporter.ImportResult.Finished
@@ -27,17 +28,18 @@ import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
+import javax.inject.Inject
 
 interface CredentialImporter {
     suspend fun import(
         importList: List<LoginCredentials>,
         originalImportListSize: Int,
+        source: AutofillImportLaunchSource,
     )
 
     fun getImportStatus(): Flow<ImportResult>
@@ -51,6 +53,7 @@ interface CredentialImporter {
         data class Finished(
             val savedCredentials: Int,
             val numberSkipped: Int,
+            val source: AutofillImportLaunchSource,
         ) : ImportResult
     }
 }
@@ -68,15 +71,17 @@ class CredentialImporterImpl @Inject constructor(
     override suspend fun import(
         importList: List<LoginCredentials>,
         originalImportListSize: Int,
+        source: AutofillImportLaunchSource,
     ) {
         appCoroutineScope.launch(dispatchers.io()) {
-            doImportCredentials(importList, originalImportListSize)
+            doImportCredentials(importList, originalImportListSize, source)
         }
     }
 
     private suspend fun doImportCredentials(
         importList: List<LoginCredentials>,
         originalImportListSize: Int,
+        source: AutofillImportLaunchSource,
     ) {
         var skippedCredentials = originalImportListSize - importList.size
 
@@ -85,7 +90,11 @@ class CredentialImporterImpl @Inject constructor(
         val insertedIds = autofillStore.bulkInsert(importList)
 
         skippedCredentials += (importList.size - insertedIds.size)
-        _importStatus.emit(Finished(savedCredentials = insertedIds.size, numberSkipped = skippedCredentials))
+
+        // mark that the user has imported passwords at least once, regardless of the number of credentials imported
+        autofillStore.hasEverImportedPasswords = true
+
+        _importStatus.emit(Finished(savedCredentials = insertedIds.size, numberSkipped = skippedCredentials, source = source))
     }
 
     override fun getImportStatus(): Flow<ImportResult> = _importStatus

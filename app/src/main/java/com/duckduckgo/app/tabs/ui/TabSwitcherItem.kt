@@ -20,25 +20,39 @@ import com.duckduckgo.app.tabs.model.TabEntity
 
 sealed class TabSwitcherItem(val id: String) {
     sealed class Tab(val tabEntity: TabEntity) : TabSwitcherItem(tabEntity.tabId) {
+        abstract val title: String
+
         data class NormalTab(
             private val entity: TabEntity,
             val isActive: Boolean,
+            override val title: String = "",
         ) : Tab(entity)
 
         data class SelectableTab(
             private val entity: TabEntity,
             val isSelected: Boolean,
+            val isDuckAi: Boolean = false,
+            override val title: String = "",
+        ) : Tab(entity)
+
+        data class DuckAiTab(
+            private val entity: TabEntity,
+            val isActive: Boolean,
+            override val title: String = "",
         ) : Tab(entity)
 
         val isNewTabPage: Boolean
             get() = tabEntity.url.isNullOrBlank()
+
+        val hasSourceTab: Boolean
+            get() = !tabEntity.sourceTabId.isNullOrBlank()
     }
 
-    data class TrackerAnimationInfoPanel(val trackerCount: Int) : TabSwitcherItem(TRACKER_ANIMATION_PANEL_ID) {
-        companion object {
+    data class TrackersAnimationInfoPanel(val trackerCount: Int) : TabSwitcherItem(TRACKER_ANIMATION_PANEL_ID) {
+        companion object Companion {
             const val ANIMATED_TILE_NO_REPLACE_ALPHA = 0.4f
             const val ANIMATED_TILE_DEFAULT_ALPHA = 1f
-            const val TRACKER_ANIMATION_PANEL_ID = "TrackerAnimationInfoPanel"
+            const val TRACKER_ANIMATION_PANEL_ID = "TrackersAnimationInfoPanel"
         }
     }
 }

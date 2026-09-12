@@ -19,13 +19,15 @@
 package com.duckduckgo.app.notification.model
 
 import androidx.test.platform.app.InstrumentationRegistry
+import com.duckduckgo.app.fire.AutomaticDataClearing
 import com.duckduckgo.app.notification.db.NotificationDao
-import com.duckduckgo.app.settings.clear.ClearWhatOption
-import com.duckduckgo.app.settings.db.SettingsDataStore
+import com.duckduckgo.common.test.CoroutineTestRule
+import com.duckduckgo.common.utils.DispatcherProvider
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
@@ -33,35 +35,43 @@ import org.mockito.kotlin.whenever
 
 class ClearDataNotificationTest {
 
+    @get:Rule
+    var coroutineRule = CoroutineTestRule()
+
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val notificationsDao: NotificationDao = mock()
-    private val settingsDataStore: SettingsDataStore = mock()
+    private val automaticDataClearing: AutomaticDataClearing = mock()
+    private val dispatcherProvider: DispatcherProvider = coroutineRule.testDispatcherProvider
 
     private lateinit var testee: ClearDataNotification
 
     @Before
     fun before() {
-        testee = ClearDataNotification(context, notificationsDao, settingsDataStore)
+        testee = ClearDataNotification(
+            context,
+            notificationsDao,
+            automaticDataClearing,
+            dispatcherProvider,
+        )
     }
 
     @Test
     fun whenNotificationNotSeenAndOptionNotSetThenCanShowIsTrue() = runTest {
         whenever(notificationsDao.exists(any())).thenReturn(false)
-        whenever(settingsDataStore.automaticallyClearWhatOption).thenReturn(ClearWhatOption.CLEAR_NONE)
+        whenever(automaticDataClearing.isAutomaticDataClearingOptionSelected()).thenReturn(false)
         assertTrue(testee.canShow())
     }
 
     @Test
     fun whenNotificationNotSeenButOptionAlreadySetThenCanShowIsFalse() = runTest {
         whenever(notificationsDao.exists(any())).thenReturn(false)
-        whenever(settingsDataStore.automaticallyClearWhatOption).thenReturn(ClearWhatOption.CLEAR_TABS_ONLY)
+        whenever(automaticDataClearing.isAutomaticDataClearingOptionSelected()).thenReturn(true)
         assertFalse(testee.canShow())
     }
 
     @Test
     fun whenNotificationAlreadySeenAndOptionNotSetThenCanShowIsFalse() = runTest {
         whenever(notificationsDao.exists(any())).thenReturn(true)
-        whenever(settingsDataStore.automaticallyClearWhatOption).thenReturn(ClearWhatOption.CLEAR_NONE)
         assertFalse(testee.canShow())
     }
 }

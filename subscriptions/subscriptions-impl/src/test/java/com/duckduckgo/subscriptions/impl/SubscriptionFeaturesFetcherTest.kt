@@ -12,6 +12,8 @@ import com.android.billingclient.api.ProductDetails.SubscriptionOfferDetails
 import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.feature.toggles.api.FakeFeatureToggleFactory
 import com.duckduckgo.feature.toggles.api.Toggle.State
+import com.duckduckgo.subscriptions.api.model.Entitlement
+import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.DUCK_AI
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.ITR
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.MONTHLY_PLAN_US
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.NETP
@@ -19,7 +21,9 @@ import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.YEARLY_PLAN_US
 import com.duckduckgo.subscriptions.impl.billing.PlayBillingManager
 import com.duckduckgo.subscriptions.impl.repository.AuthRepository
 import com.duckduckgo.subscriptions.impl.services.FeaturesResponse
-import com.duckduckgo.subscriptions.impl.services.SubscriptionsService
+import com.duckduckgo.subscriptions.impl.services.FeaturesV2Response
+import com.duckduckgo.subscriptions.impl.services.SubscriptionsCachedService
+import com.duckduckgo.subscriptions.impl.services.TierFeatureResponse
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -41,17 +45,16 @@ class SubscriptionFeaturesFetcherTest {
 
     private val processLifecycleOwner = TestLifecycleOwner(initialState = INITIALIZED)
     private val playBillingManager: PlayBillingManager = mock()
-    private val subscriptionsService: SubscriptionsService = mock()
+    private val subscriptionsCachedService: SubscriptionsCachedService = mock()
     private val authRepository: AuthRepository = mock()
-    private val privacyProFeature: PrivacyProFeature = FakeFeatureToggleFactory.create(PrivacyProFeature::class.java)
+    private val subscriptionsFeature: SubscriptionsFeature = FakeFeatureToggleFactory.create(SubscriptionsFeature::class.java)
 
     private val subscriptionFeaturesFetcher = SubscriptionFeaturesFetcher(
         appCoroutineScope = coroutineRule.testScope,
         playBillingManager = playBillingManager,
-        subscriptionsService = subscriptionsService,
+        subscriptionsCachedService = subscriptionsCachedService,
         authRepository = authRepository,
-        privacyProFeature = privacyProFeature,
-        dispatcherProvider = coroutineRule.testDispatcherProvider,
+        subscriptionsFeature = subscriptionsFeature,
     )
 
     @Before
@@ -60,64 +63,89 @@ class SubscriptionFeaturesFetcherTest {
     }
 
     @Test
-    fun `when FF disabled then does not do anything`() = runTest {
-        givenIsFeaturesApiEnabled(false)
-
-        processLifecycleOwner.currentState = CREATED
-
-        verifyNoInteractions(playBillingManager)
-        verifyNoInteractions(authRepository)
-        verifyNoInteractions(subscriptionsService)
-    }
-
-    @Test
-    fun `when products loaded then fetches and stores features`() = runTest {
-        givenIsFeaturesApiEnabled(true)
+    fun `when products loaded and tierMessagingEnabled OFF then fetches V1 features and stores`() = runTest {
+        givenTierMessagingEnabled(false)
         val productDetails = mockProductDetails()
         whenever(playBillingManager.productsFlow).thenReturn(flowOf(productDetails))
         whenever(authRepository.getFeatures(any())).thenReturn(emptySet())
-        whenever(subscriptionsService.features(any())).thenReturn(FeaturesResponse(listOf(NETP, ITR)))
+        whenever(subscriptionsCachedService.features(any())).thenReturn(FeaturesResponse(listOf(NETP, ITR, DUCK_AI)))
 
         processLifecycleOwner.currentState = CREATED
 
         verify(playBillingManager).productsFlow
-        verify(authRepository).getFeatures(MONTHLY_PLAN_US)
-        verify(authRepository).getFeatures(YEARLY_PLAN_US)
-        verify(authRepository).setFeatures(MONTHLY_PLAN_US, setOf(NETP, ITR))
-        verify(authRepository).setFeatures(YEARLY_PLAN_US, setOf(NETP, ITR))
+        verify(subscriptionsCachedService).features(MONTHLY_PLAN_US)
+        verify(subscriptionsCachedService).features(YEARLY_PLAN_US)
+        verify(authRepository).setFeatures(MONTHLY_PLAN_US, setOf(NETP, ITR, DUCK_AI))
+        verify(authRepository).setFeatures(YEARLY_PLAN_US, setOf(NETP, ITR, DUCK_AI))
+    }
+
+    @Test
+    fun `when products loaded and tierMessagingEnabled ON then fetches V2 features and stores entitlements`() = runTest {
+        givenTierMessagingEnabled(true)
+        val productDetails = mockProductDetails()
+        whenever(playBillingManager.productsFlow).thenReturn(flowOf(productDetails))
+        whenever(authRepository.getFeatures(any())).thenReturn(emptySet())
+        whenever(subscriptionsCachedService.featuresV2(any())).thenReturn(
+            FeaturesV2Response(
+                mapOf(
+                    MONTHLY_PLAN_US to listOf(
+                        TierFeatureResponse(product = NETP, name = "plus"),
+                        TierFeatureResponse(product = ITR, name = "plus"),
+                    ),
+                    YEARLY_PLAN_US to listOf(
+                        TierFeatureResponse(product = NETP, name = "plus"),
+                        TierFeatureResponse(product = ITR, name = "plus"),
+                    ),
+                ),
+            ),
+        )
+
+        processLifecycleOwner.currentState = CREATED
+
+        verify(playBillingManager).productsFlow
+        verify(subscriptionsCachedService).featuresV2(MONTHLY_PLAN_US)
+        verify(subscriptionsCachedService).featuresV2(YEARLY_PLAN_US)
+        verify(authRepository).setFeaturesV2(
+            MONTHLY_PLAN_US,
+            setOf(Entitlement(name = "plus", product = NETP), Entitlement(name = "plus", product = ITR)),
+        )
+        verify(authRepository).setFeaturesV2(
+            YEARLY_PLAN_US,
+            setOf(Entitlement(name = "plus", product = NETP), Entitlement(name = "plus", product = ITR)),
+        )
     }
 
     @Test
     fun `when there are no products then does not store anything`() = runTest {
-        givenIsFeaturesApiEnabled(true)
         whenever(playBillingManager.productsFlow).thenReturn(flowOf())
 
         processLifecycleOwner.currentState = CREATED
 
         verify(playBillingManager).productsFlow
         verifyNoInteractions(authRepository)
-        verifyNoInteractions(subscriptionsService)
+        verifyNoInteractions(subscriptionsCachedService)
     }
 
     @Test
-    fun `when features already stored then does not fetch again`() = runTest {
-        givenIsFeaturesApiEnabled(true)
+    fun `when tierMessagingEnabled ON and V2 features empty then does not store anything`() = runTest {
+        givenTierMessagingEnabled(true)
         val productDetails = mockProductDetails()
         whenever(playBillingManager.productsFlow).thenReturn(flowOf(productDetails))
-        whenever(authRepository.getFeatures(any())).thenReturn(setOf(NETP, ITR))
+        whenever(authRepository.getFeatures(any())).thenReturn(emptySet())
+        whenever(subscriptionsCachedService.featuresV2(any())).thenReturn(
+            FeaturesV2Response(emptyMap()),
+        )
 
         processLifecycleOwner.currentState = CREATED
 
-        verify(playBillingManager).productsFlow
-        verify(authRepository).getFeatures(MONTHLY_PLAN_US)
-        verify(authRepository).getFeatures(YEARLY_PLAN_US)
-        verify(authRepository, never()).setFeatures(any(), any())
-        verifyNoInteractions(subscriptionsService)
+        verify(subscriptionsCachedService).featuresV2(MONTHLY_PLAN_US)
+        verify(subscriptionsCachedService).featuresV2(YEARLY_PLAN_US)
+        verify(authRepository, never()).setFeaturesV2(any(), any())
     }
 
     @SuppressLint("DenyListedApi")
-    private fun givenIsFeaturesApiEnabled(value: Boolean) {
-        privacyProFeature.featuresApi().setRawStoredState(State(value))
+    private fun givenTierMessagingEnabled(value: Boolean) {
+        subscriptionsFeature.tierMessagingEnabled().setRawStoredState(State(value))
     }
 
     private fun mockProductDetails(): List<ProductDetails> {

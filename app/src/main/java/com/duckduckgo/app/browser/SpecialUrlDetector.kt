@@ -19,22 +19,27 @@ package com.duckduckgo.app.browser
 import android.content.ComponentName
 import android.content.Intent
 import android.content.Intent.URI_ANDROID_APP_SCHEME
+import android.content.Intent.URI_INTENT_SCHEME
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.net.Uri
+import androidx.annotation.VisibleForTesting
 import androidx.core.net.toUri
+import com.duckduckgo.adblocking.api.duckplayer.DuckPlayer
 import com.duckduckgo.app.browser.SpecialUrlDetector.UrlType
+import com.duckduckgo.app.browser.applinks.AppSchemeInterceptionFeature
 import com.duckduckgo.app.browser.applinks.ExternalAppIntentFlagsFeature
-import com.duckduckgo.app.browser.duckchat.AIChatQueryDetectionFeature
+import com.duckduckgo.browser.feature.toggles.AndroidBrowserConfigFeature
 import com.duckduckgo.duckchat.api.DuckChat
-import com.duckduckgo.duckplayer.api.DuckPlayer
 import com.duckduckgo.privacy.config.api.AmpLinkType
 import com.duckduckgo.privacy.config.api.AmpLinks
 import com.duckduckgo.privacy.config.api.TrackingParameters
 import com.duckduckgo.subscriptions.api.Subscriptions
+import logcat.LogPriority.WARN
+import logcat.asLog
+import logcat.logcat
 import java.net.URISyntaxException
-import timber.log.Timber
 
 class SpecialUrlDetectorImpl(
     private val packageManager: PackageManager,
@@ -44,10 +49,14 @@ class SpecialUrlDetectorImpl(
     private val externalAppIntentFlagsFeature: ExternalAppIntentFlagsFeature,
     private val duckPlayer: DuckPlayer,
     private val duckChat: DuckChat,
-    private val aiChatQueryDetectionFeature: AIChatQueryDetectionFeature,
+    private val androidBrowserConfigFeature: AndroidBrowserConfigFeature,
+    private val appSchemeInterceptionFeature: AppSchemeInterceptionFeature,
 ) : SpecialUrlDetector {
 
-    override fun determineType(initiatingUrl: String?, uri: Uri): UrlType {
+    override fun determineType(
+        initiatingUrl: String?,
+        uri: Uri,
+    ): UrlType {
         val uriString = uri.toString()
 
         return when (val scheme = uri.scheme) {
@@ -61,15 +70,23 @@ class SpecialUrlDetectorImpl(
             FILETYPE_SCHEME, IN_TITLE_SCHEME, IN_URL_SCHEME -> UrlType.SearchQuery(uriString)
             DUCK_SCHEME -> UrlType.DuckScheme(uriString)
             null -> {
-                if (subscriptions.shouldLaunchPrivacyProForUrl("https://$uriString")) {
-                    UrlType.ShouldLaunchPrivacyProLink
-                } else if (aiChatQueryDetectionFeature.self().isEnabled() && duckChat.isDuckChatUrl(uri)) {
-                    UrlType.ShouldLaunchDuckChatLink
+                if (subscriptions.shouldLaunchSubscriptionForUrl("https://$uriString")) {
+                    UrlType.ShouldLaunchSubscriptionLink
                 } else {
                     UrlType.SearchQuery(uriString)
                 }
             }
-            else -> checkForIntent(scheme, uriString)
+
+            else -> {
+                val intentFlags = if (scheme == INTENT_SCHEME && androidBrowserConfigFeature.handleIntentScheme().isEnabled()) {
+                    URI_INTENT_SCHEME
+                } else {
+                    URI_ANDROID_APP_SCHEME
+                }
+                // if there's no redirects (initiatingUrl = null) then it's user initiated
+                val userInitiated = initiatingUrl == null
+                checkForIntent(scheme, uriString, intentFlags, userInitiated)
+            }
         }
     }
 
@@ -85,16 +102,15 @@ class SpecialUrlDetectorImpl(
     private fun buildSmsTo(uriString: String): UrlType = UrlType.Sms(uriString.removePrefix("$SMSTO_SCHEME:").truncate(SMS_MAX_LENGTH))
 
     @Suppress("NewApi") // we use appBuildConfig
-    override fun processUrl(initiatingUrl: String?, uriString: String): UrlType {
+    override fun processUrl(
+        initiatingUrl: String?,
+        uriString: String,
+    ): UrlType {
         trackingParameters.cleanTrackingParameters(initiatingUrl = initiatingUrl, url = uriString)?.let { cleanedUrl ->
             return UrlType.TrackingParameterLink(cleanedUrl = cleanedUrl)
         }
 
         val uri = uriString.toUri()
-
-        if (duckChat.isEnabled() && duckChat.isDuckChatUrl(uri)) {
-            return UrlType.ShouldLaunchDuckChatLink
-        }
 
         if (duckPlayer.willNavigateToDuckPlayer(uri)) {
             return UrlType.ShouldLaunchDuckPlayerLink(url = uri)
@@ -114,7 +130,7 @@ class SpecialUrlDetectorImpl(
                     return UrlType.AppLink(appIntent = nonBrowserIntent, uriString = uriString)
                 }
             } catch (e: URISyntaxException) {
-                Timber.w(e, "Failed to parse uri $uriString")
+                logcat(WARN) { "Failed to parse uri $uriString: ${e.asLog()}" }
             }
         }
 
@@ -126,8 +142,8 @@ class SpecialUrlDetectorImpl(
             }
         }
 
-        if (subscriptions.shouldLaunchPrivacyProForUrl(uriString)) {
-            return UrlType.ShouldLaunchPrivacyProLink
+        if (subscriptions.shouldLaunchSubscriptionForUrl(uriString)) {
+            return UrlType.ShouldLaunchSubscriptionLink
         }
 
         return UrlType.Web(uriString)
@@ -165,34 +181,68 @@ class SpecialUrlDetectorImpl(
     private fun isBrowserFilter(filter: IntentFilter) =
         filter.countDataAuthorities() == 0 && filter.countDataPaths() == 0
 
-    private fun checkForIntent(
+    @VisibleForTesting
+    internal fun checkForIntent(
         scheme: String,
         uriString: String,
+        intentFlags: Int,
+        userInitiated: Boolean,
     ): UrlType {
+        fun buildIntent(
+            uriString: String,
+            intentFlags: Int,
+            userInitiated: Boolean,
+        ): UrlType {
+            return try {
+                val intent = Intent.parseUri(uriString, intentFlags)
+                // only proceed if something can handle it
+                if (userInitiated && (intent == null || packageManager.resolveActivity(intent, 0) == null) &&
+                    androidBrowserConfigFeature.validateIntentResolution().isEnabled()
+                ) {
+                    // If the intent has a fallback URL, still return NonHttpAppLink so the caller can use the fallback
+                    val fallbackUrl = sanitizeFallbackUrl(intent?.getStringExtra(EXTRA_FALLBACK_URL))
+                    if (fallbackUrl != null && appSchemeInterceptionFeature.self().isEnabled()) {
+                        if (externalAppIntentFlagsFeature.self().isEnabled()) {
+                            intent.addCategory(Intent.CATEGORY_BROWSABLE)
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        }
+                        val fallbackIntent = buildFallbackIntent(fallbackUrl)
+                        return UrlType.NonHttpAppLink(
+                            uriString = uriString,
+                            intent = intent,
+                            fallbackUrl = fallbackUrl,
+                            fallbackIntent = fallbackIntent,
+                        )
+                    }
+                    return UrlType.Unknown(uriString)
+                }
+
+                if (externalAppIntentFlagsFeature.self().isEnabled()) {
+                    intent.addCategory(Intent.CATEGORY_BROWSABLE)
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+
+                val fallbackUrl = sanitizeFallbackUrl(intent.getStringExtra(EXTRA_FALLBACK_URL))
+                val fallbackIntent = buildFallbackIntent(fallbackUrl)
+                UrlType.NonHttpAppLink(uriString = uriString, intent = intent, fallbackUrl = fallbackUrl, fallbackIntent = fallbackIntent)
+            } catch (e: URISyntaxException) {
+                logcat(WARN) { "Failed to parse uri $uriString: ${e.asLog()}" }
+                return UrlType.Unknown(uriString)
+            }
+        }
+
         val validUriSchemeRegex = Regex("[a-z][a-zA-Z\\d+.-]+")
         if (scheme.matches(validUriSchemeRegex)) {
-            return buildIntent(uriString)
+            return buildIntent(uriString, intentFlags, userInitiated)
         }
 
         return UrlType.SearchQuery(uriString)
     }
 
-    private fun buildIntent(uriString: String): UrlType {
-        return try {
-            val intent = Intent.parseUri(uriString, URI_ANDROID_APP_SCHEME)
-
-            if (externalAppIntentFlagsFeature.self().isEnabled()) {
-                intent.addCategory(Intent.CATEGORY_BROWSABLE)
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            }
-
-            val fallbackUrl = intent.getStringExtra(EXTRA_FALLBACK_URL)
-            val fallbackIntent = buildFallbackIntent(fallbackUrl)
-            UrlType.NonHttpAppLink(uriString = uriString, intent = intent, fallbackUrl = fallbackUrl, fallbackIntent = fallbackIntent)
-        } catch (e: URISyntaxException) {
-            Timber.w(e, "Failed to parse uri $uriString")
-            return UrlType.Unknown(uriString)
-        }
+    private fun sanitizeFallbackUrl(fallbackUrl: String?): String? {
+        if (fallbackUrl == null) return null
+        val scheme = Uri.parse(fallbackUrl).scheme?.lowercase() ?: return null
+        return if (scheme == HTTP_SCHEME || scheme == HTTPS_SCHEME) fallbackUrl else null
     }
 
     private fun buildFallbackIntent(fallbackUrl: String?): Intent? {
@@ -229,6 +279,7 @@ class SpecialUrlDetectorImpl(
         private const val IN_TITLE_SCHEME = "intitle"
         private const val IN_URL_SCHEME = "inurl"
         private const val DUCK_SCHEME = "duck"
+        private const val INTENT_SCHEME = "intent"
         const val SMS_MAX_LENGTH = 400
         const val PHONE_MAX_LENGTH = 20
         const val EMAIL_MAX_LENGTH = 1000

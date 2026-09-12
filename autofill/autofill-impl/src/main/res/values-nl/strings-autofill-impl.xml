@@ -202,7 +202,6 @@
     <string name="autofillManagementHowToSyncDesktopPasswordsTitle">Synchroniseren van desktopwachtwoorden</string>
     <string name="autofillManagementImportPasswordsHowToInstruction">Importeer wachtwoorden in de desktopversie van de DuckDuckGo-browser en synchroniseer ze vervolgens tussen apparaten.</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserButtonText">Download de desktopbrowser</string>
-    <string name="autofillManagementImportPasswordsGetDesktopBrowserLinkCopied">Link gekopieerd</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserIntentTitle">DuckDuckGo-browser downloaden voor Mac of Windows</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserIntentMessage" instruction="Placeholder is a URL">Zoek privé en blokkeer trackers met de DuckDuckGo-desktopbrowser. Bezoek deze link op je computer en download de browser vandaag nog.\n\n%1$s</string>
     <string name="autofillManagementImportPasswordsSyncWithDesktopButtonText">Synchroniseren met de desktop</string>
@@ -215,8 +214,6 @@
     <string name="autofillManagementImportPasswordsGetDesktopAppTitle">Desktop-app downloaden</string>
     <string name="autofillManagementImportPasswordsGetDesktopAppSubtitle">DuckDuckGo downloaden voor Mac of Windows</string>
     <string name="autofillManagementImportPasswordsGetDesktopAppInstruction">Ga op je computer naar:</string>
-    <string name="autofillManagementImportPasswordsGetDesktopAppUrl" translatable="false">duckduckgo.com/browser</string>
-    <string name="autofillManagementImportPasswordsGetDesktopAppShareDownloadButtonText">Downloadlink delen</string>
 
     <string name="autofillManagementReportBreakagePromptTitle">Meld een probleem met automatisch invullen</string>
     <string name="autofillManagementReportBreakagePromptSubtitle">Anoniem melden dat automatisch invullen niet werkt op deze site. Wachtwoorden worden nooit gedeeld.</string>
@@ -240,7 +237,7 @@
 
     <string name="newTabPageShortcutPasswords">Wachtwoorden</string>
 
-    <string name="autofillImportGooglePasswordsWebFlowTitle">Google-wachtwoorden importeren</string>
+    <string name="autofillImportGooglePasswordsWebFlowTitle">Wachtwoorden importeren</string>
     <string name="autofillImportGooglePasswordsSuccessMessage" instruction="Placeholder is the number of passwords imported">%1$d wachtwoorden geïmporteerd van Google</string>
     <string name="autofillImportCsvPasswordsSuccessMessage" instruction="Placeholder is the number of passwords imported">%1$d wachtwoorden geïmporteerd uit CSV-bestand</string>
 
@@ -250,9 +247,9 @@
     <string name="autofillSyncDesktopPasswordEmptyStateButtonTitle">Wachtwoorden bureaublad synchroniseren</string>
     <string name="autofillSyncDesktopPasswordsMenuTitle">Wachtwoorden bureaublad synchroniseren</string>
 
-    <string name="importPasswordsChooseMethodDialogTitle">Importeer je Google-wachtwoorden</string>
+    <string name="importPasswordsChooseMethodDialogTitle">Wachtwoorden importeren van Google</string>
     <string name="importPasswordsChooseMethodDialogSubtitle">Google kan je vragen om in te loggen of je wachtwoord in te voeren ter bevestiging.</string>
-    <string name="importPasswordsChooseMethodDialogGpmButton">Google wachtwoorden openen</string>
+    <string name="importPasswordsChooseMethodDialogGpmButton">Importeren van Google</string>
     <string name="importPasswordsChooseMethodDialogCsvButton">Kies een CSV-bestand</string>
     <string name="importPasswordsChooseMethodDialogDesktopSyncButton">Importeren vanuit de desktopbrowser</string>
 
@@ -280,5 +277,36 @@
     <string name="autofillSettingsImportFromGoogleLabel">Wachtwoorden importeren van Google</string>
     <string name="autofillSettingsImportFromDesktopSync">Wachtwoorden bureaublad synchroniseren</string>
     <string name="autofillSettingsResetExcludedSitesTitle">Uitgesloten sites opnieuw instellen</string>
+
+    <string name="passwords_import_promo_title" instruction="The &apos;br&apos; is a forced line break for English. It does not need to be included in translations.">Breng je wachtwoorden van&lt;br /&gt;Google over naar DuckDuckGo</string>
+    <string name="passwords_import_promo_subtitle">Importeer snel en veilig je wachtwoorden naar DuckDuckGo. Google kan je vragen om je wachtwoord in te voeren.</string>
+    <string name="passwords_import_promo_action">Importeren van Google</string>
+    <string name="passwords_import_promo_in_browser_title">Breng je wachtwoorden van Google naar DuckDuckGo</string>
+    <string name="passwords_import_promo_in_browser_secondary_action_button">Niet opnieuw vragen</string>
+    <string name="passwords_import_promo_in_settings_title">Wachtwoorden importeren van Google</string>
+    <string name="passwords_import_promo_in_settings_dismiss_text">Verbergen</string>
+
+    <!-- Import Bookmarks Strings -->
+    <string name="importToDuckDuckGo">Importeren naar DuckDuckGo</string>
+    <string name="importBookmarksFromGoogleChromeFolderName">Geïmporteerd vanuit Chrome</string>
+    <string name="importBookmarksFromGooglePreImportDialogTitle">Bladwijzers importeren uit Google</string>
+    <string name="importBookmarksFromGooglePreImportDialogInstruction">Google kan je vragen om in te loggen of je wachtwoord in te voeren ter bevestiging.</string>
+    <string name="importBookmarksFromGooglePreImportDialogImportButton">Importeren van Google</string>
+    <string name="importBookmarksFromGooglePreImportDialogSelectFileButton">Bladwijzerbestand selecteren...</string>
+    <string name="importBookmarksFromGoogleWebFlowTitle">Bladwijzers importeren</string>
+    <string name="importBookmarksProgressTitle">Importeren van Google…</string>
+    <string name="importBookmarksProgressSubtitle">Houd dit scherm open en wacht even — het zou niet langer dan een minuut of twee moeten duren.</string>
+    <string name="importBookmarksProgressInfoMessage1">Google kan je vragen om in te loggen of je wachtwoord in te voeren ter bevestiging.</string>
+    <string name="importBookmarksProgressInfoMessage2">Google stuurt je mogelijk een e-mail ter bevestiging dat je bladwijzers worden geëxporteerd.</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogTitle">Import annuleren?</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogMessage">Je bladwijzers worden niet geïmporteerd als je nu annuleert.</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogCancelImport">Importeren annuleren</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogContinue">Doorgaan</string>
+    <string name="importBookmarksFromGoogleSuccessBookmarksCount" instruction="Placeholder is the number of bookmarks that were imported">Bladwijzers: %1$d</string>
+    <string name="importBookmarksSuccessTitle">@string/importToDuckDuckGo</string>
+    <string name="importBookmarksFinalDoneButton">Sluiten</string>
+    <string name="importBookmarksErrorTitle">@string/importToDuckDuckGo</string>
+    <string name="importBookmarksErrorGenericMessage">Er is iets misgegaan</string>
+    <string name="importBookmarksErrorGenericMessageSecondary">Controleer of je verbinding hebt met internet en probeer het opnieuw.</string>
 
 </resources>

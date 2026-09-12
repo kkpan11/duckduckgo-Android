@@ -18,42 +18,42 @@ package com.duckduckgo.autofill.impl.configuration
 
 import com.duckduckgo.autofill.api.AutofillCapabilityChecker
 import com.duckduckgo.autofill.api.AutofillFeature
-import com.duckduckgo.autofill.api.domain.app.LoginCredentials
-import com.duckduckgo.autofill.api.email.EmailManager
 import com.duckduckgo.autofill.impl.email.incontext.availability.EmailProtectionInContextAvailabilityRules
-import com.duckduckgo.autofill.impl.jsbridge.response.AvailableInputTypeCredentials
-import com.duckduckgo.autofill.impl.sharedcreds.ShareableCredentials
-import com.duckduckgo.autofill.impl.store.InternalAutofillStore
 import com.duckduckgo.autofill.impl.store.NeverSavedSiteRepository
+import com.duckduckgo.autofill.impl.store.ReAuthenticationDetails
+import com.duckduckgo.browsermode.api.BrowserMode
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface AutofillRuntimeConfigProvider {
     suspend fun getRuntimeConfiguration(
         rawJs: String,
         url: String?,
+        reAuthenticationDetails: ReAuthenticationDetails,
+        browserMode: BrowserMode,
     ): String
 }
 
 @ContributesBinding(AppScope::class)
 class RealAutofillRuntimeConfigProvider @Inject constructor(
-    private val emailManager: EmailManager,
-    private val autofillStore: InternalAutofillStore,
     private val runtimeConfigurationWriter: RuntimeConfigurationWriter,
     private val autofillCapabilityChecker: AutofillCapabilityChecker,
     private val autofillFeature: AutofillFeature,
-    private val shareableCredentials: ShareableCredentials,
     private val emailProtectionInContextAvailabilityRules: EmailProtectionInContextAvailabilityRules,
     private val neverSavedSiteRepository: NeverSavedSiteRepository,
     private val siteSpecificFixesStore: AutofillSiteSpecificFixesStore,
+    private val autofillAvailableInputTypesProvider: AutofillAvailableInputTypesProvider,
 ) : AutofillRuntimeConfigProvider {
     override suspend fun getRuntimeConfiguration(
         rawJs: String,
         url: String?,
+        reAuthenticationDetails: ReAuthenticationDetails,
+        browserMode: BrowserMode,
     ): String {
-        Timber.v("BrowserAutofill: getRuntimeConfiguration called")
+        logcat(VERBOSE) { "BrowserAutofill: getRuntimeConfiguration called" }
 
         val contentScope = runtimeConfigurationWriter.generateContentScope(siteSpecificFixesStore.getConfig())
         val userUnprotectedDomains = runtimeConfigurationWriter.generateUserUnprotectedDomains()
@@ -64,9 +64,12 @@ class RealAutofillRuntimeConfigProvider @Inject constructor(
             showInlineKeyIcon = true,
             showInContextEmailProtectionSignup = canShowInContextEmailProtectionSignup(url),
             unknownUsernameCategorization = canCategorizeUnknownUsername(),
+            canCategorizePasswordVariant = canCategorizePasswordVariant(),
             partialFormSaves = partialFormSaves(),
-        )
-        val availableInputTypes = generateAvailableInputTypes(url)
+        ).also {
+            logcat(VERBOSE) { "autofill-config: userPreferences for $url: \n$it" }
+        }
+        val availableInputTypes = generateAvailableInputTypes(url, reAuthenticationDetails, browserMode)
 
         return StringBuilder(rawJs).apply {
             replacePlaceholder(this, TAG_INJECT_CONTENT_SCOPE, contentScope)
@@ -83,31 +86,17 @@ class RealAutofillRuntimeConfigProvider @Inject constructor(
         }
     }
 
-    private suspend fun generateAvailableInputTypes(url: String?): String {
-        val credentialsAvailable = determineIfCredentialsAvailable(url)
-        val emailAvailable = determineIfEmailAvailable()
+    private suspend fun generateAvailableInputTypes(
+        url: String?,
+        reAuthenticationDetails: ReAuthenticationDetails,
+        browserMode: BrowserMode,
+    ): String {
+        val inputTypes = autofillAvailableInputTypesProvider.getTypes(url, reAuthenticationDetails, browserMode)
 
-        val json = runtimeConfigurationWriter.generateResponseGetAvailableInputTypes(credentialsAvailable, emailAvailable).also {
-            Timber.v("availableInputTypes for %s: \n%s", url, it)
+        val json = runtimeConfigurationWriter.generateResponseGetAvailableInputTypes(inputTypes).also {
+            logcat(VERBOSE) { "autofill-config: availableInputTypes for $url: \n$it" }
         }
         return "availableInputTypes = $json"
-    }
-
-    private suspend fun determineIfCredentialsAvailable(url: String?): AvailableInputTypeCredentials {
-        return if (url == null || !autofillCapabilityChecker.canInjectCredentialsToWebView(url)) {
-            AvailableInputTypeCredentials(username = false, password = false)
-        } else {
-            val matches = mutableListOf<LoginCredentials>()
-            val directMatches = autofillStore.getCredentials(url)
-            val shareableMatches = shareableCredentials.shareableCredentials(url)
-            matches.addAll(directMatches)
-            matches.addAll(shareableMatches)
-
-            val usernameSearch = matches.find { !it.username.isNullOrEmpty() }
-            val passwordSearch = matches.find { !it.password.isNullOrEmpty() }
-
-            AvailableInputTypeCredentials(username = usernameSearch != null, password = passwordSearch != null)
-        }
     }
 
     private suspend fun canInjectCredentials(url: String?): Boolean {
@@ -143,6 +132,10 @@ class RealAutofillRuntimeConfigProvider @Inject constructor(
         return autofillFeature.canCategorizeUnknownUsername().isEnabled()
     }
 
+    private fun canCategorizePasswordVariant(): Boolean {
+        return autofillFeature.passwordVariantCategorization().isEnabled()
+    }
+
     private fun partialFormSaves(): Boolean {
         return autofillFeature.partialFormSaves().isEnabled()
     }
@@ -151,8 +144,6 @@ class RealAutofillRuntimeConfigProvider @Inject constructor(
         if (url == null) return false
         return emailProtectionInContextAvailabilityRules.permittedToShow(url)
     }
-
-    private fun determineIfEmailAvailable(): Boolean = emailManager.isSignedIn()
 
     companion object {
         private const val TAG_INJECT_CONTENT_SCOPE = "// INJECT contentScope HERE"

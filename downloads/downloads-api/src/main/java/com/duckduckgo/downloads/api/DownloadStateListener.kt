@@ -17,10 +17,11 @@
 package com.duckduckgo.downloads.api
 
 import android.content.Context
+import android.net.Uri
 import com.duckduckgo.downloads.api.FileDownloader.PendingFileDownload
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import java.io.File
 import kotlinx.coroutines.flow.Flow
+import java.io.File
 
 /** Interface containing download callbacks. */
 interface DownloadStateListener {
@@ -42,4 +43,7 @@ interface DownloadConfirmation {
 interface DownloadsFileActions {
     fun openFile(applicationContext: Context, file: File): Boolean
     fun shareFile(applicationContext: Context, file: File): Boolean
+
+    /** A content:// URI for [file] that a viewer activity can open, e.g. via FileProvider. */
+    fun getShareableUri(applicationContext: Context, file: File): Uri
 }

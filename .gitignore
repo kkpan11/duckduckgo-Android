@@ -17,6 +17,7 @@ out/
 .gradle/
 build/
 .externalNativeBuild/
+.kotlin/
 
 #Autoconsent
 /node_modules/@duckduckgo/autoconsent/
@@ -41,9 +42,13 @@ captures/
 
 # Intellij
 *.iml
-.idea/
-.idea/workspace.xml
+.idea/*
 !.idea/icon.svg
+!.idea/copyright/
+.idea/workspace.xml
+
+# VSCode
+.vscode/*
 
 # Keystore files
 *.jks
@@ -98,3 +103,13 @@ report
 !/node_modules/@duckduckgo/content-scope-scripts/build/android/pages/
 /node_modules/@duckduckgo/content-scope-scripts/build/android/pages/*
 !/node_modules/@duckduckgo/content-scope-scripts/build/android/pages/duckplayer/
+
+# Pixel processing results
+PixelDefinitions/pixels/pixel_processing_results/*
+PixelDefinitions/node_modules/
+
+# LLM
+.claude/settings.local.json
+/.claude/worktrees/*
+CLAUDE.local.md
+docs/*

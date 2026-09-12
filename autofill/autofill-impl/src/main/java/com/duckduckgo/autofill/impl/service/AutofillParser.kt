@@ -16,17 +16,16 @@
 
 package com.duckduckgo.autofill.impl.service
 
-import android.annotation.SuppressLint
 import android.app.assist.AssistStructure
 import android.app.assist.AssistStructure.ViewNode
 import android.app.assist.AssistStructure.WindowNode
 import android.view.autofill.AutofillId
-import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface AutofillParser {
     // Parses structure, detects autofill fields, and returns a list of root nodes.
@@ -61,7 +60,6 @@ enum class AutofillFieldType {
 @SingleInstanceIn(AppScope::class)
 @ContributesBinding(AppScope::class)
 class RealAutofillParser @Inject constructor(
-    private val appBuildConfig: AppBuildConfig,
     private val viewNodeClassifier: ViewNodeClassifier,
 ) : AutofillParser {
 
@@ -89,7 +87,7 @@ class RealAutofillParser @Inject constructor(
         viewNode: ViewNode,
     ): MutableList<ParsedAutofillField> {
         val autofillId = viewNode.autofillId ?: return mutableListOf()
-        Timber.v("DDGAutofillService Parsing NODE: $autofillId")
+        logcat(VERBOSE) { "DDGAutofillService Parsing NODE: $autofillId" }
         val traversalDataList = mutableListOf<ParsedAutofillField>()
         val packageId = viewNode.validPackageId()
         val website = viewNode.website()
@@ -103,7 +101,7 @@ class RealAutofillParser @Inject constructor(
             type = autofillType,
             originalNode = viewNode,
         )
-        Timber.v("DDGAutofillService Parsed as: $parsedAutofillField")
+        logcat(VERBOSE) { "DDGAutofillService Parsed as: $parsedAutofillField" }
         traversalDataList.add(parsedAutofillField)
 
         for (i in 0 until viewNode.childCount) {
@@ -133,15 +131,10 @@ class RealAutofillParser @Inject constructor(
             ?.takeUnless { it in INVALID_PACKAGE_ID }
     }
 
-    @SuppressLint("NewApi")
     private fun ViewNode.website(): String? {
         return this.webDomain?.takeUnless { it.isBlank() }
             ?.let { nonEmptyDomain ->
-                val scheme = if (appBuildConfig.sdkInt >= 28) {
-                    this.webScheme.takeUnless { it.isNullOrBlank() } ?: "http"
-                } else {
-                    "http"
-                }
+                val scheme = this.webScheme.takeUnless { it.isNullOrBlank() } ?: "http"
                 "$scheme://$nonEmptyDomain"
             }
     }

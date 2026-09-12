@@ -24,11 +24,12 @@ import com.duckduckgo.user.agent.impl.store.ClientBrandHintDatabase
 import com.duckduckgo.user.agent.impl.store.ClientHintBrandDomainEntity
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
-import java.util.concurrent.CopyOnWriteArrayList
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.INFO
+import logcat.logcat
+import java.util.concurrent.CopyOnWriteArrayList
+import javax.inject.Inject
 
 interface ClientBrandHintFeatureSettingsRepository {
     fun updateAllSettings(settings: ClientBrandHintSettings)
@@ -57,7 +58,7 @@ class RealClientBrandHintFeatureSettingsRepository @Inject constructor(
     }
 
     override fun updateAllSettings(settings: ClientBrandHintSettings) {
-        Timber.i("ClientBrandHintProvider: update domains to ${settings.domains}")
+        logcat(INFO) { "ClientBrandHintProvider: update domains to ${settings.domains}" }
         dao.updateAllDomains(settings.domains.map { ClientHintBrandDomainEntity(it.domain, it.brand.name) })
         loadToMemory()
     }
@@ -65,7 +66,7 @@ class RealClientBrandHintFeatureSettingsRepository @Inject constructor(
     private fun loadToMemory() {
         clientBrandHints.clear()
         val clientBrandHintsDomainList = dao.getAllDomains()
-        Timber.i("ClientBrandHintProvider: loading domains to memory $clientBrandHintsDomainList")
+        logcat(INFO) { "ClientBrandHintProvider: loading domains to memory $clientBrandHintsDomainList" }
         clientBrandHints.addAll(clientBrandHintsDomainList.map { ClientBrandHintDomain(it.url, ClientBrandsHints.from(it.brand)) })
     }
 }

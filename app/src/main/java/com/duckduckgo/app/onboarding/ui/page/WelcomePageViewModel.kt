@@ -19,56 +19,78 @@ package com.duckduckgo.app.onboarding.ui.page
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import androidx.annotation.DrawableRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.duckduckgo.anvil.annotations.ContributesViewModel
-import com.duckduckgo.app.browser.R
-import com.duckduckgo.app.browser.omnibar.model.OmnibarPosition
+import com.duckduckgo.app.browser.omnibar.OmnibarType
+import com.duckduckgo.app.cta.ui.DaxBubbleCta.DaxDialogIntroOption
 import com.duckduckgo.app.global.DefaultRoleBrowserDialog
 import com.duckduckgo.app.global.install.AppInstallStore
-import com.duckduckgo.app.onboarding.ui.page.WelcomePage.Companion.PreOnboardingDialogType
-import com.duckduckgo.app.onboarding.ui.page.WelcomePage.Companion.PreOnboardingDialogType.ADDRESS_BAR_POSITION
-import com.duckduckgo.app.onboarding.ui.page.WelcomePage.Companion.PreOnboardingDialogType.COMPARISON_CHART
-import com.duckduckgo.app.onboarding.ui.page.WelcomePage.Companion.PreOnboardingDialogType.INITIAL
-import com.duckduckgo.app.onboarding.ui.page.WelcomePage.Companion.PreOnboardingDialogType.INITIAL_REINSTALL_USER
-import com.duckduckgo.app.onboarding.ui.page.WelcomePage.Companion.PreOnboardingDialogType.SKIP_ONBOARDING_OPTION
+import com.duckduckgo.app.onboarding.DuckAiOnboardingAvailability
+import com.duckduckgo.app.onboarding.store.OnboardingStore
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.ADDRESS_BAR_POSITION
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.ADD_TO_DOCK
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.AI_COMPARISON_CHART
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.COMPARISON_CHART
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.INITIAL
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.INITIAL_REINSTALL_USER
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.INPUT_SCREEN
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.INPUT_SCREEN_PREVIEW
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.QUICK_SETUP
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.SKIP_ONBOARDING_OPTION
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.SYNC_RESTORE
+import com.duckduckgo.app.onboarding.ui.page.PreOnboardingDialogType.WIDGET_PROMPT
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.Finish
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.OnboardingSkipped
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.SetAddressBarPositionOptions
-import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.SetBackgroundResource
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.ShowAddressBarPositionDialog
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.ShowComparisonChart
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.ShowDefaultBrowserDialog
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.ShowInitialDialog
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.ShowInitialReinstallUserDialog
 import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.ShowSkipOnboardingOption
+import com.duckduckgo.app.onboarding.ui.page.WelcomePageViewModel.Command.ShowSyncRestoreDialog
 import com.duckduckgo.app.pixels.AppPixelName
 import com.duckduckgo.app.pixels.AppPixelName.NOTIFICATION_RUNTIME_PERMISSION_SHOWN
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_ADDRESS_BAR_POSITION_SHOWN_UNIQUE
+import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_AICHAT_SELECTED
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_BOTTOM_ADDRESS_BAR_SELECTED_UNIQUE
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_CHOOSE_BROWSER_PRESSED
+import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_CHOOSE_SEARCH_EXPERIENCE_IMPRESSIONS_UNIQUE
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_COMPARISON_CHART_SHOWN_UNIQUE
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_CONFIRM_SKIP_ONBOARDING_PRESSED
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_INTRO_REINSTALL_USER_SHOWN_UNIQUE
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_INTRO_SHOWN_UNIQUE
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_RESUME_ONBOARDING_PRESSED
+import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_SEARCH_ONLY_SELECTED
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_SKIP_ONBOARDING_PRESSED
 import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_SKIP_ONBOARDING_SHOWN_UNIQUE
+import com.duckduckgo.app.pixels.AppPixelName.PREONBOARDING_SPLIT_ADDRESS_BAR_SELECTED_UNIQUE
 import com.duckduckgo.app.settings.db.SettingsDataStore
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.app.statistics.pixels.Pixel.PixelParameter
 import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Unique
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.browser.feature.toggles.AndroidBrowserConfigFeature
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.device.DeviceInfo
 import com.duckduckgo.di.scopes.FragmentScope
-import javax.inject.Inject
+import com.duckduckgo.duckchat.api.DuckChat
+import com.duckduckgo.duckchat.impl.wideevents.InputScreenOnboardingWideEvent
+import com.duckduckgo.sync.api.SyncAutoRestore
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import logcat.LogPriority
+import logcat.logcat
+import javax.inject.Inject
 
 @SuppressLint("StaticFieldLeak")
 @ContributesViewModel(FragmentScope::class)
@@ -80,37 +102,94 @@ class WelcomePageViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val dispatchers: DispatcherProvider,
     private val appBuildConfig: AppBuildConfig,
+    private val onboardingStore: OnboardingStore,
+    private val androidBrowserConfigFeature: AndroidBrowserConfigFeature,
+    private val duckChat: DuckChat,
+    private val inputScreenOnboardingWideEvent: InputScreenOnboardingWideEvent,
+    private val deviceInfo: DeviceInfo,
+    private val syncAutoRestore: SyncAutoRestore,
+    private val duckAiOnboardingAvailability: DuckAiOnboardingAvailability,
 ) : ViewModel() {
-
     private val _commands = Channel<Command>(1, DROP_OLDEST)
     val commands: Flow<Command> = _commands.receiveAsFlow()
 
-    private var defaultAddressBarPosition: Boolean = true
+    private var addressBarPositionOption: OmnibarType = OmnibarType.SINGLE_TOP
+    private var inputScreenSelected: Boolean = true
+    private var reinstallUser: Boolean = false
+
+    private val canRestoreDeferred: Deferred<Boolean> = viewModelScope.async(dispatchers.io()) {
+        try {
+            logcat { "Sync-AutoRestore: checking canRestore..." }
+            val result = syncAutoRestore.canRestore()
+            logcat(LogPriority.INFO) { "Sync-AutoRestore: canRestore=$result" }
+            result
+        } catch (t: Throwable) {
+            coroutineContext.ensureActive()
+            logcat(LogPriority.WARN) { "Sync-AutoRestore: canRestore check failed - ${t.message}" }
+            false
+        }
+    }
 
     sealed interface Command {
-        data object ShowInitialReinstallUserDialog : Command
-        data object ShowInitialDialog : Command
-        data object ShowComparisonChart : Command
+        data object ShowSyncRestoreDialog : Command
+
+        data class ShowInitialReinstallUserDialog(val showDuckAiCopy: Boolean) : Command
+
+        data class ShowInitialDialog(val showDuckAiCopy: Boolean) : Command
+
+        data class ShowComparisonChart(val showDuckAiCopy: Boolean) : Command
+
         data object ShowSkipOnboardingOption : Command
-        data class ShowDefaultBrowserDialog(val intent: Intent) : Command
-        data object ShowAddressBarPositionDialog : Command
+
+        data class ShowDefaultBrowserDialog(
+            val intent: Intent,
+        ) : Command
+
+        data class ShowAddressBarPositionDialog(
+            val showSplitOption: Boolean,
+        ) : Command
+
+        data class ShowInputScreenDialog(val showDuckAiCopy: Boolean) : Command
+
+        data class ShowInputScreenPreviewDialog(
+            val searchSuggestions: List<DaxDialogIntroOption>,
+            val chatSuggestions: List<DaxDialogIntroOption>,
+            val duckAiDefault: Boolean,
+        ) : Command
+
         data object Finish : Command
+
+        data class FinishAndSubmitSearchQuery(val query: String) : Command
+
+        data class FinishAndSubmitChatPrompt(val prompt: String) : Command
+
         data object OnboardingSkipped : Command
-        data class SetBackgroundResource(@DrawableRes val backgroundRes: Int) : Command
-        data class SetAddressBarPositionOptions(val defaultOption: Boolean) : Command
+
+        data class SetAddressBarPositionOptions(
+            val selectedOption: OmnibarType,
+        ) : Command
     }
 
     fun onPrimaryCtaClicked(currentDialog: PreOnboardingDialogType) {
         when (currentDialog) {
+            SYNC_RESTORE -> {
+                viewModelScope.launch {
+                    logcat { "Sync-AutoRestore: user accepted restore, calling restoreSyncAccount()" }
+                    pixel.fire(AppPixelName.PREONBOARDING_SYNC_RESTORE_TAPPED_UNIQUE, type = Unique())
+                    syncAutoRestore.restoreSyncAccount()
+                    _commands.send(ShowComparisonChart(showDuckAiCopy = isDuckAiCopyEnabled()))
+                }
+            }
+
             INITIAL_REINSTALL_USER -> {
                 viewModelScope.launch {
-                    _commands.send(ShowComparisonChart)
+                    _commands.send(ShowComparisonChart(showDuckAiCopy = isDuckAiCopyEnabled()))
                 }
             }
 
             INITIAL -> {
                 viewModelScope.launch {
-                    _commands.send(ShowComparisonChart)
+                    _commands.send(ShowComparisonChart(showDuckAiCopy = isDuckAiCopyEnabled()))
                 }
             }
 
@@ -123,7 +202,7 @@ class WelcomePageViewModel @Inject constructor(
                                 _commands.send(ShowDefaultBrowserDialog(intent))
                             } else {
                                 pixel.fire(AppPixelName.DEFAULT_BROWSER_DIALOG_NOT_SHOWN)
-                                _commands.send(ShowAddressBarPositionDialog)
+                                _commands.send(ShowAddressBarPositionDialog(showSplitOption = isSplitOmnibarEnabled()))
                             }
                             false
                         } else {
@@ -137,29 +216,93 @@ class WelcomePageViewModel @Inject constructor(
                 }
             }
 
+            AI_COMPARISON_CHART -> {
+                // no-op, only used in BrandDesignUpdate path
+            }
+
             SKIP_ONBOARDING_OPTION -> {
                 viewModelScope.launch {
                     _commands.send(OnboardingSkipped)
                     pixel.fire(PREONBOARDING_CONFIRM_SKIP_ONBOARDING_PRESSED)
+                    duckChat.setInputScreenUserSetting(true)
                 }
             }
 
             ADDRESS_BAR_POSITION -> {
-                if (!defaultAddressBarPosition) {
-                    settingsDataStore.omnibarPosition = OmnibarPosition.BOTTOM
-                    pixel.fire(PREONBOARDING_BOTTOM_ADDRESS_BAR_SELECTED_UNIQUE)
+                viewModelScope.launch {
+                    when (addressBarPositionOption) {
+                        OmnibarType.SINGLE_BOTTOM -> {
+                            settingsDataStore.omnibarType = OmnibarType.SINGLE_BOTTOM
+                            pixel.fire(PREONBOARDING_BOTTOM_ADDRESS_BAR_SELECTED_UNIQUE)
+                        }
+                        OmnibarType.SPLIT -> {
+                            if (isSplitOmnibarEnabled()) {
+                                settingsDataStore.omnibarType = OmnibarType.SPLIT
+                                pixel.fire(PREONBOARDING_SPLIT_ADDRESS_BAR_SELECTED_UNIQUE)
+                            } else {
+                                // Fallback to top if split is not enabled
+                                settingsDataStore.omnibarType = OmnibarType.SINGLE_TOP
+                            }
+                        }
+                        OmnibarType.SINGLE_TOP -> {
+                            settingsDataStore.omnibarType = OmnibarType.SINGLE_TOP
+                            // Top is the default, no pixel needed
+                        }
+                    }
+                    _commands.send(Command.ShowInputScreenDialog(showDuckAiCopy = isDuckAiCopyEnabled()))
                 }
+            }
+
+            INPUT_SCREEN -> {
+                viewModelScope.launch(dispatchers.io()) {
+                    if (inputScreenSelected) {
+                        pixel.fire(PREONBOARDING_AICHAT_SELECTED)
+                        inputScreenOnboardingWideEvent.onInputScreenEnabledDuringOnboarding(reinstallUser = reinstallUser)
+                    } else {
+                        pixel.fire(PREONBOARDING_SEARCH_ONLY_SELECTED)
+                    }
+                    duckChat.setCosmeticInputScreenUserSetting(inputScreenSelected)
+                    onboardingStore.storeInputScreenSelection(inputScreenSelected)
+                    val command = if (inputScreenSelected && duckAiOnboardingAvailability.isDuckAiOnboardingEnabled()) {
+                        Command.ShowInputScreenPreviewDialog(
+                            searchSuggestions = onboardingStore.getSearchOptions(),
+                            chatSuggestions = onboardingStore.getChatSuggestions(),
+                            duckAiDefault = false,
+                        )
+                    } else {
+                        Finish
+                    }
+                    _commands.send(command)
+                }
+            }
+
+            INPUT_SCREEN_PREVIEW -> {
                 viewModelScope.launch {
                     _commands.send(Finish)
                 }
+            }
+
+            QUICK_SETUP -> {
+            }
+
+            ADD_TO_DOCK, WIDGET_PROMPT -> {
             }
         }
     }
 
     fun onSecondaryCtaClicked(currentDialog: PreOnboardingDialogType) {
         when (currentDialog) {
+            SYNC_RESTORE -> {
+                viewModelScope.launch {
+                    logcat { "Sync-AutoRestore: user skipped restore" }
+                    pixel.fire(AppPixelName.PREONBOARDING_SYNC_SKIP_RESTORE_TAPPED_UNIQUE, type = Unique())
+                    _commands.send(ShowSkipOnboardingOption)
+                }
+            }
+
             INITIAL_REINSTALL_USER -> {
                 viewModelScope.launch {
+                    reinstallUser = true
                     _commands.send(ShowSkipOnboardingOption)
                     pixel.fire(PREONBOARDING_SKIP_ONBOARDING_PRESSED)
                 }
@@ -169,19 +312,34 @@ class WelcomePageViewModel @Inject constructor(
                 // no-op
             }
 
-            COMPARISON_CHART -> {
+            COMPARISON_CHART, AI_COMPARISON_CHART -> {
                 // no-op
             }
 
             SKIP_ONBOARDING_OPTION -> {
                 viewModelScope.launch {
-                    _commands.send(ShowComparisonChart)
+                    _commands.send(ShowComparisonChart(showDuckAiCopy = isDuckAiCopyEnabled()))
                     pixel.fire(PREONBOARDING_RESUME_ONBOARDING_PRESSED)
                 }
             }
 
             ADDRESS_BAR_POSITION -> {
                 // no-op
+            }
+
+            INPUT_SCREEN -> {
+                // no-op
+            }
+
+            INPUT_SCREEN_PREVIEW -> {
+                // no-op
+            }
+
+            QUICK_SETUP -> {
+                // no-op
+            }
+
+            ADD_TO_DOCK, WIDGET_PROMPT -> {
             }
         }
     }
@@ -192,7 +350,7 @@ class WelcomePageViewModel @Inject constructor(
         pixel.fire(AppPixelName.DEFAULT_BROWSER_SET, mapOf(PixelParameter.DEFAULT_BROWSER_SET_FROM_ONBOARDING to true.toString()))
 
         viewModelScope.launch {
-            _commands.send(ShowAddressBarPositionDialog)
+            _commands.send(ShowAddressBarPositionDialog(showSplitOption = isSplitOmnibarEnabled()))
         }
     }
 
@@ -202,7 +360,7 @@ class WelcomePageViewModel @Inject constructor(
         pixel.fire(AppPixelName.DEFAULT_BROWSER_NOT_SET, mapOf(PixelParameter.DEFAULT_BROWSER_SET_FROM_ONBOARDING to true.toString()))
 
         viewModelScope.launch {
-            _commands.send(ShowAddressBarPositionDialog)
+            _commands.send(ShowAddressBarPositionDialog(showSplitOption = isSplitOmnibarEnabled()))
         }
     }
 
@@ -219,45 +377,104 @@ class WelcomePageViewModel @Inject constructor(
 
     fun onDialogShown(onboardingDialogType: PreOnboardingDialogType) {
         when (onboardingDialogType) {
-            INITIAL_REINSTALL_USER -> pixel.fire(PREONBOARDING_INTRO_REINSTALL_USER_SHOWN_UNIQUE, type = Unique())
-            INITIAL -> pixel.fire(PREONBOARDING_INTRO_SHOWN_UNIQUE, type = Unique())
-            COMPARISON_CHART -> pixel.fire(PREONBOARDING_COMPARISON_CHART_SHOWN_UNIQUE, type = Unique())
+            SYNC_RESTORE -> {
+                pixel.fire(AppPixelName.PREONBOARDING_SYNC_RESTORE_SHOWN_UNIQUE, type = Unique())
+            }
+            INITIAL_REINSTALL_USER -> {
+                pixel.fire(PREONBOARDING_INTRO_REINSTALL_USER_SHOWN_UNIQUE, type = Unique())
+            }
+            INITIAL -> {
+                pixel.fire(PREONBOARDING_INTRO_SHOWN_UNIQUE, type = Unique())
+            }
+            COMPARISON_CHART -> {
+                pixel.fire(PREONBOARDING_COMPARISON_CHART_SHOWN_UNIQUE, type = Unique())
+            }
+            AI_COMPARISON_CHART -> {
+                // no pixel yet
+            }
             SKIP_ONBOARDING_OPTION -> pixel.fire(PREONBOARDING_SKIP_ONBOARDING_SHOWN_UNIQUE, type = Unique())
-            ADDRESS_BAR_POSITION -> pixel.fire(PREONBOARDING_ADDRESS_BAR_POSITION_SHOWN_UNIQUE, type = Unique())
-        }
-    }
+            ADDRESS_BAR_POSITION -> {
+                pixel.fire(PREONBOARDING_ADDRESS_BAR_POSITION_SHOWN_UNIQUE, type = Unique())
+            }
+            INPUT_SCREEN -> {
+                pixel.fire(PREONBOARDING_CHOOSE_SEARCH_EXPERIENCE_IMPRESSIONS_UNIQUE, type = Unique())
+            }
+            INPUT_SCREEN_PREVIEW -> {
+                // no pixel yet
+            }
 
-    fun setBackgroundResource(lightModeEnabled: Boolean) {
-        val backgroundRes = if (lightModeEnabled) {
-            R.drawable.onboarding_background_bitmap_light
-        } else {
-            R.drawable.onboarding_background_bitmap_dark
-        }
-        viewModelScope.launch {
-            _commands.send(SetBackgroundResource(backgroundRes))
-        }
-    }
+            QUICK_SETUP -> {
+            }
 
-    fun onAddressBarPositionOptionSelected(defaultOption: Boolean) {
-        defaultAddressBarPosition = defaultOption
-        viewModelScope.launch {
-            _commands.send(SetAddressBarPositionOptions(defaultOption))
-        }
-    }
-
-    fun loadDaxDialog() {
-        viewModelScope.launch {
-            if (isAppReinstall()) {
-                _commands.send(ShowInitialReinstallUserDialog)
-            } else {
-                _commands.send(ShowInitialDialog)
+            ADD_TO_DOCK, WIDGET_PROMPT -> {
             }
         }
     }
 
-    private suspend fun isAppReinstall(): Boolean {
-        return withContext(dispatchers.io()) {
-            appBuildConfig.isAppReinstall()
+    fun onAddressBarPositionOptionSelected(selectedOption: OmnibarType) {
+        addressBarPositionOption = selectedOption
+        viewModelScope.launch {
+            _commands.send(SetAddressBarPositionOptions(selectedOption))
         }
     }
+
+    fun onInputScreenOptionSelected(withAi: Boolean) {
+        inputScreenSelected = withAi
+    }
+
+    fun getMaxPageCount(): Int = MAX_PAGE_COUNT
+
+    fun loadDaxDialog() {
+        viewModelScope.launch {
+            val canRestore = withTimeoutOrNull(BLOCK_STORE_TIMEOUT_MS) {
+                canRestoreDeferred.await()
+            } ?: false
+
+            // Always call isAppReinstall() — it has side effects (creates DDG downloads directory, persists reinstall state)
+            reinstallUser = isAppReinstall()
+
+            if (canRestore) {
+                logcat(LogPriority.INFO) { "Sync-AutoRestore: first dialog=SYNC_RESTORE" }
+                _commands.send(ShowSyncRestoreDialog)
+            } else {
+                if (reinstallUser) {
+                    _commands.send(ShowInitialReinstallUserDialog(showDuckAiCopy = isDuckAiCopyEnabled()))
+                } else {
+                    _commands.send(ShowInitialDialog(showDuckAiCopy = isDuckAiCopyEnabled()))
+                }
+            }
+        }
+    }
+
+    companion object {
+        private const val BLOCK_STORE_TIMEOUT_MS = 3_000L
+        private const val MAX_PAGE_COUNT = 3
+    }
+
+    private suspend fun isDuckAiCopyEnabled(): Boolean = withContext(dispatchers.io()) {
+        deviceInfo.language == "en" &&
+            androidBrowserConfigFeature.onboardingDuckAiCopyUpdatesFeb26().isEnabled()
+    }
+
+    private suspend fun isAppReinstall(): Boolean =
+        withContext(dispatchers.io()) {
+            appBuildConfig.isAppReinstall()
+        }
+
+    /**
+     * @param optionIndex 1, 2 or 3 if the user tapped one of the preset suggestions; null if they submitted a custom query.
+     */
+    fun onInputModeDemoQuerySubmitted(query: String, isChat: Boolean, optionIndex: Int?) {
+        viewModelScope.launch {
+            if (isChat) {
+                _commands.send(Command.FinishAndSubmitChatPrompt(prompt = query))
+            } else {
+                _commands.send(Command.FinishAndSubmitSearchQuery(query = query))
+            }
+        }
+    }
+
+    private fun isSplitOmnibarEnabled(): Boolean =
+        androidBrowserConfigFeature.splitOmnibar().isEnabled() &&
+            androidBrowserConfigFeature.splitOmnibarWelcomePage().isEnabled()
 }

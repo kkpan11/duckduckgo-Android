@@ -41,6 +41,9 @@ import com.duckduckgo.common.ui.view.gone
 import com.duckduckgo.common.ui.view.show
 import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.common.utils.extensions.isPrivateDnsStrict
 import com.duckduckgo.common.utils.extensions.launchAlwaysOnSystemSettings
 import com.duckduckgo.di.scopes.ActivityScope
@@ -49,6 +52,7 @@ import com.duckduckgo.navigation.api.getActivityParams
 import com.duckduckgo.networkprotection.api.NetworkProtectionScreens.NetPAppExclusionListNoParams
 import com.duckduckgo.networkprotection.api.NetworkProtectionScreens.NetworkProtectionManagementScreenAndEnable
 import com.duckduckgo.networkprotection.api.NetworkProtectionScreens.NetworkProtectionManagementScreenNoParams
+import com.duckduckgo.networkprotection.api.NetworkProtectionScreens.NetworkProtectionManagementScreenWithLaunchPixel
 import com.duckduckgo.networkprotection.impl.R
 import com.duckduckgo.networkprotection.impl.autoexclude.VpnAutoExcludePromptFragment
 import com.duckduckgo.networkprotection.impl.autoexclude.VpnAutoExcludePromptFragment.Companion.Source.VPN_SCREEN
@@ -69,16 +73,17 @@ import com.duckduckgo.networkprotection.impl.settings.NetPVpnSettingsScreenNoPar
 import com.duckduckgo.networkprotection.impl.settings.custom_dns.VpnCustomDnsScreen
 import com.duckduckgo.networkprotection.impl.settings.geoswitching.NetpGeoswitchingScreenNoParams
 import com.duckduckgo.networkprotection.store.db.VpnIncompatibleApp
-import com.duckduckgo.subscriptions.api.PrivacyProFeedbackScreens.PrivacyProFeedbackScreenWithParams
-import com.duckduckgo.subscriptions.api.PrivacyProUnifiedFeedback.PrivacyProFeedbackSource.VPN_MANAGEMENT
-import javax.inject.Inject
+import com.duckduckgo.subscriptions.api.SubscriptionFeedbackScreens.SubscriptionFeedbackScreenWithParams
+import com.duckduckgo.subscriptions.api.SubscriptionUnifiedFeedback.SubscriptionFeedbackSource.VPN_MANAGEMENT
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(NetworkProtectionManagementScreenNoParams::class, screenName = "vpn.main")
 @ContributeToActivityStarter(NetworkProtectionManagementScreenAndEnable::class, screenName = "vpn.main")
+@ContributeToActivityStarter(NetworkProtectionManagementScreenWithLaunchPixel::class, screenName = "vpn.main")
 class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
 
     @Inject
@@ -92,6 +97,12 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
 
     @Inject
     lateinit var dispatcherProvider: DispatcherProvider
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private val binding: ActivityNetpManagementBinding by viewBinding()
     private val viewModel: NetworkProtectionManagementViewModel by bindViewModel()
@@ -113,8 +124,16 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.VPN)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
+
         setContentView(binding.root)
         setupToolbar(binding.includeToolbar.toolbar)
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
         bindViews()
         intent.getActivityParams(NetworkProtectionManagementScreenAndEnable::class.java)?.enable?.let { shouldEnable ->
             if (shouldEnable) {
@@ -122,8 +141,18 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
             }
         }
 
+        intent.getActivityParams(NetworkProtectionManagementScreenWithLaunchPixel::class.java)?.let { params ->
+            viewModel.onLaunchedFromNotification(params.pixelName)
+        }
+
         observeViewModel()
         lifecycle.addObserver(viewModel)
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyNavigationBarInsets(binding.contentScrollView, drawBehindGestureNav = true)
     }
 
     override fun onDestroy() {
@@ -181,9 +210,9 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
 
     private fun renderViewState(viewState: ViewState) {
         when (viewState.connectionState) {
-            ConnectionState.Connecting -> binding.renderConnectingState()
-            ConnectionState.Connected -> viewState.connectionDetails?.let { binding.renderConnectedState(it) }
-            ConnectionState.Disconnected -> binding.renderDisconnectedState()
+            Connecting -> binding.renderConnectingState()
+            Connected -> viewState.connectionDetails?.let { binding.renderConnectedState(it) }
+            Disconnected -> binding.renderDisconnectedState()
             else -> {}
         }
 
@@ -244,6 +273,7 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
         netpStatusDescription.setText(R.string.netpManagementDescriptionOn)
         netpToggle.indicator.setImageDrawable(AppCompatResources.getDrawable(applicationContext, R.drawable.indicator_vpn_connected))
         netpToggle.quietlySetChecked(true)
+        netpToggle.jumpDrawablesToCurrentState()
         netpToggle.isEnabled = true
 
         locationDetails.locationHeader.setText(R.string.netpManagementLocationHeaderVpnOn)
@@ -299,6 +329,14 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
             binding.netpStatusImage.setAnimation(R.raw.vpn_header)
         } else {
             binding.netpStatusImage.setAnimation(R.raw.vpn_header_dark)
+        }
+
+        if (appBrandDesignUpdateToggles.pictograms().isEnabled()) {
+            binding.netpStatusImage.setAnimation(R.raw.vpn_header_brand_update)
+            binding.netpStatusImage.layoutParams = binding.netpStatusImage.layoutParams.apply {
+                width = resources.getDimensionPixelSize(R.dimen.netp_header_animation_width)
+                height = resources.getDimensionPixelSize(R.dimen.netp_header_animation_height)
+            }
         }
     }
 
@@ -371,7 +409,7 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
             is Command.ShowIssueReportingPage -> globalActivityStarter.start(this, command.params)
             is Command.ShowUnifiedFeedback -> globalActivityStarter.start(
                 this,
-                PrivacyProFeedbackScreenWithParams(feedbackSource = VPN_MANAGEMENT),
+                SubscriptionFeedbackScreenWithParams(feedbackSource = VPN_MANAGEMENT),
             )
 
             is Command.ShowExcludeAppPrompt -> showExcludeAppDialog()
@@ -469,6 +507,7 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
                     }
 
                     override fun onNegativeButtonClicked() {
+                        viewModel.onVpnConflictDialogCancel()
                         resetToggle()
                     }
                 },
@@ -539,7 +578,7 @@ class NetworkProtectionManagementActivity : DuckDuckGoActivity() {
     }
 
     private sealed class VpnPermissionStatus {
-        object Granted : VpnPermissionStatus()
+        data object Granted : VpnPermissionStatus()
         data class Denied(val intent: Intent) : VpnPermissionStatus()
     }
 

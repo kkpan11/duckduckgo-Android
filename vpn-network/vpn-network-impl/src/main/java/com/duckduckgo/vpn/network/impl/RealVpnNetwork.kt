@@ -33,13 +33,16 @@ import com.duckduckgo.vpn.network.impl.models.ResourceRecord
 import com.duckduckgo.vpn.network.impl.models.Usage
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
+import logcat.LogPriority.ERROR
+import logcat.LogPriority.INFO
+import logcat.LogPriority.VERBOSE
+import logcat.LogPriority.WARN
+import logcat.asLog
+import logcat.logcat
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import kotlin.system.exitProcess
-import logcat.LogPriority
-import logcat.asLog
-import logcat.logcat
 
 @ContributesBinding(VpnScope::class)
 @SingleInstanceIn(VpnScope::class)
@@ -184,6 +187,7 @@ class RealVpnNetwork @Inject constructor(
             """.trimIndent()
         }
 
+        @Suppress("ktlint:standard:comment-wrapping")
         if (protocol != 6 /* TCP */ && protocol != 17 /* UDP */) return Process.INVALID_UID
 
         val cm = context.getSystemService(VpnService.CONNECTIVITY_SERVICE) as ConnectivityManager? ?: return Process.INVALID_UID
@@ -209,12 +213,12 @@ class RealVpnNetwork @Inject constructor(
         try {
             packages = context.packageManager.getPackagesForUid(uid)
         } catch (e: SecurityException) {
-            logcat(LogPriority.ERROR) { "Failed to get package ID for UID: $uid due to security violation: ${e.asLog()}" }
+            logcat(ERROR) { "Failed to get package ID for UID: $uid due to security violation: ${e.asLog()}" }
             return "unknown"
         }
 
         if (packages.isNullOrEmpty()) {
-            logcat(LogPriority.WARN) { "Failed to get package ID for UID: $uid" }
+            logcat(WARN) { "Failed to get package ID for UID: $uid" }
             return "unknown"
         }
 
@@ -234,7 +238,7 @@ class RealVpnNetwork @Inject constructor(
             logcat { "Loading native VPN networking library" }
             LibraryLoader.loadLibrary(context, "netguard")
         } catch (ignored: Throwable) {
-            logcat(LogPriority.ERROR) { "Error loading netguard library: ${ignored.asLog()}" }
+            logcat(ERROR) { "Error loading netguard library: ${ignored.asLog()}" }
             exitProcess(1)
         }
     }

@@ -40,7 +40,6 @@ import com.duckduckgo.malicioussiteprotection.impl.remoteconfig.MaliciousSitePro
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
-import java.security.MessageDigest
 import junit.framework.TestCase.assertEquals
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -51,6 +50,7 @@ import org.mockito.Mockito.mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
 import org.robolectric.ParameterizedRobolectricTestRunner
+import java.security.MessageDigest
 
 @RunWith(ParameterizedRobolectricTestRunner::class)
 class MaliciousSiteProtectionReferenceTest(private val testCase: TestCase) {
@@ -90,16 +90,17 @@ class MaliciousSiteProtectionReferenceTest(private val testCase: TestCase) {
     private val mockPixel: Pixel = mock()
     private val moshi = Moshi.Builder().build()
     private val mockMaliciousSiteProtectionRCRepository: MaliciousSiteProtectionRCRepository = mock()
-    private val urlCanonicalization: UrlCanonicalization = RealUrlCanonicalization()
-    private val messageDigest: MessageDigest = MessageDigest.getInstance("SHA-256")
     private val mockMaliciousSiteProtectionRCFeature: MaliciousSiteProtectionRCFeature = mock()
+    private val urlCanonicalization: UrlCanonicalization = RealUrlCanonicalization(
+        mockMaliciousSiteProtectionRCFeature,
+    )
+    private val messageDigest: MessageDigest = MessageDigest.getInstance("SHA-256")
     private val repository = RealMaliciousSiteRepository(
         maliciousSiteDao,
         maliciousSiteService,
         maliciousSiteDatasetService,
         coroutineRule.testDispatcherProvider,
         mockPixel,
-        mockMaliciousSiteProtectionRCFeature,
     )
 
     @Before
@@ -148,7 +149,7 @@ class MaliciousSiteProtectionReferenceTest(private val testCase: TestCase) {
             ),
         )
         whenever(mockMaliciousSiteProtectionRCFeature.isFeatureEnabled()).thenReturn(true)
-        whenever(mockMaliciousSiteProtectionRCRepository.isExempted(any())).thenReturn(false)
+        whenever(mockMaliciousSiteProtectionRCFeature.stripWWWPrefix()).thenReturn(true)
         repository.loadFilters(*enumValues<Feed>())
         repository.loadHashPrefixes(*enumValues<Feed>())
 

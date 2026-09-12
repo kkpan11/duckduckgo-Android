@@ -20,8 +20,10 @@ import android.net.Uri
 import android.net.http.SslCertificate
 import androidx.annotation.WorkerThread
 import androidx.core.net.toUri
+import com.duckduckgo.adblocking.api.duckplayer.DuckPlayer
 import com.duckduckgo.app.browser.UriString
 import com.duckduckgo.app.browser.certificates.BypassedSSLCertificatesRepository
+import com.duckduckgo.app.browser.omnibar.StandardizedLeadingIconFeatureToggle
 import com.duckduckgo.app.global.model.PrivacyShield.MALICIOUS
 import com.duckduckgo.app.global.model.PrivacyShield.PROTECTED
 import com.duckduckgo.app.global.model.PrivacyShield.UNKNOWN
@@ -35,12 +37,13 @@ import com.duckduckgo.app.trackerdetection.model.TrackingEvent
 import com.duckduckgo.browser.api.brokensite.BrokenSiteContext
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.isHttps
-import com.duckduckgo.duckplayer.api.DuckPlayer
+import com.duckduckgo.feature.toggles.api.Toggle
 import com.duckduckgo.privacy.config.api.ContentBlocking
-import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.INFO
+import logcat.logcat
+import java.util.concurrent.CopyOnWriteArrayList
 
 class SiteMonitor(
     url: String,
@@ -54,6 +57,7 @@ class SiteMonitor(
     dispatcherProvider: DispatcherProvider,
     brokenSiteContext: BrokenSiteContext,
     private val duckPlayer: DuckPlayer,
+    private val standardizedLeadingIconToggle: StandardizedLeadingIconFeatureToggle,
 ) : Site {
 
     override var url: String = url
@@ -129,7 +133,7 @@ class SiteMonitor(
 
     override fun updatePrivacyData(sitePrivacyData: SitePrivacyData) {
         this.entity = sitePrivacyData.entity
-        Timber.i("fullSiteDetailsAvailable entity ${sitePrivacyData.entity} for $domain")
+        logcat(INFO) { "fullSiteDetailsAvailable entity ${sitePrivacyData.entity} for $domain" }
         fullSiteDetailsAvailable = true
     }
 
@@ -166,23 +170,33 @@ class SiteMonitor(
 
     override fun privacyProtection(): PrivacyShield {
         userAllowList = domain?.let { isAllowListed(it) } ?: false
+
         if (maliciousSiteStatus != null) return MALICIOUS
         if (duckPlayer.isDuckPlayerUri(url)) return UNKNOWN
-        if (userAllowList || !isHttps) return UNPROTECTED
+
+        if (standardizedLeadingIconToggle.self().isEnabled()) {
+            // When feature is enabled, only show UNPROTECTED for user-initiated allowlist,
+            // not remote config exceptions
+            val isUserAllowListed = domain?.let { userAllowListRepository.isDomainInUserAllowList(it) } ?: false
+            if (isUserAllowListed || !isHttps) return UNPROTECTED
+        } else {
+            // Legacy behavior: show UNPROTECTED for both user allowlist and remote config exceptions
+            if (userAllowList || !isHttps) return UNPROTECTED
+        }
 
         if (!fullSiteDetailsAvailable) {
-            Timber.i("Shield: not fullSiteDetailsAvailable for $domain")
-            Timber.i("Shield: entity is ${entity?.name} for $domain")
+            logcat(INFO) { "Shield: not fullSiteDetailsAvailable for $domain" }
+            logcat(INFO) { "Shield: entity is ${entity?.name} for $domain" }
             return UNKNOWN
         }
 
         sslError = isSslCertificateBypassed(url)
         if (sslError) {
-            Timber.i("Shield: site has certificate error")
+            logcat(INFO) { "Shield: site has certificate error" }
             return UNPROTECTED
         }
 
-        Timber.i("Shield: isMajor ${entity?.isMajor} prev ${entity?.prevalence} for $domain")
+        logcat(INFO) { "Shield: isMajor ${entity?.isMajor} prev ${entity?.prevalence} for $domain" }
         return PROTECTED
     }
 
@@ -209,6 +223,10 @@ class SiteMonitor(
 
     override var consentCosmeticHide: Boolean? = false
 
+    override var consentRule: String? = null
+
+    override var consentReloadLoop: Boolean = false
+
     override var isDesktopMode: Boolean = false
 
     override var nextUrl: String = url
@@ -218,6 +236,10 @@ class SiteMonitor(
     override var maliciousSiteStatus: MaliciousSiteStatus? = null
 
     override var previousNumberOfBlockedTrackers: Int? = null
+
+    override var activeContentScopeExperiments: List<Toggle>? = null
+
+    override var debugFlags: List<String>? = null
 
     companion object {
         private val specialDomainTypes = setOf(

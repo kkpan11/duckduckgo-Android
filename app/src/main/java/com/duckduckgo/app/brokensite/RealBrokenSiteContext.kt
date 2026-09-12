@@ -24,9 +24,9 @@ import com.duckduckgo.common.utils.isHttp
 import com.duckduckgo.common.utils.isHttps
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
-import javax.inject.Inject
+import logcat.logcat
 import org.json.JSONArray
-import timber.log.Timber
+import javax.inject.Inject
 
 @ContributesBinding(AppScope::class)
 class RealBrokenSiteContext @Inject constructor(
@@ -38,6 +38,8 @@ class RealBrokenSiteContext @Inject constructor(
     override var openerContext: BrokenSiteOpenerContext? = null
 
     override var jsPerformance: DoubleArray? = null
+
+    override var breakageData: String? = null
 
     override fun onUserTriggeredRefresh() {
         userRefreshCount++
@@ -55,11 +57,9 @@ class RealBrokenSiteContext @Inject constructor(
                 referrer.toUri().isHttp || referrer.toUri().isHttps -> BrokenSiteOpenerContext.NAVIGATION
                 else -> null
             }
-            Timber.d(
-                "openerContext inferred -> ${openerContext?.context}",
-            )
+            logcat { "openerContext inferred -> ${openerContext?.context}" }
         } else {
-            Timber.d("openerContext not inferred because referrer is null")
+            logcat { "openerContext not inferred because referrer is null" }
         }
     }
 
@@ -69,6 +69,11 @@ class RealBrokenSiteContext @Inject constructor(
             recordedJsValues[i] = performanceMetrics.getDouble(i)
         }
         jsPerformance = recordedJsValues
-        Timber.d("jsPerformance recorded as $performanceMetrics")
+        logcat { "jsPerformance recorded as $performanceMetrics" }
+    }
+
+    override fun recordBreakageData(breakageData: String?) {
+        this.breakageData = breakageData
+        logcat { "breakageData recorded as $breakageData" }
     }
 }

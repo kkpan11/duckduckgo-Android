@@ -29,14 +29,16 @@ import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.playstore.PlayStoreUtils
 import com.duckduckgo.di.scopes.AppScope
+import com.squareup.anvil.annotations.ContributesTo
 import dagger.Module
 import dagger.Provides
 import dagger.SingleInstanceIn
 import dagger.multibindings.IntoSet
-import javax.inject.Named
 import kotlinx.coroutines.CoroutineScope
+import javax.inject.Named
 
 @Module
+@ContributesTo(AppScope::class)
 class RatingModule {
 
     @SingleInstanceIn(AppScope::class)
@@ -46,8 +48,9 @@ class RatingModule {
         appEnjoymentPromptEmitter: AppEnjoymentPromptEmitter,
         promptTypeDecider: PromptTypeDecider,
         @AppCoroutineScope appCoroutineScope: CoroutineScope,
+        preventDialogQueuingFeature: PreventFeedbackDialogQueuingFeature,
     ): MainProcessLifecycleObserver {
-        return AppEnjoymentAppCreationObserver(appEnjoymentPromptEmitter, promptTypeDecider, appCoroutineScope)
+        return AppEnjoymentAppCreationObserver(appEnjoymentPromptEmitter, promptTypeDecider, appCoroutineScope, preventDialogQueuingFeature)
     }
 
     @Provides

@@ -3,7 +3,6 @@ package com.duckduckgo.app.brokensite.api
 import android.annotation.SuppressLint
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.duckduckgo.app.pixels.AppPixelName.BROKEN_SITE_REPORT
-import com.duckduckgo.app.pixels.AppPixelName.BROKEN_SITE_REPORTED
 import com.duckduckgo.app.pixels.AppPixelName.PROTECTION_TOGGLE_BROKEN_SITE_REPORT
 import com.duckduckgo.app.privacy.db.UserAllowListRepository
 import com.duckduckgo.app.statistics.model.Atb
@@ -29,7 +28,10 @@ import com.duckduckgo.feature.toggles.api.FakeToggleStore
 import com.duckduckgo.feature.toggles.api.FeatureToggle
 import com.duckduckgo.feature.toggles.api.FeatureToggles
 import com.duckduckgo.feature.toggles.api.FeatureTogglesInventory
+import com.duckduckgo.feature.toggles.api.Toggle
+import com.duckduckgo.feature.toggles.api.Toggle.FeatureName
 import com.duckduckgo.feature.toggles.api.Toggle.State
+import com.duckduckgo.feature.toggles.api.Toggle.State.Cohort
 import com.duckduckgo.feature.toggles.impl.RealFeatureTogglesInventory
 import com.duckduckgo.networkprotection.api.NetworkProtectionState
 import com.duckduckgo.privacy.config.api.AmpLinkInfo
@@ -40,11 +42,8 @@ import com.duckduckgo.privacy.config.api.PrivacyConfig
 import com.duckduckgo.privacy.config.api.PrivacyConfigData
 import com.duckduckgo.privacy.config.api.PrivacyFeatureName
 import com.duckduckgo.privacy.config.api.UnprotectedTemporary
-import com.duckduckgo.privacyprotectionspopup.api.PrivacyProtectionsPopupExperimentExternalPixels
+import com.duckduckgo.site.permissions.impl.SitePermissionsRepository
 import com.squareup.moshi.Moshi
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.util.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -60,6 +59,9 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.util.*
 
 @RunWith(AndroidJUnit4::class)
 @SuppressLint("DenyListedApi")
@@ -102,13 +104,11 @@ class BrokenSiteSubmitterTest {
 
     private val networkProtectionState: NetworkProtectionState = mock()
 
-    private val privacyProtectionsPopupExperimentExternalPixels: PrivacyProtectionsPopupExperimentExternalPixels = mock {
-        runBlocking { whenever(mock.getPixelParams()).thenReturn(emptyMap()) }
-    }
-
     private val webViewVersionProvider: WebViewVersionProvider = mock()
 
     private val ampLinks: AmpLinks = mock()
+
+    private val sitePermissionsRepository: SitePermissionsRepository = mock()
 
     private lateinit var testBlockListFeature: TestBlockListFeature
     private lateinit var inventory: FeatureTogglesInventory
@@ -128,6 +128,7 @@ class BrokenSiteSubmitterTest {
         whenever(mockVariantManager.getVariantKey()).thenReturn("g")
         whenever(mockPrivacyConfig.privacyConfigData()).thenReturn(PrivacyConfigData(version = "v", eTag = "e"))
         runBlocking { whenever(networkProtectionState.isRunning()) }.thenReturn(false)
+        runBlocking { whenever(sitePermissionsRepository.isDrmEnabledForSite(url = any())).thenReturn(true) }
 
         testBlockListFeature = FeatureToggles.Builder(
             FakeToggleStore(),
@@ -161,11 +162,11 @@ class BrokenSiteSubmitterTest {
             mockUnprotectedTemporary,
             mockContentBlocking,
             mockBrokenSiteLastSentReport,
-            privacyProtectionsPopupExperimentExternalPixels,
             networkProtectionState,
             webViewVersionProvider,
             ampLinks,
             inventory,
+            sitePermissionsRepository,
         )
     }
 
@@ -382,19 +383,6 @@ class BrokenSiteSubmitterTest {
     }
 
     @Test
-    fun whenPrivacyProtectionsPopupExperimentParamsArePresentThenTheyAreIncludedInPixel() = runTest {
-        val params = mapOf("test_key" to "test_value")
-        whenever(privacyProtectionsPopupExperimentExternalPixels.getPixelParams()).thenReturn(params)
-
-        testee.submitBrokenSiteFeedback(getBrokenSite(), toggle = false)
-
-        val paramsCaptor = argumentCaptor<Map<String, String>>()
-        verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), paramsCaptor.capture(), any(), eq(Count))
-
-        assertEquals("test_value", paramsCaptor.firstValue["test_key"])
-    }
-
-    @Test
     fun whenDeviceLocaleIsUSEnglishThenSendSanitizedParam() {
         val usLocale = Locale.Builder()
             .setLanguage("en")
@@ -543,12 +531,6 @@ class BrokenSiteSubmitterTest {
         testee.submitBrokenSiteFeedback(brokenSite, toggle = false)
 
         verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), any(), any(), eq(Count))
-
-        val paramsCaptor = argumentCaptor<Map<String, String>>()
-        verify(mockPixel).fire(eq(BROKEN_SITE_REPORTED), parameters = paramsCaptor.capture(), any(), eq(Count))
-        val params = paramsCaptor.firstValue
-        assertEquals(brokenSite.siteUrl, params[Pixel.PixelParameter.URL])
-
         verify(mockPixel, never()).fire(eq(PROTECTION_TOGGLE_BROKEN_SITE_REPORT.pixelName), any(), any(), eq(Count))
     }
 
@@ -562,9 +544,6 @@ class BrokenSiteSubmitterTest {
         val paramsCaptor = argumentCaptor<Map<String, String>>()
         verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), parameters = paramsCaptor.capture(), any(), eq(Count))
         assertEquals(brokenSite.siteUrl, paramsCaptor.lastValue["siteUrl"])
-
-        verify(mockPixel).fire(eq(BROKEN_SITE_REPORTED), parameters = paramsCaptor.capture(), any(), eq(Count))
-        assertEquals(brokenSite.siteUrl, paramsCaptor.lastValue[Pixel.PixelParameter.URL])
     }
 
     @Test
@@ -577,9 +556,6 @@ class BrokenSiteSubmitterTest {
         val paramsCaptor = argumentCaptor<Map<String, String>>()
         verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), parameters = paramsCaptor.capture(), any(), eq(Count))
         assertEquals(brokenSite.siteUrl, paramsCaptor.lastValue["siteUrl"])
-
-        verify(mockPixel).fire(eq(BROKEN_SITE_REPORTED), parameters = paramsCaptor.capture(), any(), eq(Count))
-        assertEquals(brokenSite.siteUrl, paramsCaptor.lastValue[Pixel.PixelParameter.URL])
     }
 
     @Test
@@ -592,9 +568,6 @@ class BrokenSiteSubmitterTest {
         val paramsCaptor = argumentCaptor<Map<String, String>>()
         verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), parameters = paramsCaptor.capture(), any(), eq(Count))
         assertEquals(TRACKING_URL, paramsCaptor.lastValue["siteUrl"])
-
-        verify(mockPixel).fire(eq(BROKEN_SITE_REPORTED), parameters = paramsCaptor.capture(), any(), eq(Count))
-        assertEquals(TRACKING_URL, paramsCaptor.lastValue[Pixel.PixelParameter.URL])
     }
 
     @Test
@@ -621,6 +594,92 @@ class BrokenSiteSubmitterTest {
         assertFalse(params.containsKey("protectionsState"))
     }
 
+    @Test
+    fun whenDrmIsEnabledForReportedSiteThenIncludeDrmEnabledParam() = runTest {
+        whenever(sitePermissionsRepository.isDrmEnabledForSite("https://example.com")).thenReturn(true)
+
+        testee.submitBrokenSiteFeedback(getBrokenSite(), toggle = false)
+
+        val paramsCaptor = argumentCaptor<Map<String, String>>()
+        verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), parameters = paramsCaptor.capture(), any(), eq(Count))
+
+        assertEquals("true", paramsCaptor.lastValue["drmEnabled"])
+    }
+
+    @Test
+    fun whenDrmIsDisabledForReportedSiteThenIncludeDrmEnabledParam() = runTest {
+        whenever(sitePermissionsRepository.isDrmEnabledForSite("https://example.com")).thenReturn(false)
+
+        testee.submitBrokenSiteFeedback(getBrokenSite(), toggle = false)
+
+        val paramsCaptor = argumentCaptor<Map<String, String>>()
+        verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), parameters = paramsCaptor.capture(), any(), eq(Count))
+
+        assertEquals("false", paramsCaptor.lastValue["drmEnabled"])
+    }
+
+    @Test
+    fun whenSubmitReportAndActiveContentScopeExperimentsThenIncludeParam() = runTest {
+        val brokenSite = getBrokenSite()
+        val contentScopeExperiments = listOf(
+            mock<Toggle>().apply {
+                whenever(featureName()).thenReturn(FeatureName("test", "experiment1"))
+                whenever(getCohort()).thenReturn(Cohort("control", 1, "2023-01-01T00:00:00Z"))
+            },
+            mock<Toggle>().apply {
+                whenever(featureName()).thenReturn(FeatureName("test", "experiment2"))
+                whenever(getCohort()).thenReturn(Cohort("treatment", 1, "2023-01-01T00:00:00Z"))
+            },
+        )
+
+        testee.submitBrokenSiteFeedback(brokenSite.copy(contentScopeExperiments = contentScopeExperiments), toggle = false)
+
+        val paramsCaptor = argumentCaptor<Map<String, String>>()
+        verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), parameters = paramsCaptor.capture(), any(), eq(Count))
+        val params = paramsCaptor.lastValue
+        assertEquals("experiment1:control,experiment2:treatment", params["contentScopeExperiments"])
+    }
+
+    @Test
+    fun whenSubmitReportAndADebugFlagsThenIncludeParamSortedRemovingDuplicates() = runTest {
+        val brokenSite = getBrokenSite()
+
+        testee.submitBrokenSiteFeedback(brokenSite.copy(debugFlags = listOf("flag2", "flag1", "flag2")), toggle = false)
+
+        val paramsCaptor = argumentCaptor<Map<String, String>>()
+        verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), parameters = paramsCaptor.capture(), any(), eq(Count))
+        val params = paramsCaptor.lastValue
+        assertEquals("flag1,flag2", params["debugFlags"])
+    }
+
+    @Test
+    fun whenBreakageDataIsNullThenEncodedParamsDoNotContainIt() = runTest {
+        val brokenSite = getBrokenSite()
+
+        testee.submitBrokenSiteFeedback(brokenSite, toggle = false)
+
+        val encodedParamsCaptor = argumentCaptor<Map<String, String>>()
+        verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), any(), encodedParamsCaptor.capture(), eq(Count))
+        val encodedParams = encodedParamsCaptor.firstValue
+
+        assertFalse(encodedParams.containsKey("breakageData"))
+    }
+
+    @Test
+    fun whenBreakageDataExistsThenItIsIncludedInEncodedParams() = runTest {
+        // Pre-encoded breakage data from content-scope-scripts
+        val preEncodedBreakageData = "%7B%22test%22%3A%22value%22%7D"
+        val brokenSite = getBrokenSite().copy(breakageData = preEncodedBreakageData)
+
+        testee.submitBrokenSiteFeedback(brokenSite, toggle = false)
+
+        val encodedParamsCaptor = argumentCaptor<Map<String, String>>()
+        verify(mockPixel).fire(eq(BROKEN_SITE_REPORT.pixelName), any(), encodedParamsCaptor.capture(), eq(Count))
+        val encodedParams = encodedParamsCaptor.firstValue
+
+        assertEquals(preEncodedBreakageData, encodedParams["breakageData"])
+    }
+
     private fun assignToExperiment() {
         val enrollmentDateET = ZonedDateTime.now(ZoneId.of("America/New_York")).toString()
         testBlockListFeature.tdsNextExperimentTest().setRawStoredState(
@@ -628,6 +687,7 @@ class BrokenSiteSubmitterTest {
                 remoteEnableState = true,
                 enable = true,
                 settings = configAdapter.toJson(Config(treatmentUrl = "treatmentUrl", controlUrl = "controlUrl")),
+                cohorts = listOf(State.Cohort(name = TREATMENT.cohortName, weight = 1, enrollmentDateET = enrollmentDateET)),
                 assignedCohort = State.Cohort(name = TREATMENT.cohortName, weight = 1, enrollmentDateET = enrollmentDateET),
             ),
         )
@@ -646,6 +706,8 @@ class BrokenSiteSubmitterTest {
             consentManaged = false,
             consentOptOutFailed = false,
             consentSelfTestFailed = false,
+            consentRule = null,
+            consentReloadLoop = false,
             errorCodes = "",
             httpErrorCodes = "",
             loginSite = null,
@@ -653,6 +715,9 @@ class BrokenSiteSubmitterTest {
             userRefreshCount = 0,
             openerContext = null,
             jsPerformance = null,
+            contentScopeExperiments = null,
+            debugFlags = null,
+            breakageData = null,
         )
     }
 

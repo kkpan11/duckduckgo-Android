@@ -21,9 +21,10 @@ import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.moshi.Moshi
 import dagger.SingleInstanceIn
-import javax.inject.Inject
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.LogPriority.ERROR
+import logcat.logcat
+import javax.inject.Inject
 
 interface SharedCredentialJsonReader {
     suspend fun read(): String?
@@ -49,7 +50,7 @@ class AppleSharedCredentialsJsonReader @Inject constructor(
         }.getOrNull()
 
         if (json == null) {
-            Timber.e("Failed to load shared credentials json")
+            logcat(ERROR) { "Failed to load shared credentials json" }
         }
 
         return json

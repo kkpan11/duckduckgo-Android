@@ -18,14 +18,18 @@ package com.duckduckgo.app.statistics.pixels
 
 import android.annotation.SuppressLint
 import com.duckduckgo.app.statistics.api.PixelSender
+import com.duckduckgo.app.statistics.api.PixelSender.EnqueuePixelResult
 import com.duckduckgo.app.statistics.api.PixelSender.SendPixelResult.PIXEL_IGNORED
 import com.duckduckgo.app.statistics.api.PixelSender.SendPixelResult.PIXEL_SENT
 import com.duckduckgo.app.statistics.pixels.Pixel.PixelType
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
 import io.reactivex.schedulers.Schedulers
+import logcat.LogPriority.VERBOSE
+import logcat.LogPriority.WARN
+import logcat.asLog
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 @ContributesBinding(AppScope::class)
 class RxBasedPixel @Inject constructor(
@@ -53,15 +57,12 @@ class RxBasedPixel @Inject constructor(
             .subscribe(
                 { result ->
                     when (result) {
-                        PIXEL_SENT -> Timber.v("Pixel sent: $pixelName with params: $parameters $encodedParameters")
-                        PIXEL_IGNORED -> Timber.v("Pixel ignored: $pixelName with params: $parameters $encodedParameters")
+                        PIXEL_SENT -> logcat(VERBOSE) { "Pixel sent: $pixelName with params: $parameters $encodedParameters" }
+                        PIXEL_IGNORED -> logcat(VERBOSE) { "Pixel ignored: $pixelName with params: $parameters $encodedParameters" }
                     }
                 },
                 {
-                    Timber.w(
-                        it,
-                        "Pixel failed: $pixelName with params: $parameters $encodedParameters",
-                    )
+                    logcat(WARN) { "Pixel failed: $pixelName with params: $parameters $encodedParameters: ${it.asLog()}" }
                 },
             )
     }
@@ -75,31 +76,36 @@ class RxBasedPixel @Inject constructor(
         pixel: Pixel.PixelName,
         parameters: Map<String, String>,
         encodedParameters: Map<String, String>,
+        type: PixelType,
     ) {
-        enqueueFire(pixel.pixelName, parameters, encodedParameters)
+        enqueueFire(pixel.pixelName, parameters, encodedParameters, type)
     }
 
     @SuppressLint("CheckResult")
-    /** See comment in {@link #enqueueFire(PixelName, Map<String, String>, Map<String, String>)}. */
+    /** See comment in {@link #enqueueFire(PixelName, Map<String, String>, Map<String, String>, PixelType)}. */
     override fun enqueueFire(
         pixelName: String,
         parameters: Map<String, String>,
         encodedParameters: Map<String, String>,
+        type: PixelType,
     ) {
         pixelSender
-            .enqueuePixel(pixelName, parameters, encodedParameters)
+            .enqueuePixel(pixelName, parameters, encodedParameters, type)
             .subscribeOn(Schedulers.io())
             .subscribe(
-                {
-                    Timber.v(
-                        "Pixel enqueued: $pixelName with params: $parameters $encodedParameters",
-                    )
+                { result ->
+                    when (result) {
+                        EnqueuePixelResult.PIXEL_ENQUEUED -> logcat(VERBOSE) {
+                            "Pixel enqueued: $pixelName with params: $parameters $encodedParameters"
+                        }
+
+                        EnqueuePixelResult.PIXEL_IGNORED -> logcat(VERBOSE) {
+                            "Pixel ignored: $pixelName with params: $parameters $encodedParameters"
+                        }
+                    }
                 },
                 {
-                    Timber.w(
-                        it,
-                        "Pixel failed: $pixelName with params: $parameters $encodedParameters",
-                    )
+                    logcat(WARN) { "Pixel failed: $pixelName with params: $parameters $encodedParameters: ${it.asLog()}" }
                 },
             )
     }

@@ -30,14 +30,9 @@ import com.duckduckgo.common.utils.extensions.toBinaryString
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.anvil.annotations.ContributesMultibinding
+import logcat.LogPriority.INFO
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
-
-interface DefaultBrowserDetector {
-    fun deviceSupportsDefaultBrowserConfiguration(): Boolean
-    fun isDefaultBrowser(): Boolean
-    fun hasDefaultBrowser(): Boolean
-}
 
 @ContributesMultibinding(scope = AppScope::class, boundType = BrowserFeatureStateReporterPlugin::class)
 @ContributesBinding(scope = AppScope::class, boundType = DefaultBrowserDetector::class)
@@ -54,7 +49,7 @@ class AndroidDefaultBrowserDetector @Inject constructor(
     override fun isDefaultBrowser(): Boolean {
         val defaultBrowserPackage = defaultBrowserPackage()
         val defaultAlready = defaultBrowserPackage == appBuildConfig.applicationId
-        Timber.i("Default browser identified as $defaultBrowserPackage")
+        logcat(INFO) { "Default browser identified as $defaultBrowserPackage" }
         return defaultAlready
     }
 

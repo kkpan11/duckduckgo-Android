@@ -1,4 +1,6 @@
 Task/Issue URL: 
+Tech Design URL (if applicable): 
+API Proposals URL(s) (if applicable):
 
 ### Description
 

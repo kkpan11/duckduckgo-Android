@@ -15,5 +15,7 @@
   -->
 
 <resources>
-    <color name="yellowBackground">#ffe181</color>
+    <color name="daxPromptSearchIconCircle">#876ECB</color>
+    <color name="daxPromptSearchIconLine">#110336</color>
+    <color name="daxMessageBackground">#FFFFFF</color>
 </resources>

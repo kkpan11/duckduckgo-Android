@@ -25,15 +25,17 @@ import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_DEVICE_CAP
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_DEVICE_CAPABILITY_DEVICE_AUTH_DISABLED
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_DEVICE_CAPABILITY_SECURE_STORAGE_UNAVAILABLE
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_DEVICE_CAPABILITY_SECURE_STORAGE_UNAVAILABLE_AND_DEVICE_AUTH_DISABLED
+import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_DEVICE_CAPABILITY_SECURE_STORAGE_UNAVAILABLE_DAILY
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_DEVICE_CAPABILITY_UNKNOWN_ERROR
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
+import javax.inject.Inject
 
 interface AutofillPixelSender {
     suspend fun hasDeterminedCapabilities(): Boolean
@@ -43,6 +45,8 @@ interface AutofillPixelSender {
     )
 
     fun sendCapabilitiesUndeterminablePixel()
+
+    fun sendSecureStorageUnavailableDailyPixel()
 }
 
 @ContributesBinding(AppScope::class)
@@ -67,7 +71,7 @@ class AutofillUniquePixelSender @Inject constructor(
     ) {
         appCoroutineScope.launch(dispatchers.io()) {
             sendPixel(secureStorageAvailable, deviceAuthAvailable).let {
-                Timber.v("Autofill capability pixel fired: %s", it)
+                logcat(VERBOSE) { "Autofill capability pixel fired: $it" }
             }
             preferences.edit { putBoolean(KEY_CAPABILITIES_DETERMINED, true) }
         }
@@ -77,6 +81,12 @@ class AutofillUniquePixelSender @Inject constructor(
         appCoroutineScope.launch(dispatchers.io()) {
             pixel.fire(AUTOFILL_DEVICE_CAPABILITY_UNKNOWN_ERROR)
             preferences.edit { putBoolean(KEY_CAPABILITIES_DETERMINED, true) }
+        }
+    }
+
+    override fun sendSecureStorageUnavailableDailyPixel() {
+        appCoroutineScope.launch(dispatchers.io()) {
+            pixel.fire(AUTOFILL_DEVICE_CAPABILITY_SECURE_STORAGE_UNAVAILABLE_DAILY, type = Pixel.PixelType.Daily())
         }
     }
 

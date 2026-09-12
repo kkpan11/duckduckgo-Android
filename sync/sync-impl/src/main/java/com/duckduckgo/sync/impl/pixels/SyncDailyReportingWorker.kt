@@ -30,11 +30,12 @@ import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.sync.impl.SyncAccountRepository
 import com.squareup.anvil.annotations.ContributesMultibinding
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.HOURS
 import javax.inject.Inject
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 @ContributesWorker(AppScope::class)
 class SyncDailyReportingWorker(
@@ -71,7 +72,7 @@ class SyncDailyReportingWorkerScheduler @Inject constructor(
 
     override fun onCreate(owner: LifecycleOwner) {
         super.onCreate(owner)
-        Timber.v("Scheduling sync daily reporting worker")
+        logcat(VERBOSE) { "Scheduling sync daily reporting worker" }
         val workerRequest = PeriodicWorkRequestBuilder<SyncDailyReportingWorker>(24, HOURS)
             .addTag(DAILY_REPORTING_SYNC_WORKER_TAG)
             .setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.MINUTES)

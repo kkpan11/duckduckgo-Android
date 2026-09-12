@@ -194,7 +194,7 @@
     <string name="netpNotificationCTAReconnectNow">Ponovno se poveži</string>
     <string name="netpNotificationSnoozeTitle">VPN je u stanju mirovanja</string>
     <string name="netpNotificationSnoozeBody" instruction="Placeholder is time in hh:mm format">VPN će se ponovno povezati u %1$s</string>
-    <string name="netpNotificationVpnAccessRevoked">VPN je prekinut zbog istekle pretplate. Pretplati se na Privacy Pro kako bi ponovno povezao DuckDuckGo VPN.</string>
+    <string name="netpNotificationVpnAccessRevoked">VPN je prekinut zbog istekle pretplate. Pretplati se na DuckDuckGo za ponovno povezivanje VPN-a.</string>
 
     <!-- Geoswitching -->
     <string name="netpGeoswitchingTitle">VPN lokacija</string>
@@ -206,7 +206,7 @@
 
     <!-- Access revoked-->
     <string name="netpDialogVpnAccessRevokedTitle">VPN je isključen zbog isteka pretplate</string>
-    <string name="netpDialogVpnAccessRevokedBody">Pretplati se na Privacy Pro kako bi ponovno povezao DuckDuckGo VPN.</string>
+    <string name="netpDialogVpnAccessRevokedBody">Pretplati se na DuckDuckGo za ponovno povezivanje VPN-a.</string>
     <string name="netpDialogVpnAccessRevokedPositiveAction">Pretplati se</string>
     <string name="netpDialogVpnAccessRevokedNegativeAction">Odbaci</string>
 
@@ -224,7 +224,7 @@
     <string name="netpCustomDnsSettingText">DNS poslužitelj</string>
     <string name="netpPrivateDns">Privatni DNS</string>
     <string name="netpCustomDnsDefault" translatable="false">DuckDuckGo</string>
-    <string name="netpCustomDnsDefaultBlockMalware">DuckDuckGo (blokiraj rizične domene)</string>
+    <string name="netpCustomDnsDefaultBlockMalware">DuckDuckGo (Blokiranje prevara)</string>
     <string name="netpCustomDnsDefaultOption">DuckDuckGo (preporučeno)</string>
     <string name="netpCustomDnsCustom">Prilagođeno</string>
     <string name="netpCustomDnsInputAddressHint">IPv4 adresa</string>
@@ -235,8 +235,8 @@
     <string name="netpDdgDnsByLine">DuckDuckGo usmjerava DNS upite putem naših DNS poslužitelja tako da tvoj davatelj internetskih usluga ne može vidjeti koje web stranice posjećuješ.</string>
 
     <!-- Block malware DNS -->
-    <string name="netpDnsBlockMalwareHeader">Blokiranje i filtriranje sadržaja</string>
-    <string name="netpDnsBlockMalwarePrimary">Blokiraj rizične domene</string>
+    <string name="netpDnsBlockMalwareHeader">Blokiranje zlonamjernog sadržaja</string>
+    <string name="netpDnsBlockMalwarePrimary">Blokiranje prevara</string>
     <string name="netpDnsBlockMalwareByline">Blokiraj više od 150.000 domena označenih zbog sadržavanja zlonamjernog softvera, krađe identiteta i internetskih prevara pomoću popisa za blokiranje na razini DNS-a. <annotation type="learn_more_link">Saznaj više</annotation></string>
     <string name="netpDnsBlockMalwareFaqsTitle">DNS popisi za blokiranje</string>
 
@@ -263,4 +263,9 @@
     <string name="netpAutoExcludeToggleName">Automatski izuzmi aplikacije koje nisu kompatibilne s VPN-ovima</string>
     <string name="netpExclusionListLabelAutoExclude">Nekompatibilno s VPN-ovima</string>
     <string name="netpExclusionListAutoExcludeDescription">Neke aplikacije, poput bankarskih ili streaming aplikacija, ne funkcioniraju dobro s VPN-ovima. Kad je ova postavka omogućena, automatski ćemo izuzeti (isključiti) te aplikacije.</string>
+
+    <!-- Content Descriptions -->
+    <string name="netpCloseButtonContentDescription">Zatvori</string>
+    <string name="netpVpnIndicatorContentDescription">Indikator statusa VPN-a</string>
+
 </resources>

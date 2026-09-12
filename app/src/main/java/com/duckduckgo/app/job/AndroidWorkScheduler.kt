@@ -25,10 +25,11 @@ import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -43,7 +44,7 @@ class AndroidWorkScheduler @Inject constructor(
 ) : MainProcessLifecycleObserver {
 
     override fun onResume(owner: LifecycleOwner) {
-        Timber.v("Scheduling work")
+        logcat(VERBOSE) { "Scheduling work" }
         appCoroutineScope.launch(dispatcherProvider.io()) {
             jobCleaner.cleanDeprecatedJobs()
             notificationScheduler.scheduleNextNotification()

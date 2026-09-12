@@ -63,6 +63,7 @@ import com.duckduckgo.networkprotection.impl.management.NetworkProtectionManagem
 import com.duckduckgo.networkprotection.impl.management.NetworkProtectionManagementViewModel.LocationState
 import com.duckduckgo.networkprotection.impl.management.NetworkProtectionManagementViewModel.ViewState
 import com.duckduckgo.networkprotection.impl.pixels.NetworkProtectionPixels
+import com.duckduckgo.networkprotection.impl.pixels.VpnEnableWideEvent
 import com.duckduckgo.networkprotection.impl.settings.NetPSettingsLocalConfig
 import com.duckduckgo.networkprotection.impl.settings.NetpVpnSettingsDataStore
 import com.duckduckgo.networkprotection.impl.store.NetworkProtectionRepository
@@ -70,10 +71,8 @@ import com.duckduckgo.networkprotection.impl.volume.NetpDataVolumeStore
 import com.duckduckgo.networkprotection.store.NetPGeoswitchingRepository
 import com.duckduckgo.networkprotection.store.NetPGeoswitchingRepository.UserPreferredLocation
 import com.duckduckgo.networkprotection.store.db.VpnIncompatibleApp
-import com.duckduckgo.subscriptions.api.PrivacyProUnifiedFeedback
+import com.duckduckgo.subscriptions.api.SubscriptionUnifiedFeedback
 import com.wireguard.config.Config
-import java.io.BufferedReader
-import java.io.StringReader
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -90,6 +89,8 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
+import java.io.BufferedReader
+import java.io.StringReader
 
 class NetworkProtectionManagementViewModelTest {
     @get:Rule
@@ -126,7 +127,10 @@ class NetworkProtectionManagementViewModelTest {
     private lateinit var netpVpnSettingsDataStore: NetpVpnSettingsDataStore
 
     @Mock
-    private lateinit var privacyProUnifiedFeedback: PrivacyProUnifiedFeedback
+    private lateinit var subscriptionUnifiedFeedback: SubscriptionUnifiedFeedback
+
+    @Mock
+    private lateinit var vpnEnableWideEvent: VpnEnableWideEvent
 
     private var autoExcludePrompt = FakeAutoExcludePrompt()
 
@@ -140,7 +144,7 @@ class NetworkProtectionManagementViewModelTest {
         DNS = 1.2.3.4
         MTU = 1280
         PrivateKey = yD1fKxCG/HFbxOy4YfR6zG86YQ1nOswlsv8n7uypb14=
-        
+
         [Peer]
         AllowedIPs = 0.0.0.0/0
         Endpoint = 10.10.10.10:443
@@ -176,10 +180,11 @@ class NetworkProtectionManagementViewModelTest {
             netpDataVolumeStore,
             netPExclusionListRepository,
             netpVpnSettingsDataStore,
-            privacyProUnifiedFeedback,
+            subscriptionUnifiedFeedback,
             vpnRemoteFeatures,
             localConfig,
             autoExcludePrompt,
+            vpnEnableWideEvent,
         )
     }
 
@@ -399,27 +404,72 @@ class NetworkProtectionManagementViewModelTest {
 
     @Test
     fun whenTimeDifferenceIs0ThenShowStartingTimeString() {
-        assertEquals("00:00:00", 0L.toDisplayableTimerText())
-    }
-
-    @Test
-    fun whenTimeDifferenceHasHoursOnlyThenSetMinsAndSecondsToDefault() {
-        assertEquals("27:00:00", 97_200_000L.toDisplayableTimerText())
+        assertEquals("0s", 0L.toDisplayableTimerText())
     }
 
     @Test
     fun whenTimeDifferenceHasMinsOnlyThenSetHoursAndSecondsToDefault() {
-        assertEquals("00:38:00", 2_280_000L.toDisplayableTimerText())
+        assertEquals("38m", 2_280_000L.toDisplayableTimerText())
     }
 
     @Test
     fun whenTimeDifferenceHasSecondsOnlyThenSetHoursAndMinutesToDefault() {
-        assertEquals("00:00:32", 32_000L.toDisplayableTimerText())
+        assertEquals("32s", 32_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasHoursOnlyThenShowHoursOnly() {
+        assertEquals("23h", 82_800_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasDaysOnlyThenShowDaysOnly() {
+        assertEquals("75d", 6_480_000_000.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasHoursOnlyThenSetMinsAndSecondsToDefault() {
+        assertEquals("1d 3h", 97_200_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasDaysAndMinutesThenShowDaysAndMinutesOnly() {
+        assertEquals("1d 1m", 86_460_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasDaysAndSecondsThenShowDaysAndSecondsOnly() {
+        assertEquals("1d 35s", 86_435_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasDaysHoursAndSecondsThenShowDaysHoursAndSeconds() {
+        assertEquals("3d 15h 6s", 313_206_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasDaysMinutesAndSecondsThenShowDaysMinutesAndSeconds() {
+        assertEquals("3d 15m 6s", 260_106_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasDaysHoursAndMinutesThenShowDaysHoursAndMinutes() {
+        assertEquals("3d 23h 59m", 345_540_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceHasHoursMinutesAndSecondsThenShowHoursMinutesAndSeconds() {
+        assertEquals("23h 59m 59s", 86_399_000L.toDisplayableTimerText())
+    }
+
+    @Test
+    fun whenTimeDifferenceThenShowAll() {
+        assertEquals("1d 3h 38m 32s", 99_512_000L.toDisplayableTimerText())
     }
 
     @Test
     fun whenTimeDifferenceThenSetHoursAndMinutesToDefault() {
-        assertEquals("27:38:32", 99_512_000L.toDisplayableTimerText())
+        assertEquals("1d 3h 38m 32s", 99_512_000L.toDisplayableTimerText())
     }
 
     @Test
@@ -559,7 +609,7 @@ class NetworkProtectionManagementViewModelTest {
 
     @Test
     fun whenOnReportIssuesClickedThenEmitShowIssueReportingPageCommand() = runTest {
-        whenever(privacyProUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(false)
+        whenever(subscriptionUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(false)
         testee.onReportIssuesClicked()
 
         testee.commands().test {
@@ -580,7 +630,7 @@ class NetworkProtectionManagementViewModelTest {
 
     @Test
     fun whenOnReportIssuesClickedWithUnifiedFeedbackEnabledThenEmitShowUnifiedFeedback() = runTest {
-        whenever(privacyProUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(true)
+        whenever(subscriptionUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(true)
         testee.onReportIssuesClicked()
 
         testee.commands().test {

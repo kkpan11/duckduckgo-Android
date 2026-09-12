@@ -25,10 +25,10 @@ import com.duckduckgo.sync.api.DeviceSyncState
 import com.duckduckgo.sync.api.engine.SyncEngine
 import com.duckduckgo.sync.api.engine.SyncEngine.SyncTrigger.APP_OPEN
 import com.squareup.anvil.annotations.ContributesMultibinding
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -45,7 +45,7 @@ class AppLifecycleSyncObserver @Inject constructor(
         super.onStart(owner)
         appCoroutineScope.launch(dispatcherProvider.io()) {
             if (deviceSyncState.isUserSignedInOnDevice()) {
-                Timber.d("Sync-Engine: App started, triggering sync")
+                logcat { "Sync-Engine: App started, triggering sync" }
                 syncEngine.triggerSync(APP_OPEN)
             }
         }

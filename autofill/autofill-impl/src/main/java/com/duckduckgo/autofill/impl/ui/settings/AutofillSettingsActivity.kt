@@ -27,6 +27,7 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.duckduckgo.anvil.annotations.ContributeToActivityStarter
 import com.duckduckgo.anvil.annotations.InjectWith
+import com.duckduckgo.autofill.api.AutofillImportLaunchSource
 import com.duckduckgo.autofill.api.AutofillScreenLaunchSource
 import com.duckduckgo.autofill.api.AutofillScreenLaunchSource.AutofillSettings
 import com.duckduckgo.autofill.api.AutofillScreens.AutofillPasswordsManagementScreen
@@ -49,12 +50,15 @@ import com.duckduckgo.common.ui.view.button.ButtonType.GHOST_ALT
 import com.duckduckgo.common.ui.view.dialog.TextAlertDialogBuilder
 import com.duckduckgo.common.ui.view.prependIconToText
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.duckduckgo.navigation.api.getActivityParams
-import javax.inject.Inject
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(AutofillSettingsScreen::class)
@@ -62,6 +66,12 @@ class AutofillSettingsActivity : DuckDuckGoActivity() {
 
     @Inject
     lateinit var globalActivityStarter: GlobalActivityStarter
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     val binding: ActivityAutofillSettingsBinding by viewBinding()
     private val viewModel: AutofillSettingsViewModel by bindViewModel()
@@ -88,13 +98,29 @@ class AutofillSettingsActivity : DuckDuckGoActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.AUTOFILL)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
+
         setContentView(binding.root)
         setupToolbar(binding.includeToolbar.toolbar)
         setTitle(R.string.autofillSettingsActivityTitle)
+
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
+
         observeViewModel()
         configureViewListeners()
         configureInfoText()
         sendLaunchPixel(savedInstanceState)
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.autofillAvailable.root)
     }
 
     private fun sendLaunchPixel(savedInstanceState: Bundle?) {
@@ -114,7 +140,7 @@ class AutofillSettingsActivity : DuckDuckGoActivity() {
 
     private fun observeViewModel() {
         lifecycleScope.launch {
-            viewModel.viewState
+            viewModel.viewState(extractLaunchSource())
                 .flowWithLifecycle(lifecycle, STARTED)
                 .collectLatest { state ->
                     val isAutofillAvailable = state.autofillUnsupported.not() && state.autofillDisabled.not()
@@ -174,7 +200,7 @@ class AutofillSettingsActivity : DuckDuckGoActivity() {
             viewModel.onPasswordListClicked()
         }
         binding.autofillAvailable.importPasswordsOption.setOnClickListener {
-            viewModel.onImportPasswordsClicked(getAutofillSettingsLaunchSource())
+            viewModel.onImportPasswordsClicked(AutofillImportLaunchSource.AutofillSettings)
         }
         binding.autofillAvailable.syncDesktopPasswordsOption.setOnClickListener {
             viewModel.onImportFromDesktopWithSyncClicked(getAutofillSettingsLaunchSource())
@@ -223,7 +249,7 @@ class AutofillSettingsActivity : DuckDuckGoActivity() {
     }
 
     private fun launchImportPasswordsScreen() {
-        val dialog = ImportFromGooglePasswordsDialog.instance()
+        val dialog = ImportFromGooglePasswordsDialog.instance(AutofillImportLaunchSource.AutofillSettings)
         dialog.show(supportFragmentManager, IMPORT_FROM_GPM_DIALOG_TAG)
     }
 

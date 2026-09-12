@@ -46,10 +46,10 @@ import com.duckduckgo.di.scopes.ViewScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.android.support.AndroidSupportInjection
-import javax.inject.Inject
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @ContributesMultibinding(scope = AppScope::class)
 @PriorityKey(PRIORITY_KEY_SURVEY)
@@ -131,7 +131,7 @@ class SurveyInPasswordsPromotionView @JvmOverloads constructor(
         with(binding.autofillSurvey) {
             setMessage(
                 Message(
-                    topIllustration = R.drawable.ic_passwords_ddg_96,
+                    topIllustration = R.drawable.passwords_ddg_96,
                     title = context.getString(R.string.autofillManagementSurveyPromptTitle),
                     subtitle = context.getString(R.string.autofillManagementSurveyPromptMessage),
                     action = context.getString(R.string.autofillManagementSurveyPromptAcceptButtonText),

@@ -25,9 +25,11 @@ import android.speech.SpeechRecognizer.createOnDeviceSpeechRecognizer
 import androidx.annotation.RequiresApi
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.ERROR
+import logcat.asLog
+import logcat.logcat
 import java.util.concurrent.Executors
 import javax.inject.Inject
-import timber.log.Timber
 
 interface LanguageSupportCheckerDelegate {
     fun checkRecognitionSupport(context: Context, languageTag: String, callback: RecognitionSupportCallback)
@@ -44,7 +46,7 @@ class RealLanguageSupportCheckerDelegate @Inject constructor() : LanguageSupport
                 callback,
             )
         }.onFailure {
-            Timber.e(it, "Failed to check voice recognition support")
+            logcat(ERROR) { "Failed to check voice recognition support: ${it.asLog()}" }
         }
     }
 }

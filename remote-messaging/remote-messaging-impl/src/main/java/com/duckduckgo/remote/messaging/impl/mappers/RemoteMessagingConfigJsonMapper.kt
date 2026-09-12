@@ -19,21 +19,37 @@ package com.duckduckgo.remote.messaging.impl.mappers
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.remote.messaging.api.JsonToMatchingAttributeMapper
 import com.duckduckgo.remote.messaging.api.MessageActionMapperPlugin
+import com.duckduckgo.remote.messaging.api.RemoteMessage
+import com.duckduckgo.remote.messaging.api.Surface
+import com.duckduckgo.remote.messaging.impl.RemoteMessagingFeatureToggles
 import com.duckduckgo.remote.messaging.impl.models.JsonRemoteMessagingConfig
 import com.duckduckgo.remote.messaging.impl.models.RemoteConfig
-import timber.log.Timber
+import logcat.LogPriority.INFO
+import logcat.logcat
 
 class RemoteMessagingConfigJsonMapper(
     private val appBuildConfig: AppBuildConfig,
     private val matchingAttributeMappers: Set<JsonToMatchingAttributeMapper>,
     private val actionMappers: Set<MessageActionMapperPlugin>,
+    private val remoteMessagingFeatureToggles: RemoteMessagingFeatureToggles,
 ) {
     fun map(jsonRemoteMessagingConfig: JsonRemoteMessagingConfig): RemoteConfig {
         val messages = jsonRemoteMessagingConfig.messages.mapToRemoteMessage(appBuildConfig.deviceLocale, actionMappers)
-        Timber.i("RMF: messages parsed $messages")
+        logcat(INFO) { "RMF: messages parsed $messages ${Thread.currentThread().name}" }
+
+        val updatedMessages: List<RemoteMessage> =
+            if (!remoteMessagingFeatureToggles.remoteMessageModalSurface().isEnabled()) {
+                messages.mapNotNull { message ->
+                    if (message.surfaces.isEmpty() || message.surfaces.contains(Surface.NEW_TAB_PAGE)) message else null
+                }
+            } else {
+                messages
+            }
+
+        logcat(INFO) { "RMF: updatedMessages parsed $updatedMessages ${Thread.currentThread().name}" }
         val rules = jsonRemoteMessagingConfig.rules.mapToMatchingRules(matchingAttributeMappers)
         return RemoteConfig(
-            messages = messages,
+            messages = updatedMessages,
             rules = rules,
         )
     }

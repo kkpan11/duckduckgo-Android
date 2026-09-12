@@ -26,6 +26,7 @@
         layout="@layout/include_default_toolbar" />
 
     <ScrollView
+        android:id="@+id/contentScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior"
@@ -44,7 +45,7 @@
                 android:layout_gravity="center"
                 android:layout_marginTop="@dimen/keyline_5"
                 android:importantForAccessibility="no"
-                app:srcCompat="@drawable/search_ok_128" />
+                app:srcCompat="@drawable/search_ok_pondwater_128" />
 
             <com.duckduckgo.common.ui.view.text.DaxTextView
                 android:id="@+id/privateSearchTitle"

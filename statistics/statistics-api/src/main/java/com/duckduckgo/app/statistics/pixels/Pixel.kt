@@ -50,6 +50,7 @@ interface Pixel {
         const val LAST_USED_DAY = "duck_address_last_used"
         const val WEBVIEW_VERSION = "webview_version"
         const val WEBVIEW_FULL_VERSION = "webview_full_version"
+        const val IS_DUCKDUCKGO_PACKAGE = "is_duckduckgo_app_package"
         const val DEFAULT_BROWSER = "default_browser"
         const val EMAIL = "email"
         const val MESSAGE_SHOWN = "message"
@@ -65,6 +66,19 @@ interface Pixel {
         const val TAB_INACTIVE_1W = "tab_inactive_1w"
         const val TAB_INACTIVE_2W = "tab_inactive_2w"
         const val TAB_INACTIVE_3W = "tab_inactive_3w"
+        const val IS_ENABLED = "is_enabled"
+        const val FROM_FOCUSED_NTP = "from_focused_ntp"
+        const val IS_TAB_SWITCHER_BUTTON_SHOWN = "is_tab_switcher_button_shown"
+        const val IS_FIRE_BUTTON_SHOWN = "is_fire_button_shown"
+        const val IS_BROWSER_MENU_BUTTON_SHOWN = "is_browser_menu_button_shown"
+        const val STATUS = "status"
+        const val DATA_CLEAR_TYPE_TABS = "tabs"
+        const val DATA_CLEAR_TYPE_DATA = "data"
+        const val DATA_CLEAR_TYPE_CHATS = "chats"
+        const val FREE_TRIAL = "free_trial"
+        const val BROWSER_MODE = "browser_mode"
+        const val SOURCE = "source"
+        const val PETAL = "petal"
     }
 
     object PixelValues {
@@ -82,12 +96,18 @@ interface Pixel {
         const val DAX_TRACKERS_BLOCKED_CTA = "t"
         const val DAX_NO_TRACKERS_CTA = "nt"
         const val DAX_FIRE_DIALOG_CTA = "fd"
+        const val DUCK_AI_FIRE_BUTTON_CTA = "duck_ai_fire_button_cta"
+        const val DUCK_AI_END_CTA = "duck_ai_end_cta"
         const val DAX_AUTOCONSENT_CTA = "autoconsent"
-        const val DAX_PRIVACY_PRO = "privacy_pro"
+        const val DAX_SUBSCRIPTION = "privacy_pro"
+        const val MODAL_SUBSCRIPTION_CTA = "subscription_modal"
         const val FIRE_ANIMATION_INFERNO = "fai"
+        const val FIRE_ANIMATION_INFERNO_NEW = "inferno"
         const val FIRE_ANIMATION_AIRSTREAM = "faas"
         const val FIRE_ANIMATION_WHIRLPOOL = "fawp"
         const val FIRE_ANIMATION_NONE = "fann"
+        const val PETAL_RANDOMIZE = "randomize"
+        const val PETAL_KANON = "kanon"
     }
 
     sealed class PixelType {
@@ -153,11 +173,13 @@ interface Pixel {
      * @param pixel The name of the pixel event to be sent.
      * @param parameters A map of parameters to be included with the pixel event. These parameters are URL-encoded before being sent.
      * @param encodedParameters A map of parameters that are already URL-encoded. Use this when the parameters are pre-encoded.
+     * @param type The type of pixel event to be sent.
      */
     fun enqueueFire(
         pixel: PixelName,
         parameters: Map<String, String> = emptyMap(),
         encodedParameters: Map<String, String> = emptyMap(),
+        type: PixelType = Count,
     )
 
     /**
@@ -169,10 +191,12 @@ interface Pixel {
      * @param pixelName The name of the pixel event to be sent.
      * @param parameters A map of parameters to be included with the pixel event. These parameters are URL-encoded before being sent.
      * @param encodedParameters A map of parameters that are already URL-encoded. Use this when the parameters are pre-encoded.
+     * @param type The type of pixel event to be sent.
      */
     fun enqueueFire(
         pixelName: String,
         parameters: Map<String, String> = emptyMap(),
         encodedParameters: Map<String, String> = emptyMap(),
+        type: PixelType = Count,
     )
 }

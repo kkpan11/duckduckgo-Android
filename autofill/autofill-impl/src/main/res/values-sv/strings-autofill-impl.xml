@@ -202,7 +202,6 @@
     <string name="autofillManagementHowToSyncDesktopPasswordsTitle">Så här synkroniserar du lösenord för dator</string>
     <string name="autofillManagementImportPasswordsHowToInstruction">Importera lösenord i versionen av DuckDuckGo-webbläsaren för dator och synkronisera sedan mellan enheter.</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserButtonText">Hämta webbläsare för dator</string>
-    <string name="autofillManagementImportPasswordsGetDesktopBrowserLinkCopied">Länken har kopierats</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserIntentTitle">Hämta DuckDuckGo-webbläsaren för Mac eller Windows</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserIntentMessage" instruction="Placeholder is a URL">Sök privat och blockera spårare med DuckDuckGo-webbläsaren för datorn. Gå till denna länk på din dator för att ladda ner den idag.\n\n%1$s</string>
     <string name="autofillManagementImportPasswordsSyncWithDesktopButtonText">Synkronisera med dator</string>
@@ -215,8 +214,6 @@
     <string name="autofillManagementImportPasswordsGetDesktopAppTitle">Hämta app för dator</string>
     <string name="autofillManagementImportPasswordsGetDesktopAppSubtitle">Hämta DuckDuckGo för Mac eller Windows</string>
     <string name="autofillManagementImportPasswordsGetDesktopAppInstruction">På din dator går du till:</string>
-    <string name="autofillManagementImportPasswordsGetDesktopAppUrl" translatable="false">duckduckgo.com/browser</string>
-    <string name="autofillManagementImportPasswordsGetDesktopAppShareDownloadButtonText">Dela nedladdningslänk</string>
 
     <string name="autofillManagementReportBreakagePromptTitle">Rapportera ett problem med automatisk ifyllning</string>
     <string name="autofillManagementReportBreakagePromptSubtitle">Rapportera anonymt att automatisk ifyllning inte fungerar på den här webbplatsen. Lösenord delas aldrig.</string>
@@ -240,7 +237,7 @@
 
     <string name="newTabPageShortcutPasswords">Lösenord</string>
 
-    <string name="autofillImportGooglePasswordsWebFlowTitle">Importera Google-lösenord</string>
+    <string name="autofillImportGooglePasswordsWebFlowTitle">Importera lösenord</string>
     <string name="autofillImportGooglePasswordsSuccessMessage" instruction="Placeholder is the number of passwords imported">%1$d lösenord har importerats från Google</string>
     <string name="autofillImportCsvPasswordsSuccessMessage" instruction="Placeholder is the number of passwords imported">%1$d lösenord har importerats från CSV-fil</string>
 
@@ -250,9 +247,9 @@
     <string name="autofillSyncDesktopPasswordEmptyStateButtonTitle">Synkronisera lösenord för dator</string>
     <string name="autofillSyncDesktopPasswordsMenuTitle">Synkronisera lösenord för dator</string>
 
-    <string name="importPasswordsChooseMethodDialogTitle">Importera dina Google-lösenord</string>
+    <string name="importPasswordsChooseMethodDialogTitle">Importera lösenord från Google</string>
     <string name="importPasswordsChooseMethodDialogSubtitle">Google kan be dig att logga in eller ange ditt lösenord för att bekräfta åtgärden.</string>
-    <string name="importPasswordsChooseMethodDialogGpmButton">Öppna Google Lösenordshantering</string>
+    <string name="importPasswordsChooseMethodDialogGpmButton">Importera från Google</string>
     <string name="importPasswordsChooseMethodDialogCsvButton">Välj en CSV-fil</string>
     <string name="importPasswordsChooseMethodDialogDesktopSyncButton">Importera från webbläsare för dator</string>
 
@@ -280,5 +277,36 @@
     <string name="autofillSettingsImportFromGoogleLabel">Importera lösenord från Google</string>
     <string name="autofillSettingsImportFromDesktopSync">Synkronisera lösenord för dator</string>
     <string name="autofillSettingsResetExcludedSitesTitle">Återställ exkluderade webbplatser</string>
+
+    <string name="passwords_import_promo_title" instruction="The &apos;br&apos; is a forced line break for English. It does not need to be included in translations.">Ta med dina lösenord från&lt;br /&gt;Google till DuckDuckGo</string>
+    <string name="passwords_import_promo_subtitle">Importera snabbt och säkert dina lösenord till DuckDuckGo. Google kan be dig att ange ditt lösenord.</string>
+    <string name="passwords_import_promo_action">Importera från Google</string>
+    <string name="passwords_import_promo_in_browser_title">Ta med dina lösenord från Google till DuckDuckGo</string>
+    <string name="passwords_import_promo_in_browser_secondary_action_button">Fråga inte igen</string>
+    <string name="passwords_import_promo_in_settings_title">Importera lösenord från Google</string>
+    <string name="passwords_import_promo_in_settings_dismiss_text">Dölj</string>
+
+    <!-- Import Bookmarks Strings -->
+    <string name="importToDuckDuckGo">Importera till DuckDuckGo</string>
+    <string name="importBookmarksFromGoogleChromeFolderName">Importerat från Chrome</string>
+    <string name="importBookmarksFromGooglePreImportDialogTitle">Importera bokmärken från Google</string>
+    <string name="importBookmarksFromGooglePreImportDialogInstruction">Google kan be dig att logga in eller ange ditt lösenord för att bekräfta åtgärden.</string>
+    <string name="importBookmarksFromGooglePreImportDialogImportButton">Importera från Google</string>
+    <string name="importBookmarksFromGooglePreImportDialogSelectFileButton">Välj bokmärkesfil …</string>
+    <string name="importBookmarksFromGoogleWebFlowTitle">Importera bokmärken</string>
+    <string name="importBookmarksProgressTitle">Importerar från Google…</string>
+    <string name="importBookmarksProgressSubtitle">Låt fönstret vara öppet och vänta ett ögonblick – det tar högst en till två minuter.</string>
+    <string name="importBookmarksProgressInfoMessage1">Google kan be dig att logga in eller ange ditt lösenord för att bekräfta åtgärden.</string>
+    <string name="importBookmarksProgressInfoMessage2">Google kan skicka ett mejl till dig som bekräftar att dina bokmärken exporteras.</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogTitle">Avbryt import?</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogMessage">Dina bokmärken kommer inte att importeras om du avbryter nu.</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogCancelImport">Avbryt import</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogContinue">Fortsätt</string>
+    <string name="importBookmarksFromGoogleSuccessBookmarksCount" instruction="Placeholder is the number of bookmarks that were imported">Bokmärken: %1$d</string>
+    <string name="importBookmarksSuccessTitle">@string/importToDuckDuckGo</string>
+    <string name="importBookmarksFinalDoneButton">Stäng</string>
+    <string name="importBookmarksErrorTitle">@string/importToDuckDuckGo</string>
+    <string name="importBookmarksErrorGenericMessage">Något gick fel</string>
+    <string name="importBookmarksErrorGenericMessageSecondary">Kontrollera att du är ansluten till internet och försök igen.</string>
 
 </resources>

@@ -38,7 +38,9 @@ import com.duckduckgo.autofill.impl.R
 import com.duckduckgo.autofill.impl.databinding.FragmentAutofillProviderListBinding
 import com.duckduckgo.autofill.impl.deviceauth.DeviceAuthenticator
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_SERVICE_PASSWORDS_SEARCH
-import com.duckduckgo.autofill.impl.ui.credential.management.AutofillManagementRecyclerAdapterLegacy
+import com.duckduckgo.autofill.impl.ui.credential.management.AutofillManagementRecyclerAdapter
+import com.duckduckgo.autofill.impl.ui.credential.management.AutofillManagementRecyclerAdapter.AutofillToggleState
+import com.duckduckgo.autofill.impl.ui.credential.management.AutofillManagementRecyclerAdapter.CredentialsLoadedState.Loaded
 import com.duckduckgo.autofill.impl.ui.credential.management.sorting.CredentialGrouper
 import com.duckduckgo.autofill.impl.ui.credential.management.sorting.InitialExtractor
 import com.duckduckgo.autofill.impl.ui.credential.management.suggestion.SuggestionListBuilder
@@ -50,12 +52,16 @@ import com.duckduckgo.common.ui.view.show
 import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.FragmentViewModelFactory
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.FragmentScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
-import javax.inject.Inject
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.LogPriority.INFO
+import logcat.logcat
+import javax.inject.Inject
 
 @InjectWith(FragmentScope::class)
 class AutofillSimpleCredentialsListFragment : DuckDuckGoFragment(R.layout.fragment_autofill_provider_list) {
@@ -90,12 +96,18 @@ class AutofillSimpleCredentialsListFragment : DuckDuckGoFragment(R.layout.fragme
     @Inject
     lateinit var pixel: Pixel
 
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
+
     val viewModel by lazy {
         ViewModelProvider(requireActivity(), viewModelFactory)[AutofillProviderCredentialsListViewModel::class.java]
     }
 
     private val binding: FragmentAutofillProviderListBinding by viewBinding()
-    private lateinit var adapter: AutofillManagementRecyclerAdapterLegacy
+    private lateinit var adapter: AutofillManagementRecyclerAdapter
 
     private var searchMenuItem: MenuItem? = null
 
@@ -104,6 +116,9 @@ class AutofillSimpleCredentialsListFragment : DuckDuckGoFragment(R.layout.fragme
         savedInstanceState: Bundle?,
     ) {
         super.onViewCreated(view, savedInstanceState)
+        if (edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.AUTOFILL)) {
+            edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.logins)
+        }
         configureRecyclerView()
         observeViewModel()
         configureToolbar()
@@ -225,24 +240,43 @@ class AutofillSimpleCredentialsListFragment : DuckDuckGoFragment(R.layout.fragme
 
         withContext(dispatchers.io()) {
             val showSuggestionsFor = getRequestedUrl().takeUnless { it.isNullOrBlank() } ?: getRequestedPackage()
-            Timber.i("DDGAutofillService showSuggestionsFor: $showSuggestionsFor")
+            logcat(INFO) { "DDGAutofillService showSuggestionsFor: $showSuggestionsFor" }
             val directSuggestions = suggestionMatcher.getDirectSuggestions(showSuggestionsFor, credentials)
             val shareableCredentials = suggestionMatcher.getShareableSuggestions(showSuggestionsFor)
-            adapter.updateLogins(credentials, directSuggestions, shareableCredentials, false)
+            val directSuggestionsListItems = suggestionListBuilder.build(
+                unsortedQuerySuggestions = listOf(),
+                unsortedDirectSuggestions = directSuggestions,
+                unsortedSharableSuggestions = shareableCredentials,
+                allowBreakageReporting = false,
+            )
+            val groupedCredentials = credentialGrouper.group(credentials)
+
+            withContext(dispatchers.main()) {
+                adapter.showLogins(
+                    credentialsLoadedState = Loaded(
+                        directSuggestionsListItems = directSuggestionsListItems,
+                        groupedCredentials = groupedCredentials,
+                        showGoogleImportPasswordsButton = false,
+                    ),
+                    autofillToggleState = AutofillToggleState(enabled = true, visible = false),
+                    promotionView = null,
+                )
+            }
         }
     }
 
     private fun configureRecyclerView() {
-        adapter = AutofillManagementRecyclerAdapterLegacy(
+        adapter = AutofillManagementRecyclerAdapter(
             this,
-            dispatchers = dispatchers,
             faviconManager = faviconManager,
-            grouper = credentialGrouper,
             initialExtractor = initialExtractor,
-            suggestionListBuilder = suggestionListBuilder,
             onCredentialSelected = this::onCredentialsSelected,
             onContextMenuItemClicked = { },
             onReportBreakageClicked = { },
+            onImportFromGoogleClicked = { },
+            onAutofillToggleClicked = { },
+            onImportViaDesktopSyncClicked = { },
+            launchHelpPageClicked = { },
         ).also { binding.logins.adapter = it }
     }
 

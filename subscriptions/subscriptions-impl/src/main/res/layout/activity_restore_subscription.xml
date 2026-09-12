@@ -27,6 +27,7 @@
         layout="@layout/include_default_toolbar" />
 
     <ScrollView
+        android:id="@+id/contentScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true">
@@ -42,7 +43,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginTop="@dimen/keyline_5"
-                app:srcCompat="@drawable/ic_privacy_pro_add_device"
+                app:srcCompat="@drawable/desktop_mobile_subscription_add_device_128"
                 tools:ignore="ContentDescription" />
 
             <com.duckduckgo.common.ui.view.text.DaxTextView
@@ -79,7 +80,7 @@
                     app:leadingIcon="@drawable/ic_email_24"
                     app:leadingIconBackground="circular"
                     app:primaryText="@string/restoreSubscriptionEmailTitle"
-                    app:secondaryText="@string/restoreSubscriptionEmailDescription" />
+                    tools:secondaryText="@string/restoreSubscriptionEmailDescription" />
 
                 <LinearLayout
                     android:layout_width="match_parent"

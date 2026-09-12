@@ -202,7 +202,6 @@
     <string name="autofillManagementHowToSyncDesktopPasswordsTitle">Kuidas sünkroonida töölaua paroole</string>
     <string name="autofillManagementImportPasswordsHowToInstruction">Impordi paroolid DuckDuckGo brauseri töölauaversiooni, seejärel sünkrooni need kõigis seadmetes.</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserButtonText">Hangi töölaua brauser</string>
-    <string name="autofillManagementImportPasswordsGetDesktopBrowserLinkCopied">Link kopeeritud</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserIntentTitle">Hangi DuckDuckGo brauser Maci või Windowsi jaoks</string>
     <string name="autofillManagementImportPasswordsGetDesktopBrowserIntentMessage" instruction="Placeholder is a URL">Otsi privaatselt ja blokeeri jälgurid DuckDuckGo töölaua brauseriga. Külasta oma arvutis seda linki, et laadida see alla juba täna.\n\n%1$s</string>
     <string name="autofillManagementImportPasswordsSyncWithDesktopButtonText">Sünkrooni töölauaga</string>
@@ -215,8 +214,6 @@
     <string name="autofillManagementImportPasswordsGetDesktopAppTitle">Hangi töölaua rakendus</string>
     <string name="autofillManagementImportPasswordsGetDesktopAppSubtitle">Hangi DuckDuckGo Maci või Windowsi jaoks</string>
     <string name="autofillManagementImportPasswordsGetDesktopAppInstruction">Ava oma arvutis:</string>
-    <string name="autofillManagementImportPasswordsGetDesktopAppUrl" translatable="false">duckduckgo.com/browser</string>
-    <string name="autofillManagementImportPasswordsGetDesktopAppShareDownloadButtonText">Jaga allalaadimise linki</string>
 
     <string name="autofillManagementReportBreakagePromptTitle">Teata automaatse täitmise probleemist</string>
     <string name="autofillManagementReportBreakagePromptSubtitle">Teata anonüümselt, et automaatne täitmine sellel saidil ei tööta. Paroole ei jagata kunagi.</string>
@@ -240,7 +237,7 @@
 
     <string name="newTabPageShortcutPasswords">Paroolid</string>
 
-    <string name="autofillImportGooglePasswordsWebFlowTitle">Impordi Google\'i paroolid</string>
+    <string name="autofillImportGooglePasswordsWebFlowTitle">Impordi paroolid</string>
     <string name="autofillImportGooglePasswordsSuccessMessage" instruction="Placeholder is the number of passwords imported">%1$d parooli imporditi Google\'ist</string>
     <string name="autofillImportCsvPasswordsSuccessMessage" instruction="Placeholder is the number of passwords imported">%1$d parooli imporditi CSV-st</string>
 
@@ -250,9 +247,9 @@
     <string name="autofillSyncDesktopPasswordEmptyStateButtonTitle">Töölaua paroolide sünkroonimine</string>
     <string name="autofillSyncDesktopPasswordsMenuTitle">Töölaua paroolide sünkroonimine</string>
 
-    <string name="importPasswordsChooseMethodDialogTitle">Impordi oma Google\'i paroolid</string>
+    <string name="importPasswordsChooseMethodDialogTitle">Impordi paroolid Google\'ist</string>
     <string name="importPasswordsChooseMethodDialogSubtitle">Google võib paluda sul sisse logida või sisestada kinnitamiseks parooli.</string>
-    <string name="importPasswordsChooseMethodDialogGpmButton">Ava Google\'i paroolid</string>
+    <string name="importPasswordsChooseMethodDialogGpmButton">Impordi Google\'ist</string>
     <string name="importPasswordsChooseMethodDialogCsvButton">Vali CSV-fail</string>
     <string name="importPasswordsChooseMethodDialogDesktopSyncButton">Impordi töölaua brauserist</string>
 
@@ -280,5 +277,36 @@
     <string name="autofillSettingsImportFromGoogleLabel">Impordi paroolid Google\'ist</string>
     <string name="autofillSettingsImportFromDesktopSync">Töölaua paroolide sünkroonimine</string>
     <string name="autofillSettingsResetExcludedSitesTitle">Lähtesta välistatud saidid</string>
+
+    <string name="passwords_import_promo_title" instruction="The &apos;br&apos; is a forced line break for English. It does not need to be included in translations.">Too oma paroolid Google\'ist DuckDuckGo\'sse</string>
+    <string name="passwords_import_promo_subtitle">Impordi oma paroolid kiiresti ja turvaliselt DuckDuckGosse. Google võib paluda sul oma parooli sisestada.</string>
+    <string name="passwords_import_promo_action">Impordi Google\'ist</string>
+    <string name="passwords_import_promo_in_browser_title">Too oma paroolid Google\'ist DuckDuckGo\'sse</string>
+    <string name="passwords_import_promo_in_browser_secondary_action_button">Ära enam küsi</string>
+    <string name="passwords_import_promo_in_settings_title">Impordi paroolid Google\'ist</string>
+    <string name="passwords_import_promo_in_settings_dismiss_text">Peida</string>
+
+    <!-- Import Bookmarks Strings -->
+    <string name="importToDuckDuckGo">Impordi DuckDuckGo-sse</string>
+    <string name="importBookmarksFromGoogleChromeFolderName">Imporditud Chrome\'ist</string>
+    <string name="importBookmarksFromGooglePreImportDialogTitle">Impordi järjehoidjad Google\'ist</string>
+    <string name="importBookmarksFromGooglePreImportDialogInstruction">Google võib paluda sul sisse logida või sisestada kinnitamiseks parooli.</string>
+    <string name="importBookmarksFromGooglePreImportDialogImportButton">Impordi Google\'ist</string>
+    <string name="importBookmarksFromGooglePreImportDialogSelectFileButton">Vali järjehoidjate fail...</string>
+    <string name="importBookmarksFromGoogleWebFlowTitle">Impordi järjehoidjaid</string>
+    <string name="importBookmarksProgressTitle">Importimine Google\'ist…</string>
+    <string name="importBookmarksProgressSubtitle">Hoia see ekraan avatuna ja ole kannatlik — see ei tohiks võtta rohkem kui minut või kaks.</string>
+    <string name="importBookmarksProgressInfoMessage1">Google võib paluda sul sisse logida või sisestada kinnitamiseks parooli.</string>
+    <string name="importBookmarksProgressInfoMessage2">Google võib saata sulle kinnitava e-kirja, et su järjehoidjaid eksporditakse.</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogTitle">Kas loobuda importimisest?</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogMessage">Sinu järjehoidjaid ei impordita, kui sa kohe tühistad.</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogCancelImport">Tühista importimine</string>
+    <string name="importBookmarksFromGoogleCancelConfirmationDialogContinue">Jätka</string>
+    <string name="importBookmarksFromGoogleSuccessBookmarksCount" instruction="Placeholder is the number of bookmarks that were imported">Järjehoidjad: %1$d</string>
+    <string name="importBookmarksSuccessTitle">@string/importToDuckDuckGo</string>
+    <string name="importBookmarksFinalDoneButton">Sulge</string>
+    <string name="importBookmarksErrorTitle">@string/importToDuckDuckGo</string>
+    <string name="importBookmarksErrorGenericMessage">Midagi läks valesti</string>
+    <string name="importBookmarksErrorGenericMessageSecondary">Veenduge, et olete internetiga ühendatud ja proovige uuesti.</string>
 
 </resources>

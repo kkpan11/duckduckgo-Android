@@ -25,8 +25,10 @@ import com.duckduckgo.app.browser.logindetection.LoginDetectionJavascriptInterfa
 import com.duckduckgo.app.fire.fireproofwebsite.ui.AutomaticFireproofSetting
 import com.duckduckgo.app.settings.db.SettingsDataStore
 import com.duckduckgo.common.utils.getValidUrl
+import logcat.LogPriority.INFO
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface DOMLoginDetector {
     fun addLoginDetection(
@@ -73,10 +75,10 @@ class JsLoginDetector @Inject constructor(private val settingsDataStore: Setting
 
     private fun evaluateIfLoginPostRequest(request: WebResourceRequest): Boolean {
         if (request.method == HTTP_POST) {
-            Timber.i("LoginDetector: evaluate ${request.url}")
+            logcat(INFO) { "LoginDetector: evaluate ${request.url}" }
             val validUrl = request.url.getValidUrl() ?: return false
             if (validUrl.path?.contains(loginPathRegex) == true || validUrl.isOAuthUrl()) {
-                Timber.v("LoginDetector: post login DETECTED")
+                logcat(VERBOSE) { "LoginDetector: post login DETECTED" }
                 return true
             }
         }

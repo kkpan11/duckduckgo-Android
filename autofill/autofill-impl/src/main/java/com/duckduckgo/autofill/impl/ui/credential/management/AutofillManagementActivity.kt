@@ -51,7 +51,6 @@ import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsMa
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowDeviceUnsupportedMode
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowDisabledMode
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowListMode
-import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowListModeLegacy
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowLockedMode
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowUserPasswordCopied
 import com.duckduckgo.autofill.impl.ui.credential.management.AutofillPasswordsManagementViewModel.Command.ShowUserUsernameCopied
@@ -65,7 +64,6 @@ import com.duckduckgo.autofill.impl.ui.credential.management.viewing.AutofillMan
 import com.duckduckgo.autofill.impl.ui.credential.management.viewing.AutofillManagementDeviceUnsupportedMode
 import com.duckduckgo.autofill.impl.ui.credential.management.viewing.AutofillManagementDisabledMode
 import com.duckduckgo.autofill.impl.ui.credential.management.viewing.AutofillManagementListMode
-import com.duckduckgo.autofill.impl.ui.credential.management.viewing.AutofillManagementListModeLegacy
 import com.duckduckgo.autofill.impl.ui.credential.management.viewing.AutofillManagementLockedMode
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.view.SearchBar
@@ -74,12 +72,16 @@ import com.duckduckgo.common.ui.view.hideKeyboard
 import com.duckduckgo.common.ui.view.show
 import com.duckduckgo.common.ui.view.showKeyboard
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.navigation.api.getActivityParams
 import com.google.android.material.snackbar.Snackbar
-import javax.inject.Inject
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(AutofillPasswordsManagementScreen::class)
@@ -96,6 +98,12 @@ class AutofillManagementActivity : DuckDuckGoActivity(), PasswordsScreenPromotio
     @Inject
     lateinit var pixel: Pixel
 
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -103,10 +111,25 @@ class AutofillManagementActivity : DuckDuckGoActivity(), PasswordsScreenPromotio
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
 
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.AUTOFILL)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
+
         setContentView(binding.root)
         setupToolbar(binding.toolbar)
+
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
+
         observeViewModel()
         sendLaunchPixel(savedInstanceState)
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.appBarLayout)
     }
 
     private fun sendLaunchPixel(savedInstanceState: Bundle?) {
@@ -197,8 +220,7 @@ class AutofillManagementActivity : DuckDuckGoActivity(), PasswordsScreenPromotio
             is ShowUserPasswordCopied -> showCopiedToClipboardSnackbar(CopiedToClipboardDataType.Password)
             is OfferUserUndoDeletion -> showUserCredentialDeletedWithUndoAction(command)
             is OfferUserUndoMassDeletion -> showUserCredentialsMassDeletedWithUndoAction(command)
-            is ShowListMode -> showListMode(legacyList = false)
-            is ShowListModeLegacy -> showListMode(legacyList = true)
+            is ShowListMode -> showListMode()
             is ShowDisabledMode -> showDisabledMode()
             is ShowDeviceUnsupportedMode -> showDeviceUnsupportedMode()
             is ShowLockedMode -> showLockMode()
@@ -211,7 +233,7 @@ class AutofillManagementActivity : DuckDuckGoActivity(), PasswordsScreenPromotio
             else -> processed = false
         }
         if (processed) {
-            Timber.v("Processed command $command")
+            logcat(VERBOSE) { "Processed command $command" }
             viewModel.commandProcessed(command)
         }
     }
@@ -249,19 +271,15 @@ class AutofillManagementActivity : DuckDuckGoActivity(), PasswordsScreenPromotio
         }.show()
     }
 
-    private fun showListMode(legacyList: Boolean) {
+    private fun showListMode() {
         resetToolbar()
         val currentUrl = extractSuggestionsUrl()
         val privacyProtectionStatus = extractPrivacyProtectionEnabled()
         val launchSource = extractLaunchSource()
-        Timber.v("showListMode (isLegacy = %s). currentUrl is %s", legacyList, currentUrl)
+        logcat(VERBOSE) { "showListMode. currentUrl is $currentUrl" }
 
         supportFragmentManager.commitNow {
-            val fragment = if (legacyList) {
-                AutofillManagementListModeLegacy.instance(currentUrl, privacyProtectionStatus, launchSource)
-            } else {
-                AutofillManagementListMode.instance(currentUrl, privacyProtectionStatus, launchSource)
-            }
+            val fragment = AutofillManagementListMode.instance(currentUrl, privacyProtectionStatus, launchSource)
             replace(R.id.fragment_container_view, fragment, TAG_ALL_CREDENTIALS)
         }
     }
@@ -427,7 +445,7 @@ class AutofillManagementActivity : DuckDuckGoActivity(), PasswordsScreenPromotio
     }
 
     private sealed interface CopiedToClipboardDataType {
-        object Username : CopiedToClipboardDataType
-        object Password : CopiedToClipboardDataType
+        data object Username : CopiedToClipboardDataType
+        data object Password : CopiedToClipboardDataType
     }
 }

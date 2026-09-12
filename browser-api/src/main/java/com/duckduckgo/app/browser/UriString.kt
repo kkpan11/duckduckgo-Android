@@ -22,21 +22,53 @@ import androidx.core.util.PatternsCompat
 import com.duckduckgo.common.utils.UrlScheme
 import com.duckduckgo.common.utils.baseHost
 import com.duckduckgo.common.utils.withScheme
-import java.lang.IllegalArgumentException
+import logcat.LogPriority.INFO
+import logcat.logcat
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import timber.log.Timber
+import java.lang.IllegalArgumentException
 
 class UriString {
-
     companion object {
-        private const val localhost = "localhost"
-        private const val space = " "
+        private const val LOCALHOST = "localhost"
+        private const val SPACE = " "
         private val webUrlRegex by lazy { PatternsCompat.WEB_URL.toRegex() }
         private val domainRegex by lazy { PatternsCompat.DOMAIN_NAME.toRegex() }
+        private val inputQueryCleanupRegex by lazy { "['\"\n]|\\s+".toRegex() }
         private val cache = LruCache<Int, Boolean>(250_000)
 
-        fun host(uriString: String): String? {
-            return Uri.parse(uriString).baseHost
+        fun extractUrl(inputQuery: String, cleanInputQuery: Boolean): String? {
+            val processedQuery = if (cleanInputQuery) {
+                cleanupInputQuery(inputQuery)
+            } else {
+                inputQuery
+            }
+            val urls = webUrlRegex.findAll(processedQuery).map { it.value }.toList()
+            return when {
+                urls.isEmpty() -> null
+                urls.size == 1 -> urls.first()
+                // If multiple URLs found and all start with http, treat this as a search.
+                urls.all { it.startsWith("http") } -> null
+                else -> urls.firstOrNull { it.startsWith("http") }
+            }
+        }
+
+        fun host(uriString: String): String? = Uri.parse(uriString).baseHost
+
+        /**
+         * Strips the port from [url], leaving the rest of the URL (scheme, host, path, query and
+         * fragment) intact.
+         */
+        fun removePort(url: String): String {
+            return try {
+                val uri = Uri.parse(url)
+                if (uri.port == -1) {
+                    url
+                } else {
+                    uri.buildUpon().authority(uri.host).build().toString()
+                }
+            } catch (e: Exception) {
+                url
+            }
         }
 
         fun sameOrSubdomain(
@@ -95,11 +127,22 @@ class UriString {
             return parentHost == childHost || (childHost.endsWith(".$parentHost") || parentHost.endsWith(".$childHost"))
         }
 
-        fun isWebUrl(inputQuery: String): Boolean {
+        fun isWebUrl(
+            inputQuery: String,
+            extractUrlQuery: Boolean = false,
+        ): Boolean {
+            if (extractUrlQuery) {
+                val extractedUrl = extractUrl(inputQuery, cleanInputQuery = true)
+                if (extractedUrl != null) {
+                    return isWebUrl(extractedUrl)
+                }
+            }
+
             if (inputQuery.contains("\"") || inputQuery.contains("'")) {
                 return false
             }
-            if (inputQuery.contains(space)) return false
+
+            if (inputQuery.contains(SPACE)) return false
             val rawUri = Uri.parse(inputQuery)
 
             val uri = rawUri.withScheme()
@@ -107,7 +150,7 @@ class UriString {
             if (uri.userInfo != null) return false
 
             val host = uri.host ?: return false
-            if (host == localhost) return true
+            if (host == LOCALHOST) return true
             if (host.contains("!")) return false
 
             if (webUrlRegex.containsMatchIn(host)) return true
@@ -121,14 +164,12 @@ class UriString {
                 // e.g., this means "http://raspberrypi" will be considered a webUrl, but "raspberrypi" will not
                 rawUri.hasWebScheme()
             } catch (e: IllegalArgumentException) {
-                Timber.i("Failed to parse %s as a web url; assuming it isn't", inputQuery)
+                logcat(INFO) { "Failed to parse $inputQuery as a web url; assuming it isn't" }
                 false
             }
         }
 
-        fun isValidDomain(domain: String): Boolean {
-            return domainRegex.matches(domain)
-        }
+        fun isValidDomain(domain: String): Boolean = domainRegex.matches(domain)
 
         fun isDuckUri(inputQuery: String): Boolean {
             val uri = Uri.parse(inputQuery)
@@ -151,5 +192,7 @@ class UriString {
             val normalized = normalizeScheme()
             return normalized.scheme == UrlScheme.duck
         }
+
+        private fun cleanupInputQuery(text: String): String = text.replace(inputQueryCleanupRegex, " ").trim()
     }
 }

@@ -20,11 +20,28 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.duckduckgo.anvil.annotations.ContributesViewModel
+import com.duckduckgo.app.browser.defaultbrowsing.DefaultBrowserDetector
 import com.duckduckgo.app.global.DefaultRoleBrowserDialog
+import com.duckduckgo.app.statistics.pixels.Pixel
+import com.duckduckgo.daxprompts.api.LaunchSource
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_CLOSED
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_DEFAULT_BROWSER_SET
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_PRIMARY_BUTTON_CLICKED
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_SHOWN
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.WIN_BACK_PROMPT_DEFAULT_BROWSER_NOT_SET
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.WIN_BACK_PROMPT_DEFAULT_BROWSER_SET
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.WIN_BACK_PROMPT_DISMISSED
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.WIN_BACK_PROMPT_PRIMARY_BUTTON_CLICKED
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelName.WIN_BACK_PROMPT_SHOWN
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelParameter.PARAM_NAME_INTERACTION_TYPE
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelParameter.PARAM_VALUE_MAYBE_LATER_BUTTON_TAPPED
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelParameter.PARAM_VALUE_NAVIGATION_BUTTON_OR_GESTURE_USED
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelParameter.PARAM_VALUE_SYSTEM_DIALOG_DISMISSED
+import com.duckduckgo.daxprompts.impl.pixels.DaxPromptBrowserComparisonPixelParameter.PARAM_VALUE_X_BUTTON_TAPPED
 import com.duckduckgo.daxprompts.impl.repository.DaxPromptsRepository
-import com.duckduckgo.di.scopes.ActivityScope
-import javax.inject.Inject
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -32,10 +49,12 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import logcat.logcat
 
-@ContributesViewModel(ActivityScope::class)
-class DaxPromptBrowserComparisonViewModel @Inject constructor(
+class DaxPromptBrowserComparisonViewModel @AssistedInject constructor(
+    @Assisted private val launchSource: LaunchSource,
     private val defaultRoleBrowserDialog: DefaultRoleBrowserDialog,
+    private val defaultBrowserDetector: DefaultBrowserDetector,
     private val daxPromptsRepository: DaxPromptsRepository,
+    private val pixel: Pixel,
     private val applicationContext: Context,
 ) : ViewModel() {
 
@@ -45,62 +64,132 @@ class DaxPromptBrowserComparisonViewModel @Inject constructor(
         return command.receiveAsFlow()
     }
 
-    fun onMoreLinkClicked() {
+    fun onPromptShown() {
         viewModelScope.launch {
-            command.send(Command.OpenDetailsPage(BROWSER_COMPARISON_MORE_URL))
+            val pixelName = when (launchSource) {
+                LaunchSource.REACTIVATE_USERS -> REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_SHOWN
+                LaunchSource.WIN_BACK -> WIN_BACK_PROMPT_SHOWN
+            }
+            pixel.fire(pixelName)
         }
     }
 
     fun onCloseButtonClicked() {
         viewModelScope.launch {
             command.send(Command.CloseScreen())
+            when (launchSource) {
+                LaunchSource.REACTIVATE_USERS -> pixel.fire(
+                    pixel = REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_CLOSED,
+                    parameters = mapOf(PARAM_NAME_INTERACTION_TYPE to PARAM_VALUE_X_BUTTON_TAPPED),
+                )
+                LaunchSource.WIN_BACK -> fireWinBackDismissedPixel()
+            }
         }
     }
 
     fun onPrimaryButtonClicked() {
         viewModelScope.launch {
-            if (defaultRoleBrowserDialog.shouldShowDialog()) {
-                val intent = defaultRoleBrowserDialog.createIntent(applicationContext)
-                if (intent != null) {
-                    command.send(Command.BrowserComparisonChart(intent))
-                } else {
-                    logcat { "Default browser dialog not available" }
-                    command.send(Command.CloseScreen())
-                }
+            firePrimaryButtonClickedPixel()
+            val roleDialogIntent = if (defaultRoleBrowserDialog.shouldShowDialog()) {
+                defaultRoleBrowserDialog.createIntent(applicationContext)
             } else {
-                logcat { "Default browser dialog should not be shown" }
-                command.send(Command.CloseScreen())
+                null
+            }
+            if (roleDialogIntent != null) {
+                command.send(Command.BrowserComparisonChart(roleDialogIntent))
+            } else {
+                logcat { "Default role browser dialog unavailable, opening system default apps settings" }
+                command.send(Command.LaunchSystemDefaultAppsSettings)
+            }
+        }
+    }
+
+    private fun firePrimaryButtonClickedPixel() {
+        val pixelName = when (launchSource) {
+            LaunchSource.REACTIVATE_USERS -> REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_PRIMARY_BUTTON_CLICKED
+            LaunchSource.WIN_BACK -> WIN_BACK_PROMPT_PRIMARY_BUTTON_CLICKED
+        }
+        pixel.fire(pixelName)
+    }
+
+    fun onGhostButtonClicked() {
+        viewModelScope.launch {
+            command.send(Command.CloseScreen())
+            when (launchSource) {
+                LaunchSource.REACTIVATE_USERS -> pixel.fire(
+                    pixel = REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_CLOSED,
+                    parameters = mapOf(PARAM_NAME_INTERACTION_TYPE to PARAM_VALUE_MAYBE_LATER_BUTTON_TAPPED),
+                )
+                LaunchSource.WIN_BACK -> fireWinBackDismissedPixel()
             }
         }
     }
 
     fun onDefaultBrowserSet() {
         defaultRoleBrowserDialog.dialogShown()
-        viewModelScope.launch {
-            command.send(Command.CloseScreen(true))
-        }
+        handleDefaultBrowserResult(isDefault = true)
     }
 
     fun onDefaultBrowserNotSet() {
         defaultRoleBrowserDialog.dialogShown()
+        handleDefaultBrowserResult(isDefault = false)
+    }
+
+    fun onSystemDefaultAppsSettingsReturned() {
+        handleDefaultBrowserResult(isDefault = defaultBrowserDetector.isDefaultBrowser())
+    }
+
+    private fun handleDefaultBrowserResult(isDefault: Boolean) {
         viewModelScope.launch {
-            command.send(Command.CloseScreen(false))
+            if (isDefault) {
+                val pixelName = when (launchSource) {
+                    LaunchSource.REACTIVATE_USERS -> REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_DEFAULT_BROWSER_SET
+                    LaunchSource.WIN_BACK -> WIN_BACK_PROMPT_DEFAULT_BROWSER_SET
+                }
+                pixel.fire(pixelName)
+            } else {
+                when (launchSource) {
+                    LaunchSource.REACTIVATE_USERS -> pixel.fire(
+                        pixel = REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_CLOSED,
+                        parameters = mapOf(PARAM_NAME_INTERACTION_TYPE to PARAM_VALUE_SYSTEM_DIALOG_DISMISSED),
+                    )
+                    LaunchSource.WIN_BACK -> pixel.fire(WIN_BACK_PROMPT_DEFAULT_BROWSER_NOT_SET)
+                }
+            }
+            command.send(Command.CloseScreen(isDefault))
         }
     }
 
     fun markBrowserComparisonPromptAsShown() {
         viewModelScope.launch {
-            daxPromptsRepository.setDaxPromptsShowBrowserComparison(false)
+            daxPromptsRepository.setDaxPromptsBrowserComparisonShown()
         }
+    }
+
+    fun onBackNavigation() {
+        viewModelScope.launch {
+            when (launchSource) {
+                LaunchSource.REACTIVATE_USERS -> pixel.fire(
+                    pixel = REACTIVATE_USERS_BROWSER_COMPARISON_PROMPT_CLOSED,
+                    parameters = mapOf(PARAM_NAME_INTERACTION_TYPE to PARAM_VALUE_NAVIGATION_BUTTON_OR_GESTURE_USED),
+                )
+                LaunchSource.WIN_BACK -> fireWinBackDismissedPixel()
+            }
+        }
+    }
+
+    private fun fireWinBackDismissedPixel() {
+        pixel.fire(WIN_BACK_PROMPT_DISMISSED)
     }
 
     sealed class Command {
         data class CloseScreen(val defaultBrowserSet: Boolean? = null) : Command()
-        data class OpenDetailsPage(val url: String) : Command()
         data class BrowserComparisonChart(val intent: Intent) : Command()
+        data object LaunchSystemDefaultAppsSettings : Command()
     }
 
-    companion object {
-        internal const val BROWSER_COMPARISON_MORE_URL = "https://duckduckgo.com/compare-privacy"
+    @AssistedFactory
+    interface Factory {
+        fun create(launchSource: LaunchSource): DaxPromptBrowserComparisonViewModel
     }
 }

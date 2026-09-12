@@ -24,7 +24,6 @@ import com.duckduckgo.malicioussiteprotection.api.MaliciousSiteProtection.Feed.M
 import com.duckduckgo.malicioussiteprotection.api.MaliciousSiteProtection.Feed.PHISHING
 import com.duckduckgo.malicioussiteprotection.api.MaliciousSiteProtection.Feed.SCAM
 import com.duckduckgo.malicioussiteprotection.impl.MaliciousSitePixelName.MALICIOUS_SITE_CLIENT_TIMEOUT
-import com.duckduckgo.malicioussiteprotection.impl.MaliciousSiteProtectionRCFeature
 import com.duckduckgo.malicioussiteprotection.impl.data.db.MaliciousSiteDao
 import com.duckduckgo.malicioussiteprotection.impl.data.db.RevisionEntity
 import com.duckduckgo.malicioussiteprotection.impl.data.network.FilterResponse
@@ -50,13 +49,13 @@ import com.duckduckgo.malicioussiteprotection.impl.models.Type.FILTER_SET
 import com.duckduckgo.malicioussiteprotection.impl.models.Type.HASH_PREFIXES
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
-import java.net.SocketTimeoutException
-import javax.inject.Inject
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.net.SocketTimeoutException
+import javax.inject.Inject
 
 interface MaliciousSiteRepository {
     /**
@@ -83,7 +82,6 @@ class RealMaliciousSiteRepository @Inject constructor(
     private val maliciousSiteDatasetService: MaliciousSiteDatasetService,
     private val dispatcherProvider: DispatcherProvider,
     private val pixels: Pixel,
-    private val maliciousSiteProtectionFeature: MaliciousSiteProtectionRCFeature,
 ) : MaliciousSiteRepository {
 
     private val writeMutex = Mutex()
@@ -177,7 +175,7 @@ class RealMaliciousSiteRepository @Inject constructor(
     ): Result<Unit> {
         return withContext(dispatcherProvider.io()) {
             val networkRevision = maliciousSiteService.getRevision().revision
-            val localRevisions = getLocalRevisions(type)
+            val localRevisions = writeMutex.withLock { getLocalRevisions(type) }
 
             try {
                 loadData(localRevisions, networkRevision)

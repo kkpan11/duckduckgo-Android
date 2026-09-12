@@ -28,6 +28,7 @@ import com.duckduckgo.anvil.annotations.ContributeToActivityStarter
 import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivityGeneralSettingsBinding
+import com.duckduckgo.app.browser.webview.SCAM_PROTECTION_LEARN_MORE_URL
 import com.duckduckgo.app.generalsettings.GeneralSettingsViewModel.Command
 import com.duckduckgo.app.generalsettings.GeneralSettingsViewModel.Command.LaunchShowOnAppLaunchScreen
 import com.duckduckgo.app.generalsettings.GeneralSettingsViewModel.Command.OpenMaliciousLearnMore
@@ -41,19 +42,29 @@ import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.spans.DuckDuckGoClickableSpan
 import com.duckduckgo.common.ui.view.addClickableSpan
 import com.duckduckgo.common.ui.view.fadeTransitionConfig
+import com.duckduckgo.common.ui.view.setEnabledOpacity
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
-import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
-@ContributeToActivityStarter(GeneralSettingsScreenNoParams::class)
+@ContributeToActivityStarter(GeneralSettingsScreenNoParams::class, screenName = "settingsGeneral")
 class GeneralSettingsActivity : DuckDuckGoActivity() {
 
     @Inject
     lateinit var globalActivityStarter: GlobalActivityStarter
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private val viewModel: GeneralSettingsViewModel by bindViewModel()
     private val binding: ActivityGeneralSettingsBinding by viewBinding()
@@ -70,6 +81,10 @@ class GeneralSettingsActivity : DuckDuckGoActivity() {
         viewModel.onMaliciousSiteProtectionSettingChanged(isChecked)
     }
 
+    private val chatSuggestionsToggleListener = CompoundButton.OnCheckedChangeListener { _, isChecked ->
+        viewModel.onChatSuggestionsSettingChanged(isChecked)
+    }
+
     private val voiceSearchChangeListener = CompoundButton.OnCheckedChangeListener { _, isChecked ->
         viewModel.onVoiceSearchChanged(isChecked)
     }
@@ -81,8 +96,17 @@ class GeneralSettingsActivity : DuckDuckGoActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.SETTINGS)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
+
         setContentView(binding.root)
         setupToolbar(binding.includeToolbar.toolbar)
+
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
 
         binding.maliciousLearnMore.addClickableSpan(
             textSequence = getText(R.string.maliciousSiteSettingLearnMore),
@@ -100,11 +124,13 @@ class GeneralSettingsActivity : DuckDuckGoActivity() {
     }
 
     private fun configureUiEventHandlers() {
-        binding.autocompleteToggle.setOnCheckedChangeListener(autocompleteToggleListener)
-        binding.autocompleteRecentlyVisitedSitesToggle.setOnCheckedChangeListener(autocompleteRecentlyVisitedSitesToggleListener)
-        binding.voiceSearchToggle.setOnCheckedChangeListener(voiceSearchChangeListener)
         binding.showOnAppLaunchButton.setOnClickListener(showOnAppLaunchClickListener)
-        binding.maliciousToggle.setOnCheckedChangeListener(maliciousSiteProtectionToggleListener)
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyNavigationBarInsets(binding.contentScrollView, drawBehindGestureNav = true)
     }
 
     private fun observeViewModel() {
@@ -118,14 +144,28 @@ class GeneralSettingsActivity : DuckDuckGoActivity() {
                     )
                     if (it.storeHistoryEnabled) {
                         binding.autocompleteRecentlyVisitedSitesToggle.isVisible = true
+                        binding.recentlyVisitedSitesDescription.isVisible = true
                         binding.autocompleteRecentlyVisitedSitesToggle.quietlySetIsChecked(
                             newCheckedState = it.autoCompleteRecentlyVisitedSitesSuggestionsUserEnabled,
                             changeListener = autocompleteRecentlyVisitedSitesToggleListener,
                         )
                         binding.autocompleteRecentlyVisitedSitesToggle.isEnabled = it.autoCompleteSuggestionsEnabled
+                        binding.recentlyVisitedSitesDescription.setEnabledOpacity(it.autoCompleteSuggestionsEnabled)
                     } else {
                         binding.autocompleteRecentlyVisitedSitesToggle.isVisible = false
+                        binding.recentlyVisitedSitesDescription.isVisible = false
                     }
+                    binding.chatSuggestionsToggle.isVisible = it.showChatSuggestionsToggle
+                    if (it.showChatSuggestionsToggle) {
+                        binding.chatSuggestionsToggle.quietlySetIsChecked(
+                            newCheckedState = it.chatSuggestionsEnabled,
+                            changeListener = chatSuggestionsToggleListener,
+                        )
+                        binding.searchSuggestionsDescription.setText(R.string.privateSearchAutocompleteHintWithChatSuggestions)
+                    } else {
+                        binding.searchSuggestionsDescription.setText(R.string.privateSearchAutocompleteHint)
+                    }
+
                     if (it.maliciousSiteProtectionFeatureAvailable) {
                         binding.maliciousDisabledMessage.isVisible = !it.maliciousSiteProtectionEnabled
                         binding.maliciousToggle.quietlySetIsChecked(
@@ -142,11 +182,17 @@ class GeneralSettingsActivity : DuckDuckGoActivity() {
 
                     if (it.showVoiceSearch) {
                         binding.voiceSearchToggle.isVisible = true
+                        binding.voiceSearchDescription.isVisible = true
                         binding.voiceSearchToggle.quietlySetIsChecked(viewState.voiceSearchEnabled, voiceSearchChangeListener)
                     }
 
                     binding.showOnAppLaunchButton.isVisible = it.isShowOnAppLaunchOptionVisible
                     setShowOnAppLaunchOptionSecondaryText(viewState.showOnAppLaunchSelectedOption)
+                    if (it.showNTPAfterIdleReturn) {
+                        binding.showOnAppLaunchButton.setPrimaryText(resources.getText(R.string.afterInactivityOptionTitle))
+                    } else {
+                        binding.showOnAppLaunchButton.setPrimaryText(resources.getText(R.string.showOnAppLaunchOptionTitle))
+                    }
                 }
             }.launchIn(lifecycleScope)
 
@@ -174,15 +220,11 @@ class GeneralSettingsActivity : DuckDuckGoActivity() {
                 globalActivityStarter.start(
                     this,
                     WebViewActivityWithParams(
-                        url = MALICIOUS_SITE_LEARN_MORE_URL,
+                        url = SCAM_PROTECTION_LEARN_MORE_URL,
                         screenTitle = getString(R.string.maliciousSiteLearnMoreTitle),
                     ),
                 )
             }
         }
-    }
-
-    companion object {
-        private const val MALICIOUS_SITE_LEARN_MORE_URL = "https://duckduckgo.com/duckduckgo-help-pages/privacy/phishing-and-malware-protection/"
     }
 }

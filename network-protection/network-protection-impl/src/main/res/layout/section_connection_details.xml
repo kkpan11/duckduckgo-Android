@@ -48,7 +48,7 @@
 
         <com.duckduckgo.common.ui.view.text.DaxTextView
             android:id="@+id/data_volume_title"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/keyline_4"
             android:breakStrategy="balanced"
@@ -56,8 +56,9 @@
             app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintHorizontal_chainStyle="packed"
             app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintWidth_default="wrap"
+            app:layout_constrainedWidth="true"
             app:typography="h4" />
 
         <ImageView
@@ -66,6 +67,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/keyline_3"
             android:background="@drawable/ic_arrow_down_12"
+            android:importantForAccessibility="no"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/data_volume_title" />
@@ -87,6 +89,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/keyline_4"
             android:background="@drawable/ic_arrow_down_12"
+            android:importantForAccessibility="no"
             android:rotationX="180"
             app:layout_constraintBottom_toBottomOf="@+id/received_icon"
             app:layout_constraintStart_toEndOf="@id/received_text"

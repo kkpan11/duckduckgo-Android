@@ -1,4 +1,5 @@
 appId: com.duckduckgo.mobile.android
+androidWebViewHierarchy: devtools
 name: "ReleaseTest: General website browsing works"
 tags:
   - releaseTest
@@ -15,13 +16,13 @@ tags:
       - assertVisible:
           text: "Search"
       - tapOn:
-          id: "omnibarTextInput"
+          id: "omnibarTextInput|inputField"
       - inputText: "https://privacy-test-pages.site"
       - pressKey: Enter
       - assertVisible:
           text: ".*Privacy Test Pages.*"
       - tapOn:
-          id: "omnibarTextInput"
+          id: "omnibarTextInput|inputField"
       - eraseText
       - assertVisible:
-          text: "Search or type URL"
+          text: "Search"

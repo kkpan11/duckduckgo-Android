@@ -41,10 +41,10 @@ import com.duckduckgo.networkprotection.impl.subscription.settings.ProSettingNet
 import com.duckduckgo.networkprotection.impl.subscription.settings.ProSettingNetPViewModel.NetPEntryState.Enabled
 import com.duckduckgo.networkprotection.impl.subscription.settings.ProSettingNetPViewModel.NetPEntryState.Hidden
 import dagger.android.support.AndroidSupportInjection
-import javax.inject.Inject
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ViewScope::class)
 class ProSettingNetPView @JvmOverloads constructor(
@@ -95,14 +95,14 @@ class ProSettingNetPView @JvmOverloads constructor(
                     isVisible = true
                     isClickable = false
                     setClickListener(null)
-                    setLeadingIconResource(R.drawable.ic_vpn_grayscale_color_24)
+                    setLeadingIconResource(R.drawable.vpn_grayscale_color_24)
                     setStatus(isOn = false)
                 }
                 is Enabled -> {
                     isVisible = true
                     isClickable = true
                     setClickListener { viewModel.onNetPSettingClicked() }
-                    setLeadingIconResource(R.drawable.ic_vpn_color_24)
+                    setLeadingIconResource(R.drawable.vpn_color_24)
                     setStatus(isOn = networkProtectionEntryState.isActive)
                 }
             }

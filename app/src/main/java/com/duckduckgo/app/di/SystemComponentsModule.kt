@@ -19,6 +19,7 @@ package com.duckduckgo.app.di
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.net.ConnectivityManager
 import com.duckduckgo.app.fire.FireAnimationLoader
 import com.duckduckgo.app.fire.LottieFireAnimationLoader
 import com.duckduckgo.app.global.shortcut.AppShortcutCreator
@@ -42,6 +43,7 @@ import dagger.multibindings.IntoSet
 import kotlinx.coroutines.CoroutineScope
 
 @Module
+@ContributesTo(AppScope::class)
 object SystemComponentsModule {
 
     @SingleInstanceIn(AppScope::class)
@@ -54,11 +56,18 @@ object SystemComponentsModule {
 
     @SingleInstanceIn(AppScope::class)
     @Provides
-    fun deviceAppsListProvider(packageManager: PackageManager): DeviceAppListProvider = InstalledDeviceAppListProvider(packageManager)
+    fun connectivityManager(context: Context): ConnectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    @SingleInstanceIn(AppScope::class)
+    @Provides
+    fun deviceAppsListProvider(packageManager: PackageManager, dispatcherProvider: DispatcherProvider): DeviceAppListProvider =
+        InstalledDeviceAppListProvider(packageManager, dispatcherProvider)
 
     @Provides
     @SingleInstanceIn(AppScope::class)
-    fun deviceAppLookup(deviceAppListProvider: DeviceAppListProvider): DeviceAppLookup = InstalledDeviceAppLookup(deviceAppListProvider)
+    fun deviceAppLookup(deviceAppListProvider: DeviceAppListProvider, dispatcherProvider: DispatcherProvider): DeviceAppLookup =
+        InstalledDeviceAppLookup(deviceAppListProvider, dispatcherProvider)
 
     @Provides
     fun appIconModifier(
@@ -75,7 +84,12 @@ object SystemComponentsModule {
         dispatcherProvider: DispatcherProvider,
         @AppCoroutineScope appCoroutineScope: CoroutineScope,
     ): FireAnimationLoader {
-        return LottieFireAnimationLoader(context, settingsDataStore, dispatcherProvider, appCoroutineScope)
+        return LottieFireAnimationLoader(
+            context = context,
+            settingsDataStore = settingsDataStore,
+            dispatchers = dispatcherProvider,
+            appCoroutineScope = appCoroutineScope,
+        )
     }
 }
 

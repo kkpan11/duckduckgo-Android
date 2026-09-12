@@ -26,12 +26,15 @@ import com.duckduckgo.app.browser.favicon.FaviconManager
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Daily
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.di.scopes.ViewScope
+import com.duckduckgo.newtabpage.api.interactions.HatchInteractionsPlugin
 import com.duckduckgo.savedsites.api.SavedSitesRepository
 import com.duckduckgo.savedsites.api.models.BookmarkFolder
 import com.duckduckgo.savedsites.api.models.SavedSite
 import com.duckduckgo.savedsites.api.models.SavedSite.Bookmark
 import com.duckduckgo.savedsites.api.models.SavedSite.Favorite
+import com.duckduckgo.savedsites.api.views.FavoritesPlacement
 import com.duckduckgo.savedsites.impl.SavedSitesPixelName
 import com.duckduckgo.savedsites.impl.SavedSitesPixelName.*
 import com.duckduckgo.savedsites.impl.newtab.FavouritesNewTabSectionViewModel.Command.DeleteFavoriteConfirmation
@@ -39,20 +42,24 @@ import com.duckduckgo.savedsites.impl.newtab.FavouritesNewTabSectionViewModel.Co
 import com.duckduckgo.savedsites.impl.newtab.FavouritesNewTabSectionViewModel.Command.ShowEditSavedSiteDialog
 import com.duckduckgo.sync.api.engine.SyncEngine
 import com.duckduckgo.sync.api.engine.SyncEngine.SyncTrigger.FEATURE_READ
-import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.logcat
+import javax.inject.Inject
+import kotlin.math.abs
 
 @SuppressLint("NoLifecycleObserver") // we don't observe app lifecycle
 @ContributesViewModel(ViewScope::class)
@@ -62,6 +69,8 @@ class FavouritesNewTabSectionViewModel @Inject constructor(
     private val pixel: Pixel,
     private val faviconManager: FaviconManager,
     private val syncEngine: SyncEngine,
+    private val feature: FavouritesNewTabSectionFixFeature,
+    private val hatchInteractionsPlugins: PluginPoint<HatchInteractionsPlugin>,
 ) : ViewModel(), DefaultLifecycleObserver {
 
     data class ViewState(val favourites: List<Favorite> = emptyList())
@@ -70,23 +79,6 @@ class FavouritesNewTabSectionViewModel @Inject constructor(
         val savedSite: SavedSite,
         val bookmarkFolder: BookmarkFolder?,
     )
-
-    enum class Placement {
-        FOCUSED_STATE,
-        NEW_TAB_PAGE,
-        ;
-
-        companion object {
-            fun from(type: Int): Placement {
-                // same order as attrs-saved-sites.xml
-                return when (type) {
-                    0 -> Placement.FOCUSED_STATE
-                    1 -> Placement.NEW_TAB_PAGE
-                    else -> Placement.FOCUSED_STATE
-                }
-            }
-        }
-    }
 
     sealed class Command {
         class ShowEditSavedSiteDialog(val savedSiteChangedViewState: SavedSiteChangedViewState) : Command()
@@ -100,34 +92,50 @@ class FavouritesNewTabSectionViewModel @Inject constructor(
 
     val hiddenIds = MutableStateFlow(HiddenBookmarksIds())
 
-    private val _viewState = MutableStateFlow(ViewState())
-    val viewState = _viewState.asStateFlow()
-    private val command = Channel<Command>(1, BufferOverflow.DROP_OLDEST)
-    internal fun commands(): Flow<Command> = command.receiveAsFlow()
+    private val favouritesFlow
+        get() = savedSitesRepository.getFavorites()
+            .combine(hiddenIds) { favorites, hiddenIds ->
+                favorites.filter { it.id !in hiddenIds.favorites }
+            }
+            .flowOn(dispatchers.io())
+            .onEach { favourites -> logcat { "New Tab: Favourites $favourites" } }
+
+    private val _legacyViewState = MutableStateFlow(ViewState())
+
+    val viewState: StateFlow<ViewState> = if (feature.self().isEnabled()) {
+        favouritesFlow
+            .map { favourites -> ViewState(favourites = favourites) }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Lazily,
+                initialValue = ViewState(),
+            )
+    } else {
+        _legacyViewState
+    }
 
     override fun onResume(owner: LifecycleOwner) {
         super.onResume(owner)
-
+        if (feature.self().isEnabled()) return
         viewModelScope.launch(dispatchers.io()) {
-            savedSitesRepository.getFavorites()
-                .combine(hiddenIds) { favorites, hiddenIds ->
-                    favorites.filter { it.id !in hiddenIds.favorites }
-                }
-                .flowOn(dispatchers.io())
+            favouritesFlow
                 .onEach { favourites ->
-                    logcat { "New Tab: Favourites $favourites" }
                     withContext(dispatchers.main()) {
-                        _viewState.emit(
-                            viewState.value.copy(
-                                favourites = favourites,
-                            ),
-                        )
+                        _legacyViewState.emit(ViewState(favourites = favourites))
                     }
                 }
-                .flowOn(dispatchers.main())
                 .launchIn(viewModelScope)
         }
     }
+
+    private val command = Channel<Command>(1, BufferOverflow.DROP_OLDEST)
+    internal fun commands(): Flow<Command> = command.receiveAsFlow()
+
+    enum class SwipeDecision { HORIZONTAL, VERTICAL, CANCEL_LONG_PRESS }
+
+    private var initialTouchX = 0f
+    private var initialTouchY = 0f
+    private var longPressActivated = false
 
     fun onQuickAccessListChanged(newList: List<Favorite>) {
         viewModelScope.launch(dispatchers.io()) {
@@ -135,7 +143,11 @@ class FavouritesNewTabSectionViewModel @Inject constructor(
             if (favourites.size == newList.size) {
                 savedSitesRepository.updateWithPosition(newList.map { it })
             } else {
-                val updatedList = newList.plus(favourites.takeLast(favourites.size - newList.size))
+                val updatedList = if (favourites.size > newList.size) {
+                    newList.plus(favourites.takeLast(favourites.size - newList.size))
+                } else {
+                    newList
+                }
                 savedSitesRepository.updateWithPosition(updatedList.map { it })
             }
         }
@@ -288,15 +300,44 @@ class FavouritesNewTabSectionViewModel @Inject constructor(
         pixel.fire(EDIT_BOOKMARK_REMOVE_FAVORITE_TOGGLED)
     }
 
-    fun onFavoriteClicked(placement: Placement) {
+    fun onFavoriteClicked(placement: FavoritesPlacement) {
         pixel.fire(formatPixelWithPlacement(FAVOURITE_CLICKED, placement))
         pixel.fire(formatPixelWithPlacement(FAVOURITE_CLICKED_DAILY, placement), type = Daily())
+        hatchInteractionsPlugins.getPlugins().forEach { it.onFavoriteSelected() }
     }
 
     private fun formatPixelWithPlacement(
         pixelName: SavedSitesPixelName,
-        placement: Placement,
+        placement: FavoritesPlacement,
     ): String {
         return pixelName.pixelName + "_" + placement.name.lowercase()
     }
+
+    fun onTouchDown(x: Float, y: Float) {
+        initialTouchX = x
+        initialTouchY = y
+        longPressActivated = false
+    }
+
+    fun onTouchUp() {
+        longPressActivated = false
+    }
+
+    fun onTouchMove(x: Float, y: Float, touchSlop: Int): SwipeDecision? {
+        val dx = abs(x - initialTouchX)
+        val dy = abs(y - initialTouchY)
+
+        return when {
+            dx > dy && dx > touchSlop -> SwipeDecision.HORIZONTAL
+            dy > dx && dy > touchSlop -> SwipeDecision.VERTICAL
+            dx > touchSlop || dy > touchSlop -> SwipeDecision.CANCEL_LONG_PRESS
+            else -> null
+        }
+    }
+
+    fun onLongPressTriggered() {
+        longPressActivated = true
+    }
+
+    fun isLongPressActive(): Boolean = longPressActivated
 }

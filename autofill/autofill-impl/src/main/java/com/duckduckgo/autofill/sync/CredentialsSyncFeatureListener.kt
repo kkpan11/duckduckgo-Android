@@ -25,8 +25,9 @@ import com.duckduckgo.sync.api.engine.FeatureSyncError.COLLECTION_LIMIT_REACHED
 import com.duckduckgo.sync.api.engine.FeatureSyncError.INVALID_REQUEST
 import com.duckduckgo.sync.api.engine.SyncChangesResponse
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.INFO
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface CredentialsSyncFeatureListener {
     fun onSuccess(changes: SyncChangesResponse)
@@ -53,13 +54,13 @@ class AppCredentialsSyncFeatureListener @Inject constructor(
     }
 
     override fun onError(syncError: FeatureSyncError) {
-        Timber.d("Sync-autofill: $syncError received, current state isPaused:${credentialsSyncStore.isSyncPaused}")
+        logcat { "Sync-autofill: $syncError received, current state isPaused:${credentialsSyncStore.isSyncPaused}" }
         when (syncError) {
             COLLECTION_LIMIT_REACHED,
             INVALID_REQUEST,
             -> {
                 if (!credentialsSyncStore.isSyncPaused || credentialsSyncStore.syncPausedReason != syncError.name) {
-                    Timber.i("Sync-autofill: should trigger notification for $syncError")
+                    logcat(INFO) { "Sync-autofill: should trigger notification for $syncError" }
                     triggerNotification(syncError)
                 }
                 credentialsSyncStore.isSyncPaused = true

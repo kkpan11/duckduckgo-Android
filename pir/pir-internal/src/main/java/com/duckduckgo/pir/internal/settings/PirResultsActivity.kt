@@ -26,33 +26,40 @@ import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.viewbinding.viewBinding
 import com.duckduckgo.common.utils.DispatcherProvider
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter.ActivityParams
 import com.duckduckgo.navigation.api.getActivityParams
+import com.duckduckgo.pir.impl.store.PirEventsRepository
+import com.duckduckgo.pir.impl.store.PirRepository
 import com.duckduckgo.pir.internal.R
 import com.duckduckgo.pir.internal.databinding.ActivityPirInternalResultsBinding
+import com.duckduckgo.pir.internal.settings.PirResultsScreenParams.PirEmailResultsScreen
 import com.duckduckgo.pir.internal.settings.PirResultsScreenParams.PirEventsResultsScreen
+import com.duckduckgo.pir.internal.settings.PirResultsScreenParams.PirExtractedProfilesResultsScreen
 import com.duckduckgo.pir.internal.settings.PirResultsScreenParams.PirOptOutResultsScreen
 import com.duckduckgo.pir.internal.settings.PirResultsScreenParams.PirScanResultsScreen
-import com.duckduckgo.pir.internal.store.PirRepository
-import com.duckduckgo.pir.internal.store.PirRepository.ScanResult.ErrorResult
-import com.duckduckgo.pir.internal.store.PirRepository.ScanResult.ExtractedProfileResult
-import com.duckduckgo.pir.internal.store.PirRepository.ScanResult.NavigateResult
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(PirResultsScreenParams::class)
 class PirResultsActivity : DuckDuckGoActivity() {
     @Inject
-    lateinit var repository: PirRepository
+    lateinit var eventsRepository: PirEventsRepository
+
+    @Inject
+    lateinit var pirRepository: PirRepository
 
     @Inject
     lateinit var dispatcherProvider: DispatcherProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private val formatter = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.getDefault())
     private val binding: ActivityPirInternalResultsBinding by viewBinding()
@@ -64,9 +71,17 @@ class PirResultsActivity : DuckDuckGoActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableTransparentEdgeToEdge()
         setContentView(binding.root)
+        configureEdgeToEdgeInsets()
         setupToolbar(binding.toolbar)
         bindViews()
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.appBar)
+        edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.scanLogList)
     }
 
     private fun bindViews() {
@@ -89,12 +104,64 @@ class PirResultsActivity : DuckDuckGoActivity() {
                 showOptOutResults()
             }
 
+            is PirEmailResultsScreen -> {
+                setTitle(R.string.pirDevViewEmailResults)
+                showEmailResults()
+            }
+
+            is PirExtractedProfilesResultsScreen -> {
+                setTitle(R.string.pirDevViewExtractedProfiles)
+                showExtractedProfiles()
+            }
+
             null -> {}
         }
     }
 
+    private fun showEmailResults() {
+        eventsRepository.getAllEmailConfirmationLogFlow().flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
+            .onEach { emailEvents ->
+                emailEvents.map { result ->
+                    val stringBuilder = StringBuilder()
+                    stringBuilder.append("Time: ${formatter.format(Date(result.eventTimeInMillis))}\n")
+                    stringBuilder.append("EVENT: ${result.eventType}\n")
+                    stringBuilder.append("RESULT: ${result.value}\n")
+                    stringBuilder.toString()
+                }.also {
+                    render(it)
+                }
+            }
+            .launchIn(lifecycleScope)
+    }
+
+    private fun showExtractedProfiles() {
+        pirRepository.getAllExtractedProfilesFlow()
+            .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
+            .onEach { extractedProfiles ->
+                extractedProfiles.map { profile ->
+                    val stringBuilder = StringBuilder()
+                    stringBuilder.append("ID: ${profile.dbId}\n")
+                    stringBuilder.append("PROFILE QUERY ID: ${profile.profileQueryId}\n")
+                    stringBuilder.append("BROKER: ${profile.brokerName}\n")
+                    stringBuilder.append("NAME: ${profile.name}\n")
+                    stringBuilder.append("FULL NAME: ${profile.fullName}\n")
+                    stringBuilder.append("AGE: ${profile.age}\n")
+                    stringBuilder.append("ADDRESSES: ${profile.addresses.joinToString(" | ") { "${it.city}, ${it.state} ${it.extras}" }}\n")
+                    stringBuilder.append("RELATIVES: ${profile.relatives.joinToString()}\n")
+                    stringBuilder.append("PROFILE URL: ${profile.profileUrl}\n")
+                    stringBuilder.append("IDENTIFIER: ${profile.identifier}\n")
+                    stringBuilder.append("PROFILE EXTRAS: ${profile.extras}\n")
+                    stringBuilder.append("DEPRECATED: ${profile.deprecated}\n")
+                    stringBuilder.toString()
+                }.also {
+                    render(it)
+                }
+            }
+            .launchIn(lifecycleScope)
+    }
+
     private fun showOptOutResults() {
-        repository.getAllOptOutActionLogFlow()
+        eventsRepository.getAllOptOutActionLogFlow()
             .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
             .onEach { optOutEvents ->
                 optOutEvents.map { result ->
@@ -114,28 +181,15 @@ class PirResultsActivity : DuckDuckGoActivity() {
     }
 
     private fun showScanResults() {
-        repository.getAllScanResultsFlow()
+        eventsRepository.getScannedBrokersFlow()
             .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
             .onEach { scanResults ->
                 scanResults.map {
                     val stringBuilder = StringBuilder()
-                    stringBuilder.append("BROKER NAME: ${it.brokerName}\nACTION EXECUTED: ${it.actionType}\n")
-                    when (it) {
-                        is NavigateResult -> {
-                            stringBuilder.append("URL TO NAVIGATE: ${it.url}\n")
-                        }
-
-                        is ExtractedProfileResult -> {
-                            val records = it.extractResults.filter {
-                                it.result
-                            }.size
-                            stringBuilder.append("VALID RECORDS FOUND COUNT: $records\n")
-                        }
-
-                        is ErrorResult -> {
-                            stringBuilder.append("*ERROR ENCOUNTERED: ${it.message}\n")
-                        }
-                    }
+                    stringBuilder.append("BROKER NAME: ${it.brokerName}\n")
+                    stringBuilder.append("PROFILE ID: ${it.profileQueryId}\n")
+                    stringBuilder.append("COMPLETED WITH NO ERROR: ${it.isSuccess}\n")
+                    stringBuilder.append("DURATION: ${it.endTimeInMillis - it.startTimeInMillis}\n")
                     stringBuilder.toString()
                 }.also {
                     render(it)
@@ -145,7 +199,7 @@ class PirResultsActivity : DuckDuckGoActivity() {
     }
 
     private fun showAllEvents() {
-        repository.getAllEventLogsFlow()
+        eventsRepository.getAllEventLogsFlow()
             .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
             .onEach { scanEvents ->
                 scanEvents.map { result ->
@@ -167,4 +221,6 @@ sealed class PirResultsScreenParams : ActivityParams {
     data object PirEventsResultsScreen : PirResultsScreenParams()
     data object PirScanResultsScreen : PirResultsScreenParams()
     data object PirOptOutResultsScreen : PirResultsScreenParams()
+    data object PirEmailResultsScreen : PirResultsScreenParams()
+    data object PirExtractedProfilesResultsScreen : PirResultsScreenParams()
 }

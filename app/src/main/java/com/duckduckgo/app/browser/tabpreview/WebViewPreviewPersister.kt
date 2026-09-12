@@ -20,10 +20,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import com.duckduckgo.app.global.file.FileDeleter
 import com.duckduckgo.common.utils.DispatcherProvider
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.INFO
+import logcat.logcat
 import java.io.File
 import java.io.FileOutputStream
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 interface WebViewPreviewPersister {
 
@@ -62,7 +63,7 @@ class FileBasedWebViewPreviewPersister(
             val previewFile = prepareDestinationFile(tabId)
             writeBytesToFile(previewFile, bitmap)
 
-            Timber.d("Wrote bitmap preview to ${previewFile.absolutePath}")
+            logcat { "Wrote bitmap preview to ${previewFile.absolutePath}" }
             return@withContext previewFile.name
         }
     }
@@ -74,15 +75,15 @@ class FileBasedWebViewPreviewPersister(
         val directoryToDelete = directoryForTabPreviews(tabId)
 
         if (currentPreviewImage == null) {
-            Timber.i("Deleting all tab previews for $tabId")
+            logcat(INFO) { "Deleting all tab previews for $tabId" }
             fileDeleter.deleteDirectory(directoryToDelete)
         } else {
-            Timber.i("Keeping tab preview $currentPreviewImage but deleting the rest for $tabId")
+            logcat(INFO) { "Keeping tab preview $currentPreviewImage but deleting the rest for $tabId" }
             val exclusionList = listOf(currentPreviewImage)
             fileDeleter.deleteContents(directoryToDelete, exclusionList)
         }
 
-        Timber.i("Does tab preview directory still exist? ${directoryToDelete.exists()}")
+        logcat(INFO) { "Does tab preview directory still exist? ${directoryToDelete.exists()}" }
     }
 
     override fun fullPathForFile(

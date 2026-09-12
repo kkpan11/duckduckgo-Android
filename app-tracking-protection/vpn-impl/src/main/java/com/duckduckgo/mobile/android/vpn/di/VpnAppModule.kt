@@ -18,7 +18,6 @@ package com.duckduckgo.mobile.android.vpn.di
 
 import android.content.Context
 import android.content.res.Resources
-import android.net.ConnectivityManager
 import androidx.room.Room
 import com.duckduckgo.app.di.AppCoroutineScope
 import com.duckduckgo.common.utils.DispatcherProvider
@@ -32,21 +31,14 @@ import com.squareup.anvil.annotations.ContributesTo
 import dagger.Module
 import dagger.Provides
 import dagger.SingleInstanceIn
-import javax.inject.Provider
-import javax.inject.Qualifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.sync.Mutex
+import javax.inject.Provider
+import javax.inject.Qualifier
 
 @Module
 @ContributesTo(AppScope::class)
 object VpnAppModule {
-
-    @SingleInstanceIn(AppScope::class)
-    @Provides
-    fun providesConnectivityManager(context: Context): ConnectivityManager {
-        return context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    }
-
     @Provides
     fun provideVpnDatabaseCallbackProvider(
         context: Context,

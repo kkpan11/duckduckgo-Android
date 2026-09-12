@@ -1,4 +1,5 @@
 appId: com.duckduckgo.mobile.android
+androidWebViewHierarchy: devtools
 tags:
     - securityTest
 ---
@@ -9,13 +10,15 @@ tags:
                 clearState: true
             - runFlow: ../shared/skip_all_onboarding.yaml
             # Test 1
-            - doubleTapOn:
-                id: "omnibarTextInput"
+            - tapOn:
+                id: "omnibarTextInput|inputField"
             - inputText: "https://privacy-test-pages.site/security/address-bar-spoofing/spoof-form-action.html"
             - pressKey: Enter
 
             - tapOn: "run"
             # Should do nothing - the navigation should be prevented.
+            - tapOn:
+                id: "omnibarTextInput|inputField"
             - copyTextFrom:
-                id: "omnibarTextInput"
+                id: "omnibarTextInput|inputField"
             - assertTrue: ${maestro.copiedText == "https://privacy-test-pages.site/security/address-bar-spoofing/spoof-form-action.html"}

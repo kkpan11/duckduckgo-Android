@@ -17,8 +17,9 @@
 package com.duckduckgo.remote.messaging.impl.models
 
 import com.duckduckgo.remote.messaging.api.MatchingAttribute
+import logcat.LogPriority.INFO
+import logcat.logcat
 import java.util.*
-import timber.log.Timber
 
 data class Locale(
     override val value: List<String> = emptyList(),
@@ -319,7 +320,7 @@ fun StringMatchingAttribute.matches(value: String): Boolean? {
 }
 
 fun RangeStringMatchingAttribute.matches(value: String): Boolean? {
-    Timber.i("RMF: device value: $value")
+    logcat(INFO) { "RMF: device value: $value" }
     if (!value.matches(Regex("[0-9]+(\\.[0-9]+)*"))) return false
 
     val versionAsIntList = value.split(".").filter { it.isNotEmpty() }.map { it.toInt() }

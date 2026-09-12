@@ -28,12 +28,12 @@ import com.duckduckgo.mobile.android.app.tracking.AppTrackerDetector
 import com.duckduckgo.networkprotection.impl.pixels.NetworkProtectionPixels
 import dagger.Lazy
 import dagger.SingleInstanceIn
+import logcat.LogPriority.ERROR
+import logcat.asLog
+import logcat.logcat
 import java.net.InetSocketAddress
 import javax.inject.Inject
 import kotlin.system.exitProcess
-import logcat.LogPriority
-import logcat.asLog
-import logcat.logcat
 
 @SingleInstanceIn(VpnScope::class)
 class GoBackend @Inject constructor(
@@ -48,7 +48,7 @@ class GoBackend @Inject constructor(
         } catch (ignored: Throwable) {
             pixels.get().reportWireguardLibraryLoadFailed()
             Thread.sleep(100)
-            logcat(LogPriority.ERROR) { "Error loading wireguard-go library: ${ignored.asLog()}" }
+            logcat(ERROR) { "Error loading wireguard-go library: ${ignored.asLog()}" }
             exitProcess(1)
         }
     }
@@ -97,6 +97,7 @@ class GoBackend @Inject constructor(
             """.trimIndent()
         }
 
+        @Suppress("ktlint:standard:comment-wrapping")
         if (protocol != 6 /* TCP */ && protocol != 17 /* UDP */) return true
 
         @Suppress("NAME_SHADOWING")

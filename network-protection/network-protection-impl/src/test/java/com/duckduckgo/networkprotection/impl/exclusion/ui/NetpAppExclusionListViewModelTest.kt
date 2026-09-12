@@ -17,6 +17,7 @@
 package com.duckduckgo.networkprotection.impl.exclusion.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import app.cash.turbine.test
@@ -49,7 +50,7 @@ import com.duckduckgo.networkprotection.impl.settings.FakeNetPSettingsLocalConfi
 import com.duckduckgo.networkprotection.store.NetPManualExclusionListRepository
 import com.duckduckgo.networkprotection.store.db.NetPManuallyExcludedApp
 import com.duckduckgo.networkprotection.store.db.VpnIncompatibleApp
-import com.duckduckgo.subscriptions.api.PrivacyProUnifiedFeedback
+import com.duckduckgo.subscriptions.api.SubscriptionUnifiedFeedback
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -87,7 +88,10 @@ class NetpAppExclusionListViewModelTest {
     private lateinit var systemAppsExclusionRepository: SystemAppsExclusionRepository
 
     @Mock
-    private lateinit var privacyProUnifiedFeedback: PrivacyProUnifiedFeedback
+    private lateinit var subscriptionUnifiedFeedback: SubscriptionUnifiedFeedback
+
+    @Mock
+    private lateinit var context: Context
 
     private val autoExcludeAppsRepository = FakeAutoExcludeAppsRepository()
     private val localConfig = FakeNetPSettingsLocalConfigFactory.create()
@@ -113,10 +117,11 @@ class NetpAppExclusionListViewModelTest {
             systemAppOverridesProvider,
             networkProtectionPixels,
             systemAppsExclusionRepository,
-            privacyProUnifiedFeedback,
+            subscriptionUnifiedFeedback,
             localConfig,
             autoExcludeAppsRepository,
             autoExcludePrompt,
+            context,
         )
 
         testee.initialize()
@@ -298,7 +303,7 @@ class NetpAppExclusionListViewModelTest {
 
     @Test
     fun whenOnAppProtectionDisabledAndReportThenManuallyExcludeAndShowIssueReporting() = runTest {
-        whenever(privacyProUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(false)
+        whenever(subscriptionUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(false)
         testee.onAppProtectionDisabled("App Name", "com.example.app1", true)
 
         verify(manualExclusionListRepository).manuallyExcludeApp("com.example.app1")
@@ -322,7 +327,7 @@ class NetpAppExclusionListViewModelTest {
 
     @Test
     fun whenOnAppProtectionDisabledAndReportWithUnifiedFeedbackThenManuallyExcludeAndShowUnifiedFeedback() = runTest {
-        whenever(privacyProUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(true)
+        whenever(subscriptionUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(true)
         testee.onAppProtectionDisabled("App Name", "com.example.app1", true)
 
         verify(manualExclusionListRepository).manuallyExcludeApp("com.example.app1")
@@ -342,7 +347,7 @@ class NetpAppExclusionListViewModelTest {
 
     @Test
     fun whenLaunchFeedbackThenShowIssueReporting() = runTest {
-        whenever(privacyProUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(false)
+        whenever(subscriptionUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(false)
         testee.launchFeedback()
 
         verify(networkProtectionPixels).reportExclusionListLaunchBreakageReport()
@@ -364,7 +369,7 @@ class NetpAppExclusionListViewModelTest {
 
     @Test
     fun whenLaunchFeedbackWithUnifiedFeedbackThenShowUnifiedFeedback() = runTest {
-        whenever(privacyProUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(true)
+        whenever(subscriptionUnifiedFeedback.shouldUseUnifiedFeedback(any())).thenReturn(true)
         testee.launchFeedback()
 
         verify(networkProtectionPixels).reportExclusionListLaunchBreakageReport()

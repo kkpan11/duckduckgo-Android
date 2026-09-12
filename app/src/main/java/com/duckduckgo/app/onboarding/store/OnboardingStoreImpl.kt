@@ -21,23 +21,31 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.cta.ui.DaxBubbleCta.DaxDialogIntroOption
+import com.duckduckgo.app.onboarding.ui.page.configdriven.DownloadReasonSelection
+import com.duckduckgo.app.onboardingbranddesignupdate.OnboardingBrandDesignUpdateToggles
+import com.duckduckgo.data.store.api.SharedPreferencesProvider
+import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.mobile.android.R.drawable
+import dagger.SingleInstanceIn
 import java.util.Locale
 import javax.inject.Inject
 
+@SingleInstanceIn(scope = AppScope::class)
 class OnboardingStoreImpl @Inject constructor(
     private val context: Context,
+    private val onboardingBrandDesignUpdateToggles: OnboardingBrandDesignUpdateToggles,
+    private val sharedPreferencesProvider: SharedPreferencesProvider,
 ) : OnboardingStore {
 
-    private val preferences: SharedPreferences by lazy { context.getSharedPreferences(FILENAME, Context.MODE_PRIVATE) }
+    private val preferences: SharedPreferences by lazy { sharedPreferencesProvider.getSharedPreferences(FILENAME) }
 
     override var onboardingDialogJourney: String?
         get() = preferences.getString(ONBOARDING_JOURNEY, null)
         set(dialogJourney) = preferences.edit { putString(ONBOARDING_JOURNEY, dialogJourney) }
 
-    override var visitSiteCtaDisplayCount: Int
-        get() = preferences.getInt(VISIT_SITE_CTA_DISPLAY_COUNT, 0)
-        set(count) = preferences.edit { putInt(VISIT_SITE_CTA_DISPLAY_COUNT, count) }
+    override var linearPlanWidgetPromptShown: Boolean
+        get() = preferences.getBoolean(KEY_LINEAR_PLAN_WIDGET_PROMPT_SHOWN, false)
+        set(shown) = preferences.edit { putBoolean(KEY_LINEAR_PLAN_WIDGET_PROMPT_SHOWN, shown) }
 
     override fun getSearchOptions(): List<DaxDialogIntroOption> {
         val country = Locale.getDefault().country
@@ -45,10 +53,18 @@ class OnboardingStoreImpl @Inject constructor(
 
         return listOf(
             DaxDialogIntroOption(
-                optionText = if (language == "en") {
-                    context.getString(R.string.onboardingSearchDaxDialogOption1English)
+                optionText = if (onboardingBrandDesignUpdateToggles.brandDesignUpdate().isEnabled()) {
+                    if (language == "en") {
+                        context.getString(R.string.onboardingSearchDaxDialogOption1EnglishQuoted)
+                    } else {
+                        context.getString(R.string.onboardingSearchDaxDialogOption1Quoted)
+                    }
                 } else {
-                    context.getString(R.string.onboardingSearchDaxDialogOption1)
+                    if (language == "en") {
+                        context.getString(R.string.onboardingSearchDaxDialogOption1English)
+                    } else {
+                        context.getString(R.string.onboardingSearchDaxDialogOption1)
+                    }
                 },
                 iconRes = drawable.ic_find_search_16,
                 link = if (language == "en") "how to say duck in spanish" else context.getString(R.string.onboardingSearchQueryOption1),
@@ -67,18 +83,29 @@ class OnboardingStoreImpl @Inject constructor(
                 },
             ),
             DaxDialogIntroOption(
-                optionText = context.getString(R.string.onboardingSearchDaxDialogOption3),
-                iconRes = drawable.ic_find_search_16,
-                link = context.getString(R.string.onboardingSearchDaxDialogOption3),
-            ),
-            DaxDialogIntroOption(
                 optionText = context.getString(R.string.onboardingSearchDaxDialogOption4),
                 iconRes = drawable.ic_wand_16,
-                link = if (country == "US") {
-                    context.getString(R.string.onboardingSearchQueryOption4US)
-                } else {
-                    context.getString(R.string.onboardingSearchQueryOption4)
-                },
+                link = "!image ${context.getString(R.string.onboardingSearchQueryOption4)}",
+            ),
+        )
+    }
+
+    override fun getChatSuggestions(): List<DaxDialogIntroOption> {
+        return listOf(
+            DaxDialogIntroOption(
+                optionText = context.getString(R.string.preOnboardingInputModeDemoChatSuggestion1),
+                iconRes = drawable.ic_ai_chat_16,
+                link = context.getString(R.string.preOnboardingInputModeDemoChatSuggestion1),
+            ),
+            DaxDialogIntroOption(
+                optionText = context.getString(R.string.preOnboardingInputModeDemoChatSuggestion2),
+                iconRes = drawable.ic_ai_chat_16,
+                link = context.getString(R.string.preOnboardingInputModeDemoChatSuggestion2),
+            ),
+            DaxDialogIntroOption(
+                optionText = context.getString(R.string.preOnboardingInputModeDemoChatSuggestion3),
+                iconRes = drawable.ic_wand_16,
+                link = context.getString(R.string.preOnboardingInputModeDemoChatSuggestion3Prompt),
             ),
         )
     }
@@ -98,7 +125,7 @@ class OnboardingStoreImpl @Inject constructor(
 
             "GB" -> {
                 site1 = "skysports.com "
-                site2 = "bbc.co.uk"
+                site2 = "uk.yahoo.com"
                 site3 = "ebay.com"
                 site4Query = "britannica.com/animal/duck"
             }
@@ -140,7 +167,7 @@ class OnboardingStoreImpl @Inject constructor(
 
             "IE" -> {
                 site1 = "skysports.com"
-                site2 = "bbc.co.uk "
+                site2 = "uk.yahoo.com"
                 site3 = "ebay.com"
                 site4Query = "britannica.com/animal/duck"
             }
@@ -176,48 +203,55 @@ class OnboardingStoreImpl @Inject constructor(
         )
     }
 
-    override fun getExperimentSearchOptions(): List<DaxDialogIntroOption> {
-        val country = Locale.getDefault().country
-        val language = Locale.getDefault().language
-
-        return listOf(
-            DaxDialogIntroOption(
-                optionText = if (language == "en") {
-                    context.getString(R.string.onboardingSearchDaxDialogOption1English)
-                } else {
-                    context.getString(R.string.onboardingSearchDaxDialogOption1)
-                },
-                iconRes = drawable.ic_find_search_16,
-                link = if (language == "en") "how to say duck in spanish" else context.getString(R.string.onboardingSearchQueryOption1),
-            ),
-            DaxDialogIntroOption(
-                optionText = if (country == "US") {
-                    context.getString(R.string.onboardingSearchDaxDialogOption2US)
-                } else {
-                    context.getString(R.string.onboardingSearchDaxDialogOption2)
-                },
-                iconRes = drawable.ic_find_search_16,
-                link = if (country == "US") {
-                    context.getString(R.string.onboardingSearchDaxDialogOption2US)
-                } else {
-                    context.getString(R.string.onboardingSearchDaxDialogOption2)
-                },
-            ),
-            DaxDialogIntroOption(
-                optionText = context.getString(R.string.onboardingSearchDaxDialogOption4),
-                iconRes = drawable.ic_wand_16,
-                link = "!image ${context.getString(R.string.highlightsOnboardingSearchQueryOption4)}",
-            ),
-        )
+    override fun storeInputScreenSelection(selected: Boolean) {
+        preferences.edit { putBoolean(KEY_INPUT_SCREEN_SELECTION, selected) }
     }
 
-    override fun clearVisitSiteCtaDisplayCount() {
-        preferences.edit { remove(VISIT_SITE_CTA_DISPLAY_COUNT) }
+    override fun getInputScreenSelection(): Boolean? {
+        return if (preferences.contains(KEY_INPUT_SCREEN_SELECTION)) {
+            preferences.getBoolean(KEY_INPUT_SCREEN_SELECTION, false)
+        } else {
+            null
+        }
+    }
+
+    override fun isInputScreenSelectionOverriddenByUser(): Boolean {
+        return preferences.getBoolean(KEY_INPUT_SCREEN_SELECTION_OVERRIDDEN_BY_USER, false)
+    }
+
+    override fun setInputScreenSelectionOverriddenByUser() {
+        preferences.edit { putBoolean(KEY_INPUT_SCREEN_SELECTION_OVERRIDDEN_BY_USER, true) }
+    }
+
+    override fun setDuckAiOnboardingFlow() {
+        preferences.edit { putBoolean(KEY_DUCK_AI_ONBOARDING_FLOW, true) }
+    }
+
+    override fun isDuckAiOnboardingFlow(): Boolean {
+        return preferences.getBoolean(KEY_DUCK_AI_ONBOARDING_FLOW, false)
+    }
+
+    override fun setDownloadReason(reason: DownloadReasonSelection?) {
+        preferences.edit { putString(KEY_DOWNLOAD_REASON, reason?.name) }
+    }
+
+    override fun getDownloadReason(): DownloadReasonSelection? {
+        val stored = preferences.getString(KEY_DOWNLOAD_REASON, null) ?: return null
+        return DownloadReasonSelection.entries.firstOrNull { it.name == stored }
+    }
+
+    override fun getSegmentedPathWithAiInput(): DownloadReasonSelection? {
+        if (getInputScreenSelection() != true) return null
+        return getDownloadReason()?.takeIf { it == DownloadReasonSelection.SEARCH || it == DownloadReasonSelection.AI_CHAT }
     }
 
     companion object {
         const val FILENAME = "com.duckduckgo.app.onboarding.settings"
         const val ONBOARDING_JOURNEY = "onboardingJourney"
-        const val VISIT_SITE_CTA_DISPLAY_COUNT = "visitSiteCtaDisplayCount"
+        private const val KEY_INPUT_SCREEN_SELECTION = "inputScreenSelection"
+        private const val KEY_INPUT_SCREEN_SELECTION_OVERRIDDEN_BY_USER = "inputScreenSelectionOverriddenByUser"
+        private const val KEY_DUCK_AI_ONBOARDING_FLOW = "duckAiOnboardingFlow"
+        private const val KEY_LINEAR_PLAN_WIDGET_PROMPT_SHOWN = "linearPlanWidgetPromptShown"
+        private const val KEY_DOWNLOAD_REASON = "downloadReason"
     }
 }

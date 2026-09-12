@@ -53,7 +53,11 @@ class FakeMessageHandlerPlugin : MessageHandlerPlugin {
 
 class FakeSettingsRepository : AutoconsentSettingsRepository {
     override var userSetting: Boolean = false
+    override var clickAcceptEnabled: Boolean = false
     override var firstPopupHandled: Boolean = false
+    override var optInPromptShownCount: Int = 0
+    override var optInPromptFirstShownAt: Long = 0L
+    override var optInPromptChoiceMade: Boolean = false
     override fun invalidateCache() {}
 }
 

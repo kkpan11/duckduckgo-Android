@@ -22,19 +22,26 @@ import com.duckduckgo.common.utils.plugins.ActivePlugin
 
 /**
  * This class is used to provide one of the two different version of NewTabPage
- * Legacy -> What existed before https://app.asana.com/0/1174433894299346/1207064372575037
- * New -> Implementation of https://app.asana.com/0/1174433894299346/1207064372575037
+ * New Tab Page -> What existed before https://app.asana.com/0/1174433894299346/1207064372575037
+ * Configurable -> Implementation of https://app.asana.com/0/1174433894299346/1207064372575037
  */
 interface NewTabPagePlugin : ActivePlugin {
 
     /**
      * This method returns a [View] that will be used as the NewTabPage content
+     * @param context The context to create the view with
+     * @param showLogo Whether to show the logo in the new tab page
+     * @param onHasContent Optional callback to notify when the view has content. View assumes it has content while loading data.
      * @return [View]
      */
-    fun getView(context: Context): View
+    fun getView(
+        context: Context,
+        showLogo: Boolean = true,
+        onHasContent: ((Boolean) -> Unit)? = null,
+    ): View
 
     companion object {
-        const val PRIORITY_LEGACY_NTP = 0
-        const val PRIORITY_NTP = 100
+        const val PRIORITY_NTP = 0
+        const val PRIORITY_CONFIGURABLE_NTP = 100
     }
 }

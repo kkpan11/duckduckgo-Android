@@ -21,7 +21,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import androidx.core.app.NotificationManagerCompat
+import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -29,18 +29,20 @@ import com.duckduckgo.anvil.annotations.ContributeToActivityStarter
 import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.duckduckgo.navigation.api.GlobalActivityStarter.ActivityParams
+import com.duckduckgo.pir.impl.notifications.PirNotificationManager
+import com.duckduckgo.pir.impl.optout.PirForegroundOptOutService
+import com.duckduckgo.pir.impl.optout.PirForegroundOptOutService.Companion.EXTRA_BROKER_TO_OPT_OUT
+import com.duckduckgo.pir.impl.store.PirEventsRepository
+import com.duckduckgo.pir.impl.store.PirRepository
 import com.duckduckgo.pir.internal.databinding.ActivityPirInternalOptoutBinding
-import com.duckduckgo.pir.internal.optout.PirForegroundOptOutService
-import com.duckduckgo.pir.internal.optout.PirForegroundOptOutService.Companion.EXTRA_BROKER_TO_OPT_OUT
-import com.duckduckgo.pir.internal.settings.PirDevSettingsActivity.Companion.NOTIF_ID_STATUS_COMPLETE
-import com.duckduckgo.pir.internal.store.PirRepository
-import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(PirDevOptOutScreenNoParams::class)
@@ -49,10 +51,16 @@ class PirDevOptOutActivity : DuckDuckGoActivity() {
     lateinit var globalActivityStarter: GlobalActivityStarter
 
     @Inject
-    lateinit var notificationManagerCompat: NotificationManagerCompat
+    lateinit var pirNotificationManager: PirNotificationManager
+
+    @Inject
+    lateinit var eventsRepository: PirEventsRepository
 
     @Inject
     lateinit var repository: PirRepository
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
 
     private lateinit var optOutAdapter: ArrayAdapter<String>
     private lateinit var dropDownAdapter: ArrayAdapter<String>
@@ -62,10 +70,18 @@ class PirDevOptOutActivity : DuckDuckGoActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableTransparentEdgeToEdge()
         setContentView(binding.root)
+        configureEdgeToEdgeInsets()
         setupToolbar(binding.toolbar)
         setupViews()
         bindViews()
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.appBar)
+        edgeToEdgeHandler.applyScrollableNavigationBarInsets(binding.optOutList)
     }
 
     private fun setupViews() {
@@ -74,7 +90,7 @@ class PirDevOptOutActivity : DuckDuckGoActivity() {
         binding.optOutList.adapter = optOutAdapter
         binding.optOut.setOnClickListener {
             if (selectedBroker != null) {
-                notificationManagerCompat.cancel(NOTIF_ID_STATUS_COMPLETE)
+                pirNotificationManager.cancelNotifications()
                 Intent(this, PirForegroundOptOutService::class.java).apply {
                     putExtra(EXTRA_BROKER_TO_OPT_OUT, selectedBroker)
                 }.also {
@@ -84,11 +100,11 @@ class PirDevOptOutActivity : DuckDuckGoActivity() {
         }
 
         binding.optOutDebug.setOnClickListener {
-            notificationManagerCompat.cancel(NOTIF_ID_STATUS_COMPLETE)
+            pirNotificationManager.cancelNotifications()
             if (selectedBroker != null) {
                 globalActivityStarter.start(
                     this,
-                    PirDebugWebViewResultsScreenParams(listOf(selectedBroker!!)),
+                    PirDevWebViewScreenParams.PirDevOptOutWebViewScreenParams(listOf(selectedBroker!!)),
                 )
             }
         }
@@ -96,9 +112,10 @@ class PirDevOptOutActivity : DuckDuckGoActivity() {
         binding.debugForceKill.setOnClickListener {
             stopService(Intent(this, PirForegroundOptOutService::class.java))
             lifecycleScope.launch {
-                repository.deleteAllOptOutData()
+                eventsRepository.deleteAllOptOutData()
+                eventsRepository.deleteAllEmailConfirmationsLogs()
             }
-            notificationManagerCompat.cancel(NOTIF_ID_STATUS_COMPLETE)
+            pirNotificationManager.cancelNotifications()
         }
 
         binding.viewResults.setOnClickListener {
@@ -124,13 +141,16 @@ class PirDevOptOutActivity : DuckDuckGoActivity() {
 
     private fun bindViews() {
         lifecycleScope.launch {
+            binding.manualConfigWarning.isVisible = repository.hasBrokerConfigBeenManuallyUpdated()
+
             repository.getBrokersForOptOut(formOptOutOnly = true).also {
                 brokerOptions.addAll(it)
                 dropDownAdapter.clear()
                 dropDownAdapter.addAll(brokerOptions)
             }
         }
-        repository.getAllSuccessfullySubmittedOptOutFlow()
+
+        eventsRepository.getAllSuccessfullySubmittedOptOutFlow()
             .flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)
             .onEach { optOuts ->
                 optOutAdapter.clear()

@@ -24,14 +24,15 @@ import com.android.billingclient.api.BillingClient.ProductType
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.Purchase.PurchaseState
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryProductDetailsParams.Product
-import com.android.billingclient.api.QueryPurchaseHistoryParams
+import com.android.billingclient.api.QueryPurchasesParams
 import com.android.billingclient.api.queryProductDetails
-import com.android.billingclient.api.queryPurchaseHistory
+import com.android.billingclient.api.queryPurchasesAsync
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.subscriptions.impl.billing.BillingError.BILLING_CRASH_ERROR
@@ -39,14 +40,15 @@ import com.duckduckgo.subscriptions.impl.billing.BillingInitResult.Failure
 import com.duckduckgo.subscriptions.impl.billing.BillingInitResult.Success
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.ERROR
+import logcat.LogPriority.WARN
+import logcat.asLog
+import logcat.logcat
 import java.lang.IllegalArgumentException
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import kotlinx.coroutines.withContext
-import logcat.LogPriority.WARN
-import logcat.asLog
-import logcat.logcat
 
 @ContributesBinding(AppScope::class)
 @SingleInstanceIn(AppScope::class)
@@ -66,7 +68,11 @@ class RealBillingClientAdapter @Inject constructor(
     ): BillingInitResult {
         reset()
         billingClient = BillingClient.newBuilder(context)
-            .enablePendingPurchases()
+            .enablePendingPurchases(
+                PendingPurchasesParams.newBuilder()
+                    .enableOneTimeProducts()
+                    .build(),
+            )
             .setListener { billingResult, purchases ->
                 val purchasesUpdateResult = mapToPurchasesUpdateResult(billingResult, purchases)
                 purchasesListener.invoke(purchasesUpdateResult)
@@ -130,19 +136,40 @@ class RealBillingClientAdapter @Inject constructor(
         }
     }
 
-    override suspend fun getSubscriptionsPurchaseHistory(): SubscriptionsPurchaseHistoryResult {
+    override suspend fun queryPurchases(): QueryPurchasesResult {
         val client = billingClient
-        if (client == null || !client.isReady) return SubscriptionsPurchaseHistoryResult.Failure
+        if (client == null || !client.isReady) {
+            return QueryPurchasesResult.Failure(
+                billingError = BillingError.SERVICE_DISCONNECTED,
+                debugMessage = "BillingClient is not ready",
+            )
+        }
 
-        val queryParams = QueryPurchaseHistoryParams.newBuilder()
-            .setProductType(ProductType.SUBS)
-            .build()
+        return try {
+            val queryParams = QueryPurchasesParams.newBuilder()
+                .setProductType(ProductType.SUBS)
+                .build()
 
-        val (billingResult, purchaseHistory) = client.queryPurchaseHistory(queryParams)
+            val (billingResult, purchases) = client.queryPurchasesAsync(queryParams)
 
-        return when (billingResult.responseCode) {
-            BillingResponseCode.OK -> SubscriptionsPurchaseHistoryResult.Success(history = purchaseHistory.orEmpty())
-            else -> SubscriptionsPurchaseHistoryResult.Failure
+            when (billingResult.responseCode) {
+                BillingResponseCode.OK -> {
+                    QueryPurchasesResult.Success(purchases = purchases)
+                }
+                else -> {
+                    val billingError = billingResult.responseCode.toBillingError()
+                    QueryPurchasesResult.Failure(
+                        billingError = billingError,
+                        debugMessage = billingResult.debugMessage,
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            logcat(WARN) { "Error querying purchases: ${e.asLog()}" }
+            QueryPurchasesResult.Failure(
+                billingError = BILLING_CRASH_ERROR,
+                debugMessage = e.message,
+            )
         }
     }
 
@@ -153,7 +180,7 @@ class RealBillingClientAdapter @Inject constructor(
         externalId: String,
     ): LaunchBillingFlowResult {
         val client = billingClient
-        if (client == null || !client.isReady) return LaunchBillingFlowResult.Failure
+        if (client == null || !client.isReady) return LaunchBillingFlowResult.Failure(error = BillingError.SERVICE_DISCONNECTED)
 
         val billingFlowParams = BillingFlowParams.newBuilder()
             .setProductDetailsParamsList(
@@ -174,7 +201,52 @@ class RealBillingClientAdapter @Inject constructor(
 
         return when (result.responseCode) {
             BillingResponseCode.OK -> LaunchBillingFlowResult.Success
-            else -> LaunchBillingFlowResult.Failure
+            else -> LaunchBillingFlowResult.Failure(result.responseCode.toBillingError())
+        }
+    }
+
+    override suspend fun launchSubscriptionUpdate(
+        activity: Activity,
+        productDetails: ProductDetails,
+        offerToken: String,
+        externalId: String,
+        oldPurchaseToken: String,
+        replacementMode: SubscriptionReplacementMode,
+    ): LaunchBillingFlowResult {
+        val client = billingClient
+        if (client == null || !client.isReady) return LaunchBillingFlowResult.Failure(BillingError.SERVICE_DISCONNECTED)
+
+        val subscriptionUpdateParams = BillingFlowParams.SubscriptionUpdateParams.newBuilder()
+            .setOldPurchaseToken(oldPurchaseToken)
+            .setSubscriptionReplacementMode(replacementMode.value)
+            .build()
+
+        val billingFlowParams = BillingFlowParams.newBuilder()
+            .setProductDetailsParamsList(
+                listOf(
+                    BillingFlowParams.ProductDetailsParams.newBuilder()
+                        .setProductDetails(productDetails)
+                        .setOfferToken(offerToken)
+                        .build(),
+                ),
+            )
+            .setObfuscatedAccountId(externalId)
+            .setObfuscatedProfileId(externalId)
+            .setSubscriptionUpdateParams(subscriptionUpdateParams)
+            .build()
+
+        val result = withContext(coroutineDispatchers.main()) {
+            client.launchBillingFlow(activity, billingFlowParams)
+        }
+
+        return when (result.responseCode) {
+            BillingResponseCode.OK -> LaunchBillingFlowResult.Success
+            else -> {
+                logcat(priority = ERROR) {
+                    "Failed to launch subscription update flow: ${result.responseCode} ${result.debugMessage}"
+                }
+                LaunchBillingFlowResult.Failure(error = result.responseCode.toBillingError())
+            }
         }
     }
 

@@ -55,10 +55,17 @@ class BottomAppBarBehavior<V : View>(
         R.id.webViewFullScreenContainer,
         R.id.browserLayout,
         R.id.includeNewBrowserTab,
+        R.id.inputModeBottomRoot,
+        R.id.inputModeTopRoot,
+        R.id.inputModeWidgetNavLayout,
     )
 
     @SuppressLint("RestrictedApi")
-    override fun layoutDependsOn(parent: CoordinatorLayout, child: V, dependency: View): Boolean {
+    override fun layoutDependsOn(
+        parent: CoordinatorLayout,
+        child: V,
+        dependency: View,
+    ): Boolean {
         if (dependency is Snackbar.SnackbarLayout) {
             updateSnackbar(child, dependency)
         }
@@ -78,6 +85,7 @@ class BottomAppBarBehavior<V : View>(
         axes: Int,
         type: Int,
     ): Boolean {
+        if (!omnibar.isOmnibarScrollingEnabled()) return false
         if (axes == ViewCompat.SCROLL_AXIS_VERTICAL) {
             lastStartedType = type
             offsetAnimator?.cancel()
@@ -118,7 +126,12 @@ class BottomAppBarBehavior<V : View>(
         }
     }
 
-    override fun onStopNestedScroll(coordinatorLayout: CoordinatorLayout, child: V, target: View, type: Int) {
+    override fun onStopNestedScroll(
+        coordinatorLayout: CoordinatorLayout,
+        child: V,
+        target: View,
+        type: Int,
+    ) {
         if (lastStartedType == ViewCompat.TYPE_TOUCH || type == ViewCompat.TYPE_NON_TOUCH) {
             val dY = child.translationY
             val threshold = child.height * 0.5f
@@ -132,7 +145,10 @@ class BottomAppBarBehavior<V : View>(
         }
     }
 
-    fun setExpanded(expanded: Boolean, animate: Boolean = true) {
+    fun setExpanded(
+        expanded: Boolean,
+        animate: Boolean = true,
+    ) {
         if (animate) {
             animateToolbarVisibility(expanded)
         } else {
@@ -162,7 +178,10 @@ class BottomAppBarBehavior<V : View>(
     }
 
     @SuppressLint("RestrictedApi")
-    private fun updateSnackbar(child: View, snackbarLayout: Snackbar.SnackbarLayout) {
+    private fun updateSnackbar(
+        child: View,
+        snackbarLayout: Snackbar.SnackbarLayout,
+    ) {
         if (snackbarLayout.layoutParams is CoordinatorLayout.LayoutParams) {
             val params = snackbarLayout.layoutParams as CoordinatorLayout.LayoutParams
 

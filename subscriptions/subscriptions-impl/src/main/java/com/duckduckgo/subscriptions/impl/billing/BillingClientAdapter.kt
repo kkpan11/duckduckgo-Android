@@ -18,7 +18,7 @@ package com.duckduckgo.subscriptions.impl.billing
 
 import android.app.Activity
 import com.android.billingclient.api.ProductDetails
-import com.android.billingclient.api.PurchaseHistoryRecord
+import com.android.billingclient.api.Purchase
 
 interface BillingClientAdapter {
     val ready: Boolean
@@ -30,13 +30,22 @@ interface BillingClientAdapter {
 
     suspend fun getSubscriptions(productIds: List<String>): SubscriptionsResult
 
-    suspend fun getSubscriptionsPurchaseHistory(): SubscriptionsPurchaseHistoryResult
+    suspend fun queryPurchases(): QueryPurchasesResult
 
     suspend fun launchBillingFlow(
         activity: Activity,
         productDetails: ProductDetails,
         offerToken: String,
         externalId: String,
+    ): LaunchBillingFlowResult
+
+    suspend fun launchSubscriptionUpdate(
+        activity: Activity,
+        productDetails: ProductDetails,
+        offerToken: String,
+        externalId: String,
+        oldPurchaseToken: String,
+        replacementMode: SubscriptionReplacementMode,
     ): LaunchBillingFlowResult
 }
 
@@ -54,14 +63,17 @@ sealed class SubscriptionsResult {
     ) : SubscriptionsResult()
 }
 
-sealed class SubscriptionsPurchaseHistoryResult {
-    data class Success(val history: List<PurchaseHistoryRecord>) : SubscriptionsPurchaseHistoryResult()
-    data object Failure : SubscriptionsPurchaseHistoryResult()
+sealed class QueryPurchasesResult {
+    data class Success(val purchases: List<Purchase>) : QueryPurchasesResult()
+    data class Failure(
+        val billingError: BillingError? = null,
+        val debugMessage: String? = null,
+    ) : QueryPurchasesResult()
 }
 
 sealed class LaunchBillingFlowResult {
     data object Success : LaunchBillingFlowResult()
-    data object Failure : LaunchBillingFlowResult()
+    data class Failure(val error: BillingError) : LaunchBillingFlowResult()
 }
 
 sealed class PurchasesUpdateResult {
@@ -90,5 +102,35 @@ enum class BillingError {
     NETWORK_ERROR,
     UNKNOWN_ERROR, // for when billing returns something we don't understand
     BILLING_CRASH_ERROR, // This is our own error
-    ;
+}
+
+/**
+ * Defines supported replacement modes for Google Play Billing subscription updates.
+ * Currently, we only use the [WITHOUT_PRORATION] mode in our implementation.
+ */
+enum class SubscriptionReplacementMode(val value: Int) {
+    /**
+     * The new plan takes effect immediately.
+     * The billing cycle remains the same, and the user is charged a prorated amount for the remaining period.
+     */
+    CHARGE_PRORATED_PRICE(2),
+
+    /**
+     * The new plan takes effect immediately.
+     * The new price will be charged on the next recurrence time, and the billing cycle stays the same.
+     */
+    WITHOUT_PRORATION(3),
+
+    /**
+     * The new plan takes effect immediately.
+     * The user is charged the full price of the new plan and is given a full billing cycle of subscription,
+     * plus remaining prorated time from the old plan.
+     */
+    CHARGE_FULL_PRICE(5),
+
+    /**
+     * New subscription starts after current subscription expires.
+     * Best for: When you want to avoid billing complications or user requested delayed switch.
+     */
+    DEFERRED(6),
 }

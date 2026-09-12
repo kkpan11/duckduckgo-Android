@@ -19,13 +19,16 @@ package com.duckduckgo.sync.impl
 import com.duckduckgo.anvil.annotations.ContributesServiceApi
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.moshi.Json
+import okhttp3.RequestBody
 import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -58,6 +61,12 @@ interface SyncService {
         @Header("Authorization") token: String,
     ): Call<DeviceResponse>
 
+    @PATCH("$SYNC_PROD_ENVIRONMENT_URL/sync/devices")
+    fun patchDevices(
+        @Header("Authorization") token: String,
+        @Body request: PatchDevicesRequest,
+    ): Call<PatchDevicesResponse>
+
     @POST("$SYNC_PROD_ENVIRONMENT_URL/sync/connect")
     fun connect(
         @Header("Authorization") token: String,
@@ -78,12 +87,6 @@ interface SyncService {
     fun sendEncryptedMessage(
         @Body request: EncryptedMessage,
     ): Call<Void>
-
-    @PATCH("$SYNC_PROD_ENVIRONMENT_URL/sync/data")
-    fun patch(
-        @Header("Authorization") token: String,
-        @Body request: JSONObject,
-    ): Call<JSONObject>
 
     @GET("$SYNC_PROD_ENVIRONMENT_URL/sync/bookmarks")
     fun bookmarks(
@@ -109,9 +112,90 @@ interface SyncService {
     @GET("$SYNC_PROD_ENVIRONMENT_URL/sync/settings")
     fun settingsSince(@Header("Authorization") token: String, @Query("since") since: String): Call<JSONObject>
 
+    @DELETE("$SYNC_PROD_ENVIRONMENT_URL/sync/ai_chats")
+    fun deleteAiChats(
+        @Header("Authorization") token: String,
+        @Query("until") until: String,
+    ): Call<JSONObject>
+
+    @PATCH("$SYNC_PROD_ENVIRONMENT_URL/sync/data")
+    fun patchData(
+        @Header("Authorization") token: String,
+        @Body body: JSONObject,
+    ): Call<JSONObject>
+
+    @PATCH("$SYNC_PROD_ENVIRONMENT_URL/sync/ai_chats")
+    fun patchChats(
+        @Header("Authorization") token: String,
+        @Body body: RequestBody,
+        @Query("since") since: String? = null,
+    ): Call<JSONObject>
+
+    @POST("$SYNC_PROD_ENVIRONMENT_URL/sync/token/rescope")
+    fun rescopeToken(
+        @Header("Authorization") token: String,
+        @Body request: TokenRescopeRequest,
+    ): Call<TokenRescopeResponse>
+
+    @GET("$SYNC_PROD_ENVIRONMENT_URL/sync/keys")
+    fun getProtectedKeys(
+        @Header("Authorization") token: String,
+    ): Call<ProtectedKeysResponse>
+
+    /**
+     * First-writer-wins registration for a purpose-scoped protected key.
+     */
+    @POST("$SYNC_PROD_ENVIRONMENT_URL/sync/keys/purpose/{purpose}/set-if-absent")
+    fun setKeysIfAbsent(
+        @Header("Authorization") token: String,
+        @Path("purpose") purpose: String,
+        @Body request: SetKeysIfAbsentRequest,
+    ): Call<SetKeyIfAbsentResponse>
+
+    @GET("$SYNC_PROD_ENVIRONMENT_URL/sync/access-credentials")
+    fun getAccessCredentials(
+        @Header("Authorization") token: String,
+    ): Call<AccessCredentialsResponse>
+
+    @POST("$SYNC_PROD_ENVIRONMENT_URL/sync/access-credentials/{id}")
+    fun createAccessCredential(
+        @Header("Authorization") token: String,
+        @Path("id") credentialId: String,
+        @Body request: CreateAccessCredentialRequest,
+    ): Call<Void>
+
+    @PUT("$SYNC_PROD_ENVIRONMENT_URL$EXCHANGE_CHANNEL_PATH_PREFIX{channelId}")
+    fun createExchangeChannel(
+        @Header("Authorization") authorization: String?,
+        @Path("channelId") channelId: String,
+        @Body body: ExchangeChannelCreateRequest,
+    ): Call<Void>
+
+    @POST("$SYNC_PROD_ENVIRONMENT_URL$EXCHANGE_CHANNEL_PATH_PREFIX{channelId}/messages")
+    fun postExchangeMessages(
+        @Header("Authorization") authorization: String?,
+        @Path("channelId") channelId: String,
+        @Body body: ExchangeMessagesRequest,
+    ): Call<Void>
+
+    @GET("$SYNC_PROD_ENVIRONMENT_URL$EXCHANGE_CHANNEL_PATH_PREFIX{channelId}/messages")
+    fun pollExchangeMessages(
+        @Header("Authorization") authorization: String?,
+        @Path("channelId") channelId: String,
+        @Query("after") after: Int,
+    ): Call<ExchangeMessagesResponse>
+
+    @DELETE("$SYNC_PROD_ENVIRONMENT_URL$EXCHANGE_CHANNEL_PATH_PREFIX{channelId}")
+    fun deleteExchangeChannel(
+        @Header("Authorization") authorization: String?,
+        @Path("channelId") channelId: String,
+    ): Call<Void>
+
     companion object {
         const val SYNC_PROD_ENVIRONMENT_URL = "https://sync.duckduckgo.com"
-        const val SYNC_DEV_ENVIRONMENT_URL = "https://dev-sync-use.duckduckgo.com"
+        const val SYNC_DEV_ENVIRONMENT_URL = "https://sync-staging.duckduckgo.com"
+
+        const val EXCHANGE_CHANNEL_PATH_PREFIX = "/sync/v2/exchange/"
     }
 }
 
@@ -121,6 +205,7 @@ data class Login(
     @field:Json(name = "device_id") val deviceId: String,
     @field:Json(name = "device_name") val deviceName: String,
     @field:Json(name = "device_type") val deviceType: String,
+    @field:Json(name = "scope") val scope: String? = null,
 )
 
 data class Signup(
@@ -130,6 +215,9 @@ data class Signup(
     @field:Json(name = "device_id") val deviceId: String,
     @field:Json(name = "device_name") val deviceName: String,
     @field:Json(name = "device_type") val deviceType: String,
+    @field:Json(name = "credential_id") val credentialId: String? = null,
+    @field:Json(name = "device_info") val deviceInfo: String? = null,
+    @field:Json(name = "keys") val keys: List<ProtectedKeyEntry>? = null,
 )
 
 data class Logout(
@@ -155,10 +243,16 @@ data class AccountCreatedResponse(
     val token: String,
 )
 
+// Server sends a `devices_v2` field here too; intentionally not parsed because nothing consumes
+// `devices` from this response either — the device list is sourced from GET /devices instead.
 data class LoginResponse(
     val token: String,
-    val protected_encryption_key: String,
+    // Absent when the matched access credential is 3party-restricted; populated for ddg/legacy
+    // credentials. Callers on the ddg path must null-check before use.
+    val protected_encryption_key: String? = null,
     val devices: List<Device>,
+    @field:Json(name = "access_credentials") val accessCredentials: List<AccessCredentialEntry>? = null,
+    val keys: List<ProtectedKeyEntry>? = null,
 )
 
 data class DeviceResponse(
@@ -167,6 +261,7 @@ data class DeviceResponse(
 
 data class DeviceEntries(
     val entries: List<Device>,
+    @field:Json(name = "entries_v2") val entriesV2: List<DeviceV2>? = null,
 )
 
 data class Device(
@@ -176,11 +271,157 @@ data class Device(
     @field:Json(name = "jw_iat") val jwIat: String,
 )
 
+/**
+ * `name` and `type` are encrypted with the credential in `credentialId`
+ * `info` is the cross-credential `device_info` JWE (encrypted under the account_info key).
+ */
+data class DeviceV2(
+    @field:Json(name = "id") val deviceId: String? = null,
+    @field:Json(name = "name") val deviceName: String? = null,
+    @field:Json(name = "type") val deviceType: String? = null,
+    @field:Json(name = "info") val deviceInfo: String? = null,
+    @field:Json(name = "jw_iat") val jwIat: String? = null,
+    @field:Json(name = "credential_id") val credentialId: String? = null,
+)
+
+/** Request body for PATCH /sync/devices. Exactly one [DeviceUpdate], targeting the current device. */
+data class PatchDevicesRequest(
+    val updates: List<DeviceUpdate>,
+)
+
+/**
+ * A single device update. [id] must be the current device id.
+ * A null field is left unchanged, except [info], which the server clears when it is omitted, so always send the current value.
+ */
+data class DeviceUpdate(
+    @field:Json(name = "id") val id: String,
+    @field:Json(name = "name") val name: String? = null,
+    @field:Json(name = "type") val type: String? = null,
+    @field:Json(name = "info") val info: String? = null,
+)
+
+data class PatchDevicesResponse(
+    val devices: List<Device> = emptyList(),
+    @field:Json(name = "devices_v2") val devicesV2: List<DeviceV2> = emptyList(),
+)
+
 data class ErrorResponse(
     val code: Int = -1,
     val error: String,
 )
 
+data class TokenRescopeRequest(
+    val scope: String,
+)
+
+data class TokenRescopeResponse(
+    val token: String,
+)
+
+/** Response from GET /sync/keys — the account's protected keys for all purposes. */
+data class ProtectedKeysResponse(
+    val keys: List<ProtectedKeyEntry>,
+)
+
+/**
+ * Request body for POST /sync/keys/purpose/{purpose}/set-if-absent
+ * one entry per credential (ddg/3party) so both wrapped copies are stored atomically.
+ * */
+data class SetKeysIfAbsentRequest(
+    val keys: List<ProtectedKeyEntry>,
+)
+
+data class SetKeyIfAbsentResponse(
+    val keys: List<AccountInfoKeyWire> = emptyList(),
+)
+
+// Response only returns the winning key ID + public key
+data class AccountInfoKeyWire(
+    val kid: String,
+    @field:Json(name = "public_key") val publicKey: RsaJwk? = null,
+)
+
+data class AccessCredentialsResponse(
+    @field:Json(name = "access_credentials") val accessCredentials: List<AccessCredentialEntry>,
+)
+
+/**
+ * One entry in GET /sync/access-credentials. Each entry represents an access credential the
+ * account holds (id "ddg" for the native credential, "3party" for the scoped-access one shared
+ * with browser surfaces). `encryptedCredential` is the credential's secret encrypted with the
+ * companion credential's MEK (e.g. for id="3party", encrypted with the DDG MEK).
+ *
+ */
+data class AccessCredentialEntry(
+    val id: String,
+    val scope: String? = null,
+    @field:Json(name = "encrypted_3party_credential") val encryptedCredential: String? = null,
+)
+
+data class CreateAccessCredentialRequest(
+    @field:Json(name = "hashed_password") val hashedPassword: String,
+    @field:Json(name = "credential_hashed_password") val credentialHashedPassword: String,
+    @field:Json(name = "protected_encryption_key") val protectedEncryptionKey: String? = null,
+    @field:Json(name = "encrypted_3party_credential") val encrypted3partyCredential: String? = null,
+    val keys: List<ProtectedKeyEntry>? = null,
+)
+
+/**
+ * A protected RSA keypair stored against the account for a specific [purpose] (e.g. "ai_chats").
+ * [encryptedPrivateKey] is wrapped with the credential identified by [encryptedWith] ("ddg" or
+ * "3party"); each purpose can have one entry per credential. [publicKey] is sent in JWK form so
+ * clients without the private key can still use it for asymmetric encryption.
+ */
+data class ProtectedKeyEntry(
+    val kid: String,
+    val purpose: String,
+    @field:Json(name = "encrypted_with") val encryptedWith: String,
+    @field:Json(name = "encrypted_private_key") val encryptedPrivateKey: String,
+    @field:Json(name = "public_key") val publicKey: RsaJwk? = null,
+)
+
+/**
+ * Outer envelope sent on the v2 exchange relay. The [version] field is unencrypted and used
+ * for protocol version negotiation. [payload] is a JWE compact string (RSA-OAEP-256 +
+ * A256GCM) containing the actual message JSON. (Asana 1214486492252757).
+ */
+data class ExchangeEnvelope(
+    val version: String,
+    val payload: String,
+)
+
+/** Body for PUT /sync/v2/exchange/{channelId} — opens the channel. Empty per spec. */
+class ExchangeChannelCreateRequest
+
+/** Body for POST /sync/v2/exchange/{channelId}/messages — batch send. */
+data class ExchangeMessagesRequest(
+    val messages: List<ExchangeEnvelope>,
+)
+
+/** Response from GET /sync/v2/exchange/{channelId}/messages?after={seq}. */
+data class ExchangeMessagesResponse(
+    val messages: List<ExchangeMessageEntry>,
+)
+
+/** Server-assigned [seq] plus the envelope contents. */
+data class ExchangeMessageEntry(
+    val seq: Int,
+    val version: String,
+    val payload: String,
+)
+
+/** RSA-OAEP-256 public key in JWK format (RFC 7517) for sync protected key entries. */
+data class RsaJwk(
+    val alg: String = "RSA-OAEP-256",
+    val e: String,
+    val ext: Boolean = true,
+    @field:Json(name = "key_ops") val keyOps: List<String> = listOf("encrypt"),
+    val kty: String = "RSA",
+    val n: String,
+    val use: String = "enc",
+)
+
+@Suppress("ktlint:standard:class-naming")
 enum class API_CODE(val code: Int) {
     INVALID_LOGIN_CREDENTIALS(401),
     NOT_MODIFIED(304),

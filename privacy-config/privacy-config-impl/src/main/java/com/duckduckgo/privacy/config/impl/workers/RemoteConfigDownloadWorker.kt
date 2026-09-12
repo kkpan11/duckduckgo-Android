@@ -32,10 +32,11 @@ import com.duckduckgo.privacy.config.impl.PrivacyConfigDownloader
 import com.duckduckgo.privacy.config.impl.PrivacyConfigDownloader.ConfigDownloadResult.Success
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 @ContributesWorker(AppScope::class)
 class PrivacyConfigDownloadWorker(
@@ -70,7 +71,7 @@ class PrivacyConfigDownloadWorkerScheduler @Inject constructor(
 ) : MainProcessLifecycleObserver {
 
     override fun onCreate(owner: LifecycleOwner) {
-        Timber.v("Scheduling remote config worker")
+        logcat(VERBOSE) { "Scheduling remote config worker" }
         val workerRequest = PeriodicWorkRequestBuilder<PrivacyConfigDownloadWorker>(1, TimeUnit.HOURS)
             .addTag(PRIVACY_CONFIG_DOWNLOADER_WORKER_TAG)
             .setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.MINUTES)

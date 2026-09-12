@@ -1,4 +1,5 @@
 appId: com.duckduckgo.mobile.android
+androidWebViewHierarchy: devtools
 tags:
   - adClickTest
 ---
@@ -18,8 +19,7 @@ tags:
           id: "ad-id-6"
       - assertVisible:
           text: "Publisher site"
-      - tapOn:
-          id: "com.duckduckgo.mobile.android:id/omnibarIconContainer"
+      - runFlow: ../shared/browser_screen/click_on_privacy_shield.yaml
       - assertVisible:
           text: "View Tracker Companies"
       - tapOn:

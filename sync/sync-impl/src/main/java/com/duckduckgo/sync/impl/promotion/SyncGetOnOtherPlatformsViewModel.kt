@@ -27,11 +27,11 @@ import com.duckduckgo.sync.impl.pixels.SyncPixelName
 import com.duckduckgo.sync.impl.pixels.SyncPixelParameters.GET_OTHER_DEVICES_SCREEN_LAUNCH_SOURCE
 import com.duckduckgo.sync.impl.promotion.SyncGetOnOtherPlatformsViewModel.Command.ShareLink
 import com.duckduckgo.sync.impl.promotion.SyncGetOnOtherPlatformsViewModel.Command.ShowCopiedNotification
-import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class SyncGetOnOtherPlatformsViewModel @Inject constructor(
@@ -48,10 +48,8 @@ class SyncGetOnOtherPlatformsViewModel @Inject constructor(
         data object ShowCopiedNotification : Command()
     }
 
-    data class ViewState(val windowsFeatureEnabled: Boolean)
-
     fun onShareClicked(launchSource: String?) {
-        viewModelScope.launch {
+        viewModelScope.launch(dispatchers.io()) {
             commandChannel.send(ShareLink(buildLink()))
 
             pixel.fire(SyncPixelName.SYNC_GET_OTHER_DEVICES_LINK_SHARED, buildSourceMap(launchSource))

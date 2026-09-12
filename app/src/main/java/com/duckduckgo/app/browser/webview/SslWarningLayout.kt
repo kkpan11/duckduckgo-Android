@@ -56,9 +56,9 @@ class SslWarningLayout @JvmOverloads constructor(
     sealed class Action {
 
         data class Shown(val errorType: SSLErrorType) : Action()
-        object Proceed : Action()
-        object Advance : Action()
-        object LeaveSite : Action()
+        data object Proceed : Action()
+        data object Advance : Action()
+        data object LeaveSite : Action()
     }
 
     private val binding: ViewSslWarningBinding by viewBinding()
@@ -75,6 +75,18 @@ class SslWarningLayout @JvmOverloads constructor(
             configureCopy(errorResponse)
             setListeners(handler, actionHandler)
         }
+    }
+
+    fun disableViewStateSaving() {
+        binding.errorLayout.isSaveEnabled = false
+        binding.sslAlertImage.isSaveEnabled = false
+        binding.sslErrorTitle.isSaveEnabled = false
+        binding.sslErrorHeadline.isSaveEnabled = false
+        binding.sslErrorExpandedMessage.isSaveEnabled = false
+        binding.sslErrorExpandedHeadline.isSaveEnabled = false
+        binding.sslErrorLeaveSiteCTA.isSaveEnabled = false
+        binding.sslErrorAdvancedCTA.isSaveEnabled = false
+        binding.sslErrorAcceptCta.isSaveEnabled = false
     }
 
     override fun onAttachedToWindow() {

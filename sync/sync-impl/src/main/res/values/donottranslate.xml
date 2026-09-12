@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  ~ Copyright (c) 2024 DuckDuckGo
+  ~ Copyright (c) 2026 DuckDuckGo
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -15,18 +15,6 @@
   -->
 
 <resources>
-    <!-- Internal Setting -->
-    <string name="sync_internal_activity_label">Sync Setup Internal</string>
-    <string name="sync_internal_environment_header">Environment Settings</string>
-    <string name="sync_internal_environment_title">Use Dev Environment?</string>
-    <string name="sync_internal_environment_subtitle_prod">https://sync.duckduckgo.com</string>
-    <string name="sync_internal_environment_subtitle_dev">https://dev-sync-use.duckduckgo.com</string>
-    <string name="sync_internal_account_header">Account Settings</string>
-    <string name="sync_internal_device_header">Device Settings</string>
-    <string name="sync_internal_recovery_code">Recovery code</string>
-    <string name="sync_internal_recovery_code_cta">Copy Recovery code</string>
-    <string name="sync_internal_favicons_prompt_cta">Reset Favicons Prompt</string>
-    <string name="userIdSectionHeader">User ID</string>
-    <string name="deviceIdSectionHeader">Device Id</string>
-    <string name="deviceNameSectionHeader">Device Name</string>
+    <!-- Scanner screen: manual entry tab -->
+    <string name="sync_simplified_scanner_manual_entry_example_code">eyJyZWNvdmVyeSI6eyJ1c2VyX2lkIjoiNjgwRDQ1QjUtNUU2RS00MzQ3LTlDNDQtQjZGQkU4MEZDNEE3IiwicHJpbWFyelkasd92V9rZXkiOiJBUUVCQVFFQkFRRUJBUUVCQVFFQkFRRUJBUUVCQVFFQkFRRUJBUUVCQVFFPSJ9fQ==</string>
 </resources>

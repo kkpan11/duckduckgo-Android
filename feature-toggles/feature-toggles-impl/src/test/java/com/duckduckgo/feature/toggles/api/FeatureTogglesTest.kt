@@ -16,15 +16,21 @@
 
 package com.duckduckgo.feature.toggles.api
 
+import android.annotation.SuppressLint
+import app.cash.turbine.test
 import com.duckduckgo.appbuildconfig.api.BuildFlavor
+import com.duckduckgo.common.test.CoroutineTestRule
 import com.duckduckgo.feature.toggles.api.Cohorts.CONTROL
 import com.duckduckgo.feature.toggles.api.Cohorts.TREATMENT
 import com.duckduckgo.feature.toggles.api.Toggle.DefaultFeatureValue
 import com.duckduckgo.feature.toggles.api.Toggle.FeatureName
 import com.duckduckgo.feature.toggles.api.Toggle.State
 import com.duckduckgo.feature.toggles.api.Toggle.State.CohortName
+import com.duckduckgo.feature.toggles.api.internal.CachedToggleStore
 import com.duckduckgo.feature.toggles.internal.api.FeatureTogglesCallback
-import java.lang.IllegalStateException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -33,19 +39,25 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import java.lang.IllegalStateException
 
+@SuppressLint("DenyListedApi") // getRawStoredState
 class FeatureTogglesTest {
+
+    @get:Rule
+    val coroutineTestRule: CoroutineTestRule = CoroutineTestRule()
 
     private lateinit var feature: TestFeature
     private lateinit var provider: FakeProvider
-    private lateinit var toggleStore: FakeToggleStore
+    private lateinit var toggleStore: Toggle.Store
     private lateinit var callback: FakeFeatureTogglesCallback
 
     @Before
     fun setup() {
         provider = FakeProvider()
-        toggleStore = FakeToggleStore()
+        toggleStore = CachedToggleStore(FakeToggleStore())
         callback = FakeFeatureTogglesCallback()
         feature = FeatureToggles.Builder()
             .store(toggleStore)
@@ -55,6 +67,7 @@ class FeatureTogglesTest {
             .forceDefaultVariantProvider { provider.variantKey = "" }
             .callback(callback)
             .featureName("test")
+            .ioDispatcher(coroutineTestRule.testDispatcher)
             .build()
             .create(TestFeature::class.java)
     }
@@ -119,6 +132,84 @@ class FeatureTogglesTest {
         feature.noDefaultValue().isEnabled()
     }
 
+    @Test
+    fun whenEnabledByDefaultThenEmitEnabled() = runTest {
+        feature.enabledByDefault().enabled().test {
+            assertTrue(awaitItem())
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun whenEnabledByDefaultAndSetEnabledThenEmitTwoEnables() = runTest {
+        feature.enabledByDefault().enabled().test {
+            assertTrue(awaitItem())
+            feature.enabledByDefault().setRawStoredState(Toggle.State(enable = false))
+            assertFalse(awaitItem())
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun whenMultipleObserversSubscribeToEnabledThenAllReceiveUpdates() = runTest {
+        val firstObserverReady = CompletableDeferred<Unit>()
+        val secondObserverReady = CompletableDeferred<Unit>()
+        val toggle = feature.enabledByDefault()
+
+        val firstJob = launch {
+            toggle.enabled().test {
+                assertTrue(awaitItem())
+                firstObserverReady.complete(Unit)
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+        val secondJob = launch {
+            toggle.enabled().test {
+                assertTrue(awaitItem())
+                secondObserverReady.complete(Unit)
+                assertFalse(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+        firstObserverReady.await()
+        secondObserverReady.await()
+        toggle.setRawStoredState(Toggle.State(enable = false))
+
+        firstJob.join()
+        secondJob.join()
+    }
+
+    @Test
+    fun enableValuesSetBeforeRegistrationGetLost() = runTest {
+        feature.enabledByDefault().setRawStoredState(Toggle.State(enable = false))
+        feature.enabledByDefault().enabled().test {
+            assertFalse(awaitItem())
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun whenDroppingEmissionThenNoValueEmitted() = runTest {
+        feature.enabledByDefault().enabled().drop(1).test {
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun whenADifferentToggleIsWrittenThenEnabledFlowDoesNotEmit() = runTest {
+        feature.enabledByDefault().enabled().test {
+            assertTrue(awaitItem()) // initial emission
+
+            // Write to a different toggle — key filter must suppress any emission on this flow
+            feature.disableByDefault().setRawStoredState(Toggle.State(enable = true))
+
+            expectNoEvents()
+        }
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun whenWrongReturnValueThenThrow() {
         feature.wrongReturnValue()
@@ -178,7 +269,7 @@ class FeatureTogglesTest {
         toggleStore.set(
             "test_forcesDefaultVariant",
             State(
-                targets = listOf(State.Target("na", localeCountry = null, localeLanguage = null, null, null, null)),
+                targets = listOf(State.Target("na", localeCountry = null, localeLanguage = null, null, null, null, null)),
             ),
         )
         assertNull(provider.variantKey)
@@ -450,7 +541,7 @@ class FeatureTogglesTest {
         val state = Toggle.State(
             remoteEnableState = null,
             enable = true,
-            targets = listOf(State.Target("ma", localeCountry = null, localeLanguage = null, null, null, null)),
+            targets = listOf(State.Target("ma", localeCountry = null, localeLanguage = null, null, null, null, null)),
         )
 
         // Use directly the store because setRawStoredState() populates the local state when the remote state is null
@@ -468,7 +559,7 @@ class FeatureTogglesTest {
         val state = Toggle.State(
             remoteEnableState = null,
             enable = true,
-            targets = listOf(State.Target(provider.variantKey!!, localeCountry = null, localeLanguage = null, null, null, null)),
+            targets = listOf(State.Target(provider.variantKey!!, localeCountry = null, localeLanguage = null, null, null, null, null)),
         )
 
         // Use directly the store because setRawStoredState() populates the local state when the remote state is null
@@ -486,7 +577,7 @@ class FeatureTogglesTest {
         val state = Toggle.State(
             remoteEnableState = null,
             enable = true,
-            targets = listOf(State.Target("zz", localeCountry = null, localeLanguage = null, null, null, null)),
+            targets = listOf(State.Target("zz", localeCountry = null, localeLanguage = null, null, null, null, null)),
         )
 
         // Use directly the store because setRawStoredState() populates the local state when the remote state is null
@@ -513,8 +604,8 @@ class FeatureTogglesTest {
             remoteEnableState = null,
             enable = true,
             targets = listOf(
-                State.Target("ma", localeCountry = null, localeLanguage = null, null, null, null),
-                State.Target("mb", localeCountry = null, localeLanguage = null, null, null, null),
+                State.Target("ma", localeCountry = null, localeLanguage = null, null, null, null, null),
+                State.Target("mb", localeCountry = null, localeLanguage = null, null, null, null, null),
             ),
         )
 
@@ -534,8 +625,8 @@ class FeatureTogglesTest {
             remoteEnableState = null,
             enable = true,
             targets = listOf(
-                State.Target("ma", localeCountry = null, localeLanguage = null, null, null, null),
-                State.Target("zz", localeCountry = null, localeLanguage = null, null, null, null),
+                State.Target("ma", localeCountry = null, localeLanguage = null, null, null, null, null),
+                State.Target("zz", localeCountry = null, localeLanguage = null, null, null, null, null),
             ),
         )
 
@@ -549,7 +640,7 @@ class FeatureTogglesTest {
     }
 
     @Test
-    fun whenAssigningCohortOnCohortAssignedCallbackCalled() {
+    fun whenAssigningCohortOnCohortAssignedCallbackCalled() = runTest {
         val state = Toggle.State(
             remoteEnableState = true,
             enable = true,
@@ -568,15 +659,123 @@ class FeatureTogglesTest {
         // Use directly the store because setRawStoredState() populates the local state when the remote state is null
         toggleStore.set("test_enabledByDefault", state)
 
-        // isEnabled triggers callback on first assignment
-        assertTrue(feature.enabledByDefault().isEnabled(TREATMENT))
+        assertTrue(feature.enabledByDefault().enroll())
         assertEquals(1, callback.times)
         assertEquals("enabledByDefault", callback.experimentName)
         assertEquals("treatment", callback.cohortName)
         assertNotNull(callback.enrollmentDate)
 
-        assertFalse(feature.enabledByDefault().isEnabled(CONTROL))
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
         assertEquals(1, callback.times)
+    }
+
+    @Test
+    fun enrollIsIdempotent() = runTest {
+        val state = Toggle.State(
+            remoteEnableState = true,
+            enable = true,
+            cohorts = listOf(
+                Toggle.State.Cohort(name = "control", weight = 0, enrollmentDateET = null),
+                Toggle.State.Cohort(name = "treatment", weight = 1, enrollmentDateET = null),
+            ),
+        )
+
+        // Use directly the store because setRawStoredState() populates the local state when the remote state is null
+        toggleStore.set("test_enabledByDefault", state)
+
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+        assertTrue(feature.enabledByDefault().enroll())
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertTrue(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+
+        assertFalse(feature.enabledByDefault().enroll())
+
+        val controlState = feature.enabledByDefault().getRawStoredState()!!.copy(
+            cohorts = listOf(
+                Toggle.State.Cohort(name = "control", weight = 1, enrollmentDateET = null),
+                Toggle.State.Cohort(name = "treatment", weight = 0, enrollmentDateET = null),
+            ),
+        )
+
+        toggleStore.set("test_enabledByDefault", controlState)
+        assertFalse(feature.enabledByDefault().enroll())
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertTrue(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+    }
+
+    @Test
+    fun getCohortReEnrollsWhenNecessary() = runTest {
+        val state = Toggle.State(
+            remoteEnableState = true,
+            enable = true,
+            cohorts = listOf(
+                Toggle.State.Cohort(name = "control", weight = 0, enrollmentDateET = null),
+                Toggle.State.Cohort(name = "treatment", weight = 1, enrollmentDateET = null),
+            ),
+        )
+
+        // Use directly the store because setRawStoredState() populates the local state when the remote state is null
+        toggleStore.set("test_enabledByDefault", state)
+
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+        assertTrue(feature.enabledByDefault().enroll())
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertTrue(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+
+        assertFalse(feature.enabledByDefault().enroll())
+
+        val controlState = feature.enabledByDefault().getRawStoredState()!!.copy(
+            cohorts = listOf(
+                Toggle.State.Cohort(name = "control", weight = 1, enrollmentDateET = null),
+            ),
+        )
+
+        toggleStore.set("test_enabledByDefault", controlState)
+        assertFalse(feature.enabledByDefault().enroll())
+        assertTrue(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+        assertFalse(feature.enabledByDefault().enroll())
+    }
+
+    @Test
+    fun changingTargetsOnceEnrolledDoNotChangeEnrollment() = runTest {
+        val state = Toggle.State(
+            remoteEnableState = true,
+            enable = true,
+            cohorts = listOf(
+                Toggle.State.Cohort(name = "control", weight = 0, enrollmentDateET = null),
+                Toggle.State.Cohort(name = "treatment", weight = 1, enrollmentDateET = null),
+            ),
+        )
+
+        // Use directly the store because setRawStoredState() populates the local state when the remote state is null
+        toggleStore.set("test_enabledByDefault", state)
+
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+        assertTrue(feature.enabledByDefault().isEnabled())
+
+        assertTrue(feature.enabledByDefault().enroll())
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertTrue(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+        assertTrue(feature.enabledByDefault().isEnabled())
+
+        val newState = feature.enabledByDefault().getRawStoredState()!!.copy(
+            minSupportedVersion = 1,
+        )
+        toggleStore.set("test_enabledByDefault", newState)
+        provider.version = 0
+
+        assertFalse(feature.enabledByDefault().enroll())
+
+        assertTrue(feature.enabledByDefault().isEnrolled())
+        assertEquals(TREATMENT.cohortName, feature.enabledByDefault().getCohort()?.name)
+        assertFalse(feature.enabledByDefault().enroll())
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(CONTROL))
+        assertFalse(feature.enabledByDefault().isEnrolledAndEnabled(TREATMENT))
+        assertFalse(feature.enabledByDefault().isEnabled())
     }
 }
 
@@ -616,6 +815,7 @@ interface TestFeature {
     fun experimentEnabledByDefault(): Toggle
 }
 
+@SuppressLint("DenyListedApi") // getRawStoredState
 private fun Toggle.rolloutThreshold(): Double {
     return getRawStoredState()?.rolloutThreshold!!
 }

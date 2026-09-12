@@ -24,11 +24,11 @@ import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.macos.impl.MacOsPixelNames.MACOS_WAITLIST_SHARE_PRESSED
 import com.duckduckgo.macos.impl.MacOsViewModel.Command.GoToWindowsClientSettings
 import com.duckduckgo.macos.impl.MacOsViewModel.Command.ShareLink
-import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @ContributesViewModel(AppScope::class)
 class MacOsViewModel @Inject constructor(
@@ -41,7 +41,7 @@ class MacOsViewModel @Inject constructor(
 
     sealed class Command {
         data class ShareLink(val originEnabled: Boolean) : Command()
-        object GoToWindowsClientSettings : Command()
+        data object GoToWindowsClientSettings : Command()
     }
 
     data class ViewState(val windowsFeatureEnabled: Boolean)

@@ -88,7 +88,7 @@ interface JsMessageHandler {
      * This method processes a [JsMessage] and can return a JsRequestResponse to reply to the message if needed
      * @return `JsRequestResponse` or `null`
      */
-    fun process(jsMessage: JsMessage, secret: String, jsMessageCallback: JsMessageCallback?)
+    fun process(jsMessage: JsMessage, jsMessaging: JsMessaging, jsMessageCallback: JsMessageCallback?)
 
     /**
      * List of domains where we can process the message
@@ -135,9 +135,14 @@ sealed class JsRequestResponse {
         val featureName: String,
         val method: String,
         val id: String,
-        val error: String,
+        val error: JsErrorDetails,
     ) : JsRequestResponse()
 }
+
+data class JsErrorDetails(
+    val code: Int,
+    val message: String,
+)
 
 data class SubscriptionEventData(val featureName: String, val subscriptionName: String, val params: JSONObject)
 data class SubscriptionEvent(val context: String, val featureName: String, val subscriptionName: String, val params: JSONObject)

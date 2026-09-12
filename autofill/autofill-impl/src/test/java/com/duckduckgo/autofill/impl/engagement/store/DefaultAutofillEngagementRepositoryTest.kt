@@ -15,21 +15,27 @@ import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_SERVICE_DI
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_SERVICE_ENABLED_DAU
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_TOGGLED_OFF_SEARCH
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames.AUTOFILL_TOGGLED_ON_SEARCH
+import com.duckduckgo.autofill.impl.pixel.AutofillPixelParameters.LAST_USED_PIXEL_KEY
 import com.duckduckgo.autofill.impl.securestorage.SecureStorage
 import com.duckduckgo.autofill.impl.service.store.AutofillServiceStore
 import com.duckduckgo.autofill.impl.store.InternalAutofillStore
+import com.duckduckgo.autofill.store.AutofillPrefsStore
 import com.duckduckgo.autofill.store.engagement.AutofillEngagementDatabase
 import com.duckduckgo.common.test.CoroutineTestRule
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.time.format.DateTimeFormatter
 
 @RunWith(AndroidJUnit4::class)
 class DefaultAutofillEngagementRepositoryTest {
@@ -48,11 +54,12 @@ class DefaultAutofillEngagementRepositoryTest {
     private val autofillServiceStore: AutofillServiceStore = FakeAutofillServiceStore()
     private val secureStorage: SecureStorage = mock()
     private val deviceAuthenticator: DeviceAuthenticator = mock()
+    private val autofillPrefsStore: AutofillPrefsStore = mock()
 
     @Before
     fun setup() {
         coroutineTestRule.testScope.runTest {
-            whenever(autofillStore.getCredentialCount()).thenReturn(flowOf(0))
+            whenever(autofillStore.getCredentialCount()).thenReturn(flowOf(Result.success(0)))
             whenever(secureStorage.canAccessSecureStorage()).thenReturn(true)
             whenever(deviceAuthenticator.hasValidDeviceAuthentication()).thenReturn(true)
         }
@@ -67,7 +74,14 @@ class DefaultAutofillEngagementRepositoryTest {
         secureStorage = secureStorage,
         deviceAuthenticator = deviceAuthenticator,
         autofillServiceStore = autofillServiceStore,
+        autofillPrefsStore = autofillPrefsStore,
     )
+
+    @Test
+    fun whenAutofilledThenLastUsedDateIsUpdated() = runTest {
+        testee.recordAutofilledToday()
+        verify(autofillPrefsStore).dataLastAutofilledDate = eq(todayString())
+    }
 
     @Test
     fun whenAutofilledButNotSearchedThenActiveUserPixelNotSent() = runTest {
@@ -86,6 +100,28 @@ class DefaultAutofillEngagementRepositoryTest {
         testee.recordSearchedToday()
         testee.recordAutofilledToday()
         AUTOFILL_ENGAGEMENT_ACTIVE_USER.verifySent()
+    }
+
+    @Test
+    fun whenActiveUserPixelSentWithNoLastUsedThenOmittedFromParameters() = runTest {
+        whenever(autofillPrefsStore.dataLastAutofilledDate).thenReturn(null)
+        testee.recordSearchedToday()
+        testee.recordAutofilledToday()
+
+        val pixelParams = AUTOFILL_ENGAGEMENT_ACTIVE_USER.getParametersForFiredPixel()!!
+        assertFalse(pixelParams.contains(LAST_USED_PIXEL_KEY))
+    }
+
+    @Test
+    fun whenActiveUserPixelSentWithLastUsedThenIncludedInParameters() = runTest {
+        val lastUsedDate = yesterdayString()
+        whenever(autofillPrefsStore.dataLastAutofilledDate).thenReturn(lastUsedDate)
+
+        testee.recordSearchedToday()
+        testee.recordAutofilledToday()
+
+        val pixelParams = AUTOFILL_ENGAGEMENT_ACTIVE_USER.getParametersForFiredPixel()!!
+        assertEquals(lastUsedDate, pixelParams[LAST_USED_PIXEL_KEY])
     }
 
     @Test
@@ -164,7 +200,7 @@ class DefaultAutofillEngagementRepositoryTest {
     }
 
     private suspend fun givenUserHasPasswords(storePasswords: Int) {
-        whenever(autofillStore.getCredentialCount()).thenReturn(flowOf(storePasswords))
+        whenever(autofillStore.getCredentialCount()).thenReturn(flowOf(Result.success(storePasswords)))
     }
 
     private fun AutofillPixelNames.verifySent() {
@@ -175,9 +211,23 @@ class DefaultAutofillEngagementRepositoryTest {
         assertFalse(pixel.firedPixels.contains(pixelName))
     }
 
+    private fun AutofillPixelNames.getParametersForFiredPixel(): Map<String, String>? = pixel.firedPixels[this.pixelName]
+
+    private fun yesterdayString(): String {
+        return DATE_FORMATTER.format(java.time.LocalDate.now().minusDays(1))
+    }
+
+    private fun todayString(): String {
+        return DATE_FORMATTER.format(java.time.LocalDate.now())
+    }
+
+    companion object {
+        private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    }
+
     private class FakePixel : Pixel {
 
-        val firedPixels = mutableListOf<String>()
+        val firedPixels = mutableMapOf<String, Map<String, String>>()
 
         override fun fire(
             pixel: PixelName,
@@ -185,7 +235,7 @@ class DefaultAutofillEngagementRepositoryTest {
             encodedParameters: Map<String, String>,
             type: PixelType,
         ) {
-            firedPixels.add(pixel.pixelName)
+            firedPixels[pixel.pixelName] = parameters
         }
 
         override fun fire(
@@ -194,23 +244,25 @@ class DefaultAutofillEngagementRepositoryTest {
             encodedParameters: Map<String, String>,
             type: PixelType,
         ) {
-            firedPixels.add(pixelName)
+            firedPixels[pixelName] = parameters
         }
 
         override fun enqueueFire(
             pixel: PixelName,
             parameters: Map<String, String>,
             encodedParameters: Map<String, String>,
+            type: PixelType,
         ) {
-            firedPixels.add(pixel.pixelName)
+            firedPixels[pixel.pixelName] = parameters
         }
 
         override fun enqueueFire(
             pixelName: String,
             parameters: Map<String, String>,
             encodedParameters: Map<String, String>,
+            type: PixelType,
         ) {
-            firedPixels.add(pixelName)
+            firedPixels[pixelName] = parameters
         }
     }
 }

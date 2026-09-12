@@ -34,27 +34,38 @@ import com.duckduckgo.autofill.impl.R
 import com.duckduckgo.autofill.impl.databinding.DialogEmailProtectionInContextSignUpBinding
 import com.duckduckgo.autofill.impl.email.incontext.prompt.EmailProtectionInContextSignUpPromptViewModel.Command.FinishWithResult
 import com.duckduckgo.autofill.impl.pixel.AutofillPixelNames
+import com.duckduckgo.common.ui.applyBottomSystemBarInsetPadding
 import com.duckduckgo.common.utils.FragmentViewModelFactory
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.FragmentScope
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import dagger.android.support.AndroidSupportInjection
-import javax.inject.Inject
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import timber.log.Timber
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
+import javax.inject.Inject
 
 @InjectWith(FragmentScope::class)
 class EmailProtectionInContextSignUpPromptFragment : BottomSheetDialogFragment(), EmailProtectionInContextSignUpDialog {
 
-    override fun getTheme(): Int = R.style.AutofillBottomSheetDialogTheme
+    override fun getTheme(): Int = if (edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.BOTTOM_SHEETS)) {
+        R.style.AutofillBottomSheetDialogThemeEdgeToEdge
+    } else {
+        R.style.AutofillBottomSheetDialogTheme
+    }
 
     @Inject
     lateinit var pixel: Pixel
 
     @Inject
     lateinit var viewModelFactory: FragmentViewModelFactory
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
 
     private val viewModel by lazy {
         ViewModelProvider(this, viewModelFactory)[EmailProtectionInContextSignUpPromptViewModel::class.java]
@@ -84,6 +95,9 @@ class EmailProtectionInContextSignUpPromptFragment : BottomSheetDialogFragment()
         val binding = DialogEmailProtectionInContextSignUpBinding.inflate(inflater, container, false)
         configureViews(binding)
         observeViewModel()
+        if (edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.BOTTOM_SHEETS)) {
+            binding.dialogRootView.applyBottomSystemBarInsetPadding()
+        }
         return binding.root
     }
 
@@ -117,7 +131,7 @@ class EmailProtectionInContextSignUpPromptFragment : BottomSheetDialogFragment()
     }
 
     private fun returnResult(resultType: EmailProtectionInContextSignUpDialog.EmailProtectionInContextSignUpResult) {
-        Timber.v("User action: %s", resultType::class.java.simpleName)
+        logcat(VERBOSE) { "User action: ${resultType::class.java.simpleName}" }
 
         val result = Bundle().also {
             it.putParcelable(EmailProtectionInContextSignUpDialog.KEY_RESULT, resultType)

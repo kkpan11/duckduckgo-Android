@@ -25,10 +25,13 @@ import com.duckduckgo.autofill.impl.securestorage.SecureStorage
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.VERBOSE
+import logcat.LogPriority.WARN
+import logcat.asLog
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -44,27 +47,32 @@ class AutofillDeviceCapabilityReporter @Inject constructor(
 
     @UiThread
     override fun onCreate(owner: LifecycleOwner) {
-        Timber.v("Autofill device capability reporter created")
+        logcat(VERBOSE) { "Autofill device capability reporter created" }
 
         appCoroutineScope.launch(dispatchers.io()) {
-            if (pixel.hasDeterminedCapabilities()) {
-                Timber.v("Already determined device autofill capabilities previously")
-                return@launch
-            }
-
             try {
                 val secureStorageAvailable = secureStorage.canAccessSecureStorage()
+
+                if (!secureStorageAvailable) {
+                    pixel.sendSecureStorageUnavailableDailyPixel()
+                }
+
+                if (pixel.hasDeterminedCapabilities()) {
+                    logcat(VERBOSE) { "Already determined device autofill capabilities previously" }
+                    return@launch
+                }
+
                 val deviceAuthAvailable = deviceAuthenticator.hasValidDeviceAuthentication()
 
-                Timber.d(
+                logcat {
                     "Autofill device capabilities:" +
                         "\nSecure storage available: $secureStorageAvailable" +
-                        "\nDevice auth available: $deviceAuthAvailable",
-                )
+                        "\nDevice auth available: $deviceAuthAvailable"
+                }
 
                 pixel.sendCapabilitiesPixel(secureStorageAvailable, deviceAuthAvailable)
             } catch (e: Error) {
-                Timber.w(e, "Failed to determine device autofill capabilities")
+                logcat(WARN) { "Failed to determine device autofill capabilities: ${e.asLog()}" }
                 pixel.sendCapabilitiesUndeterminablePixel()
             }
         }

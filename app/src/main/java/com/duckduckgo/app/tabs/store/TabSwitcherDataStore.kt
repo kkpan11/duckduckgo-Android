@@ -26,17 +26,17 @@ import com.duckduckgo.app.tabs.model.TabSwitcherData.LayoutType
 import com.duckduckgo.app.tabs.model.TabSwitcherData.UserState
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
-import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
 
 interface TabSwitcherDataStore {
     val data: Flow<TabSwitcherData>
 
     suspend fun setUserState(userState: UserState)
     suspend fun setTabLayoutType(layoutType: LayoutType)
-    fun isAnimationTileDismissed(): Flow<Boolean>
-    suspend fun setIsAnimationTileDismissed(isDismissed: Boolean)
+    fun isTrackersAnimationInfoTileHidden(): Flow<Boolean>
+    suspend fun setTrackersAnimationInfoTileHidden(isHidden: Boolean)
 }
 
 @ContributesBinding(AppScope::class)
@@ -68,15 +68,15 @@ class TabSwitcherPrefsDataStore @Inject constructor(
         }
     }
 
-    override fun isAnimationTileDismissed(): Flow<Boolean> {
+    override fun isTrackersAnimationInfoTileHidden(): Flow<Boolean> {
         return store.data.map { preferences ->
             preferences[booleanPreferencesKey(KEY_IS_ANIMATION_TILE_DISMISSED)] ?: false
         }
     }
 
-    override suspend fun setIsAnimationTileDismissed(isDismissed: Boolean) {
+    override suspend fun setTrackersAnimationInfoTileHidden(isHidden: Boolean) {
         store.edit { preferences ->
-            preferences[booleanPreferencesKey(KEY_IS_ANIMATION_TILE_DISMISSED)] = isDismissed
+            preferences[booleanPreferencesKey(KEY_IS_ANIMATION_TILE_DISMISSED)] = isHidden
         }
     }
 }

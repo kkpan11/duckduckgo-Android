@@ -23,6 +23,7 @@ import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.data.store.api.SharedPreferencesProvider
 import com.duckduckgo.di.scopes.AppScope
+import com.duckduckgo.feature.toggles.api.send
 import com.duckduckgo.mobile.android.vpn.feature.AppTpTDSPixelsPlugin
 import com.duckduckgo.mobile.android.vpn.feature.didFailToDownloadTDS
 import com.duckduckgo.mobile.android.vpn.feature.getDisabledProtectionForApp
@@ -33,6 +34,8 @@ import com.duckduckgo.mobile.android.vpn.feature.getSelectedDisableProtection
 import com.duckduckgo.mobile.android.vpn.feature.getSelectedRemoveAppTP
 import com.squareup.anvil.annotations.ContributesBinding
 import dagger.SingleInstanceIn
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -41,8 +44,6 @@ import java.time.temporal.ChronoUnit
 import java.util.*
 import javax.inject.Inject
 import kotlin.math.absoluteValue
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 interface DeviceShieldPixels {
     /** This pixel will be unique on a given day, no matter how many times we call this fun */
@@ -319,6 +320,8 @@ interface DeviceShieldPixels {
     fun reportAnylocalDnsError()
     fun reportGeneralDnsError()
 
+    fun reportBlocklistStats(payload: Map<String, String>)
+
     /**
      * Will fire when the user is interacting with the Promote Always On Dialog
      */
@@ -384,15 +387,15 @@ interface DeviceShieldPixels {
     // New Tab Engagement pixels https://app.asana.com/0/72649045549333/1207667088727866/f
     fun reportNewTabSectionToggled(enabled: Boolean)
 
-    fun reportPproUpsellBannerShown()
-    fun reportPproUpsellBannerDismissed()
-    fun reportPproUpsellBannerLinkClicked()
+    fun reportSubscriptionUpsellBannerShown()
+    fun reportSubscriptionUpsellBannerDismissed()
+    fun reportSubscriptionUpsellBannerLinkClicked()
 
-    fun reportPproUpsellDisabledInfoShown()
-    fun reportPproUpsellDisabledInfoLinkClicked()
+    fun reportSubscriptionUpsellDisabledInfoShown()
+    fun reportSubscriptionUpsellDisabledInfoLinkClicked()
 
-    fun reportPproUpsellRevokedInfoShown()
-    fun reportPproUpsellRevokedInfoLinkClicked()
+    fun reportSubscriptionUpsellRevokedInfoShown()
+    fun reportSubscriptionUpsellRevokedInfoLinkClicked()
 
     /** Fires when the AppTP experiment blocklist fails to download. */
     fun appTPBlocklistExperimentDownloadFailure(
@@ -671,18 +674,14 @@ class RealDeviceShieldPixels @Inject constructor(
     override fun didChooseToDisableTrackingProtectionFromDialog() {
         firePixel(DeviceShieldPixelNames.ATP_DID_CHOOSE_DISABLE_TRACKING_PROTECTION_DIALOG)
         appCoroutineScope.launch(dispatcherProvider.io()) {
-            appTpTDSPixelsPlugin.getSelectedDisableProtection()?.getPixelDefinitions()?.forEach {
-                firePixel(it.pixelName, it.params)
-            }
+            appTpTDSPixelsPlugin.getSelectedDisableProtection()?.send()
         }
     }
 
     override fun didChooseToDisableOneAppFromDialog() {
         firePixel(DeviceShieldPixelNames.ATP_DID_CHOOSE_DISABLE_ONE_APP_PROTECTION_DIALOG)
         appCoroutineScope.launch(dispatcherProvider.io()) {
-            appTpTDSPixelsPlugin.getSelectedDisableAppProtection()?.getPixelDefinitions()?.forEach {
-                firePixel(it.pixelName, it.params)
-            }
+            appTpTDSPixelsPlugin.getSelectedDisableAppProtection()?.send()
         }
     }
 
@@ -756,6 +755,10 @@ class RealDeviceShieldPixels @Inject constructor(
         firePixel(DeviceShieldPixelNames.ATP_REPORT_DNS_SET_ERROR)
     }
 
+    override fun reportBlocklistStats(payload: Map<String, String>) {
+        tryToFireDailyPixel(DeviceShieldPixelNames.ATP_REPORT_BLOCKLIST_STATS_DAILY, payload)
+    }
+
     override fun didEnableAppProtectionFromDetail() {
         firePixel(DeviceShieldPixelNames.ATP_DID_ENABLE_APP_PROTECTION_FROM_DETAIL)
     }
@@ -763,12 +766,8 @@ class RealDeviceShieldPixels @Inject constructor(
     override fun didDisableAppProtectionFromDetail() {
         firePixel(DeviceShieldPixelNames.ATP_DID_DISABLE_APP_PROTECTION_FROM_DETAIL)
         appCoroutineScope.launch(dispatcherProvider.io()) {
-            appTpTDSPixelsPlugin.getProtectionDisabledAppFromDetail()?.getPixelDefinitions()?.forEach {
-                firePixel(it.pixelName, it.params)
-            }
-            appTpTDSPixelsPlugin.getDisabledProtectionForApp()?.getPixelDefinitions()?.forEach {
-                firePixel(it.pixelName, it.params)
-            }
+            appTpTDSPixelsPlugin.getProtectionDisabledAppFromDetail()?.send()
+            appTpTDSPixelsPlugin.getDisabledProtectionForApp()?.send()
         }
     }
 
@@ -779,12 +778,8 @@ class RealDeviceShieldPixels @Inject constructor(
     override fun didDisableAppProtectionFromApps() {
         firePixel(DeviceShieldPixelNames.ATP_DID_DISABLE_APP_PROTECTION_FROM_ALL)
         appCoroutineScope.launch(dispatcherProvider.io()) {
-            appTpTDSPixelsPlugin.getProtectionDisabledAppFromAll()?.getPixelDefinitions()?.forEach {
-                firePixel(it.pixelName, it.params)
-            }
-            appTpTDSPixelsPlugin.getDisabledProtectionForApp()?.getPixelDefinitions()?.forEach {
-                firePixel(it.pixelName, it.params)
-            }
+            appTpTDSPixelsPlugin.getProtectionDisabledAppFromAll()?.send()
+            appTpTDSPixelsPlugin.getDisabledProtectionForApp()?.send()
         }
     }
 
@@ -798,9 +793,7 @@ class RealDeviceShieldPixels @Inject constructor(
         tryToFireDailyPixel(DeviceShieldPixelNames.ATP_DID_CHOOSE_REMOVE_TRACKING_PROTECTION_DIALOG_DAILY)
         firePixel(DeviceShieldPixelNames.ATP_DID_CHOOSE_REMOVE_TRACKING_PROTECTION_DIALOG)
         appCoroutineScope.launch(dispatcherProvider.io()) {
-            appTpTDSPixelsPlugin.getSelectedRemoveAppTP()?.getPixelDefinitions()?.forEach {
-                firePixel(it.pixelName, it.params)
-            }
+            appTpTDSPixelsPlugin.getSelectedRemoveAppTP()?.send()
         }
     }
 
@@ -912,44 +905,44 @@ class RealDeviceShieldPixels @Inject constructor(
         }
     }
 
-    override fun reportPproUpsellBannerShown() {
-        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_ENABLED_BANNER_SHOWN_UNIQUE)
-        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_ENABLED_BANNER_SHOWN_DAILY)
-        firePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_ENABLED_BANNER_SHOWN)
+    override fun reportSubscriptionUpsellBannerShown() {
+        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_ENABLED_BANNER_SHOWN_UNIQUE)
+        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_ENABLED_BANNER_SHOWN_DAILY)
+        firePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_ENABLED_BANNER_SHOWN)
     }
 
-    override fun reportPproUpsellBannerLinkClicked() {
-        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_ENABLED_BANNER_LINK_CLICKED_UNIQUE)
-        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_ENABLED_BANNER_LINK_CLICKED_DAILY)
-        firePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_ENABLED_BANNER_LINK_CLICKED)
+    override fun reportSubscriptionUpsellBannerLinkClicked() {
+        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_ENABLED_BANNER_LINK_CLICKED_UNIQUE)
+        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_ENABLED_BANNER_LINK_CLICKED_DAILY)
+        firePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_ENABLED_BANNER_LINK_CLICKED)
     }
 
-    override fun reportPproUpsellBannerDismissed() {
-        firePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_ENABLED_BANNER_DISMISSED)
+    override fun reportSubscriptionUpsellBannerDismissed() {
+        firePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_ENABLED_BANNER_DISMISSED)
     }
 
-    override fun reportPproUpsellDisabledInfoShown() {
-        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_DISABLED_INFO_SHOWN_UNIQUE)
-        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_DISABLED_INFO_SHOWN_DAILY)
-        firePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_DISABLED_INFO_SHOWN)
+    override fun reportSubscriptionUpsellDisabledInfoShown() {
+        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_DISABLED_INFO_SHOWN_UNIQUE)
+        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_DISABLED_INFO_SHOWN_DAILY)
+        firePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_DISABLED_INFO_SHOWN)
     }
 
-    override fun reportPproUpsellDisabledInfoLinkClicked() {
-        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_DISABLED_INFO_LINK_CLICKED_UNIQUE)
-        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_DISABLED_INFO_LINK_CLICKED_DAILY)
-        firePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_DISABLED_INFO_LINK_CLICKED)
+    override fun reportSubscriptionUpsellDisabledInfoLinkClicked() {
+        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_DISABLED_INFO_LINK_CLICKED_UNIQUE)
+        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_DISABLED_INFO_LINK_CLICKED_DAILY)
+        firePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_DISABLED_INFO_LINK_CLICKED)
     }
 
-    override fun reportPproUpsellRevokedInfoShown() {
-        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_REVOKED_INFO_SHOWN_UNIQUE)
-        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_REVOKED_INFO_SHOWN_DAILY)
-        firePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_REVOKED_INFO_SHOWN)
+    override fun reportSubscriptionUpsellRevokedInfoShown() {
+        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_REVOKED_INFO_SHOWN_UNIQUE)
+        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_REVOKED_INFO_SHOWN_DAILY)
+        firePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_REVOKED_INFO_SHOWN)
     }
 
-    override fun reportPproUpsellRevokedInfoLinkClicked() {
-        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_REVOKED_INFO_LINK_CLICKED_UNIQUE)
-        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_REVOKED_INFO_LINK_CLICKED_DAILY)
-        firePixel(DeviceShieldPixelNames.APPTP_PPRO_UPSELL_REVOKED_INFO_LINK_CLICKED)
+    override fun reportSubscriptionUpsellRevokedInfoLinkClicked() {
+        tryToFireUniquePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_REVOKED_INFO_LINK_CLICKED_UNIQUE)
+        tryToFireDailyPixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_REVOKED_INFO_LINK_CLICKED_DAILY)
+        firePixel(DeviceShieldPixelNames.APPTP_SUBSCRIPTION_UPSELL_REVOKED_INFO_LINK_CLICKED)
     }
 
     override fun appTPBlocklistExperimentDownloadFailure(statusCode: Int, experimentName: String, experimentCohort: String) {
@@ -962,9 +955,7 @@ class RealDeviceShieldPixels @Inject constructor(
             ),
         )
         appCoroutineScope.launch(dispatcherProvider.io()) {
-            appTpTDSPixelsPlugin.didFailToDownloadTDS()?.getPixelDefinitions()?.forEach {
-                firePixel(it.pixelName, it.params)
-            }
+            appTpTDSPixelsPlugin.didFailToDownloadTDS()?.send()
         }
     }
 

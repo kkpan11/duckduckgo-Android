@@ -29,16 +29,17 @@ import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.mobile.android.vpn.di.AppTpBlocklistUpdateMutex
+import com.duckduckgo.mobile.android.vpn.pixels.DeviceShieldPixels
 import com.duckduckgo.mobile.android.vpn.store.VpnDatabase
 import com.duckduckgo.mobile.android.vpn.trackers.AppTrackerMetadata
 import com.squareup.anvil.annotations.ContributesMultibinding
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import logcat.LogPriority
+import logcat.LogPriority.WARN
 import logcat.logcat
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 @ContributesWorker(AppScope::class)
 class AppTrackerListUpdateWorker(context: Context, workerParameters: WorkerParameters) :
@@ -56,15 +57,28 @@ class AppTrackerListUpdateWorker(context: Context, workerParameters: WorkerParam
     @AppTpBlocklistUpdateMutex
     lateinit var mutex: Mutex
 
+    @Inject
+    lateinit var deviceShieldPixels: DeviceShieldPixels
+
     override suspend fun doWork(): Result {
         return withContext(dispatchers.io()) {
             val updateBlocklistResult = mutex.withLock {
-                updateTrackerBlocklist()
+                val res = updateTrackerBlocklist()
+
+                // Report current blocklist status after update
+                deviceShieldPixels.reportBlocklistStats(
+                    mapOf(
+                        "blocklist_etag" to vpnDatabase.vpnAppTrackerBlockingDao().getTrackerBlocklistMetadata()?.eTag.toString(),
+                        "blocklist_size" to vpnDatabase.vpnAppTrackerBlockingDao().getTrackerBlockListSize().toString(),
+                    ),
+                )
+
+                res
             }
 
             val success = Result.success()
             if (updateBlocklistResult != success) {
-                logcat(LogPriority.WARN) { "One of the app tracker list updates failed, scheduling a retry" }
+                logcat(WARN) { "One of the app tracker list updates failed, scheduling a retry" }
                 return@withContext Result.retry()
             }
 
@@ -101,7 +115,7 @@ class AppTrackerListUpdateWorker(context: Context, workerParameters: WorkerParam
                 return Result.success()
             }
             else -> {
-                logcat(LogPriority.WARN) { "Received app tracker blocklist with invalid eTag" }
+                logcat(WARN) { "Received app tracker blocklist with invalid eTag" }
                 return Result.retry()
             }
         }

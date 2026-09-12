@@ -31,13 +31,13 @@ import com.squareup.anvil.annotations.ContributesMultibinding
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
-import javax.inject.Inject
 import kotlinx.coroutines.runBlocking
 import logcat.logcat
 import okhttp3.Interceptor
 import okhttp3.Interceptor.Chain
 import okhttp3.Response
 import retrofit2.Invocation
+import javax.inject.Inject
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -54,9 +54,9 @@ class AppTPBlockListInterceptorApiPlugin @Inject constructor(
         moshi.adapter(Types.newParameterizedType(Map::class.java, String::class.java, String::class.java))
     }
     override fun intercept(chain: Chain): Response {
-        val request = chain.request().newBuilder()
+        val originalRequest = chain.request()
 
-        val tdsRequired = chain.request().tag(Invocation::class.java)
+        val tdsRequired = originalRequest.tag(Invocation::class.java)
             ?.method()
             ?.isAnnotationPresent(AppTPTdsRequired::class.java) == true
 
@@ -64,39 +64,46 @@ class AppTPBlockListInterceptorApiPlugin @Inject constructor(
             appTrackingProtection.isEnabled()
         }
 
-        return if (shouldInterceptRequest) {
-            logcat { "[AppTP]: Intercepted AppTP TDS Request: ${chain.request()}" }
-            val activeExperiment = runBlocking {
-                inventory.activeAppTpTdsFlag()
-            }
-            logcat { "[AppTP]: Active experiment: ${activeExperiment?.featureName()}" }
-            logcat { "[AppTP]: Cohort: ${activeExperiment?.getCohort()}" }
+        if (!shouldInterceptRequest) {
+            return chain.proceed(originalRequest)
+        }
 
-            activeExperiment?.let {
-                val config = activeExperiment.getSettings()?.let {
-                    runCatching {
-                        jsonAdapter.fromJson(it)
-                    }.getOrDefault(emptyMap())
-                } ?: emptyMap()
-                val path = when {
-                    activeExperiment.isEnabled(TREATMENT) -> config["treatmentUrl"]
-                    activeExperiment.isEnabled(CONTROL) -> config["controlUrl"]
-                    else -> config["nextUrl"]
-                } ?: return chain.proceed(request.build())
-                val newURL = "$APPTP_TDS_BASE_URL$path"
-                logcat { "[AppTP]: Rewrote TDS request URL to $newURL" }
-                chain.proceed(request.url(newURL).build()).also { response ->
-                    if (!response.isSuccessful) {
-                        pixel.appTPBlocklistExperimentDownloadFailure(
-                            response.code,
-                            activeExperiment.featureName().name,
-                            activeExperiment.getCohort()?.name.toString(),
-                        )
-                    }
-                }
-            } ?: chain.proceed(request.build())
-        } else {
-            chain.proceed(request.build())
+        logcat { "[AppTP]: Intercepted AppTP TDS Request: $originalRequest" }
+        val activeExperiment = runBlocking {
+            inventory.activeAppTpTdsFlag()?.also {
+                it.enroll()
+            }
+        }
+        logcat { "[AppTP]: Active experiment: ${activeExperiment?.featureName()}" }
+        logcat { "[AppTP]: Cohort: ${runBlocking { activeExperiment?.getCohort() }}" }
+
+        if (activeExperiment == null) {
+            return chain.proceed(originalRequest)
+        }
+
+        val config = activeExperiment.getSettings()?.let {
+            runCatching {
+                jsonAdapter.fromJson(it)
+            }.getOrDefault(emptyMap())
+        } ?: emptyMap()
+
+        val path = when {
+            runBlocking { activeExperiment.isEnrolledAndEnabled(TREATMENT) } -> config["treatmentUrl"]
+            runBlocking { activeExperiment.isEnrolledAndEnabled(CONTROL) } -> config["controlUrl"]
+            else -> config["nextUrl"]
+        } ?: return chain.proceed(originalRequest)
+
+        val newURL = "$APPTP_TDS_BASE_URL$path"
+        logcat { "[AppTP]: Rewrote TDS request URL to $newURL" }
+
+        return chain.proceed(originalRequest.newBuilder().url(newURL).build()).also { response ->
+            if (!response.isSuccessful) {
+                pixel.appTPBlocklistExperimentDownloadFailure(
+                    response.code,
+                    activeExperiment.featureName().name,
+                    runBlocking { activeExperiment.getCohort() }?.name.toString(),
+                )
+            }
         }
     }
 

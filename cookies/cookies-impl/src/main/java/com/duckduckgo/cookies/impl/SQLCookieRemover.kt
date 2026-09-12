@@ -22,27 +22,30 @@ import android.database.sqlite.SQLiteDatabase
 import com.duckduckgo.app.fire.DatabaseLocator
 import com.duckduckgo.app.fire.FireproofRepository
 import com.duckduckgo.app.statistics.pixels.Pixel
+import com.duckduckgo.browsermode.api.BrowserMode
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.cookies.api.CookieManagerProvider
 import com.duckduckgo.cookies.api.CookieRemover
 import com.duckduckgo.cookies.impl.CookiesPixelName.COOKIE_DELETE_ERROR
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesBinding
+import kotlinx.coroutines.withContext
+import logcat.LogPriority.VERBOSE
+import logcat.asLog
+import logcat.logcat
 import javax.inject.Inject
 import javax.inject.Named
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import kotlinx.coroutines.withContext
-import logcat.asLog
-import timber.log.Timber
 
 @ContributesBinding(AppScope::class)
 @Named("cookieManagerRemover")
 class CookieManagerRemover @Inject constructor(private val cookieManagerProvider: CookieManagerProvider) : CookieRemover {
     override suspend fun removeCookies(): Boolean {
         suspendCoroutine { continuation ->
-            cookieManagerProvider.get()?.removeAllCookies {
-                Timber.v("All cookies removed; restoring DDG cookies")
+            // Regular mode used here because this is Regular mode-only data-clearing
+            cookieManagerProvider.forMode(BrowserMode.REGULAR)?.removeAllCookies {
+                logcat(VERBOSE) { "All cookies removed; restoring DDG cookies" }
                 continuation.resume(Unit)
             }
         }

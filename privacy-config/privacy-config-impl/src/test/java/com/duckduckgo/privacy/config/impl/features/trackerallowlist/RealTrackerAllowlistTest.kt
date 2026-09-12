@@ -18,9 +18,10 @@ package com.duckduckgo.privacy.config.impl.features.trackerallowlist
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.duckduckgo.feature.toggles.api.FeatureToggle
+import com.duckduckgo.privacy.config.store.AllowlistRuleEntity
 import com.duckduckgo.privacy.config.store.TrackerAllowlistEntity
 import com.duckduckgo.privacy.config.store.features.trackerallowlist.TrackerAllowlistRepository
-import java.util.concurrent.CopyOnWriteArrayList
+import com.duckduckgo.privacy.config.store.features.trackerallowlist.buildRulesByDomain
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -51,10 +52,196 @@ class RealTrackerAllowlistTest {
         assertFalse(testee.isAnException("test.com", url))
     }
 
+    @Test
+    fun whenRuleMatchesThenReturnsTrue() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("site.com"), reason = ""),
+                ),
+            ),
+        )
+
+        assertTrue(testee.isAnException("https://site.com", "https://tracker.com/videos.js"))
+    }
+
+    @Test
+    fun whenSubdomainRequestThenReturnsTrue() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+
+        assertTrue(testee.isAnException("https://site.com", "https://a.b.tracker.com/videos.js"))
+    }
+
+    @Test
+    fun whenDocumentDomainDoesNotMatchThenReturnsFalse() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("site.com"), reason = ""),
+                ),
+            ),
+        )
+
+        assertFalse(testee.isAnException("https://other.com", "https://tracker.com/videos.js"))
+    }
+
+    @Test
+    fun whenDomainNotInListThenReturnsFalse() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+
+        assertFalse(testee.isAnException("https://site.com", "https://other-tracker.com/videos.js"))
+    }
+
+    @Test
+    fun whenFeatureDisabledThenReturnsFalse() {
+        whenever(mockFeatureToggle.isFeatureEnabled(any(), any())).thenReturn(false)
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+
+        assertFalse(testee.isAnException("https://site.com", "https://tracker.com/videos.js"))
+    }
+
+    @Test
+    fun whenRepositorySnapshotChangesThenReadsLatest() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+        assertTrue(testee.isAnException("https://site.com", "https://tracker.com/videos.js"))
+        assertFalse(testee.isAnException("https://site.com", "https://tracker-2.com/videos.js"))
+
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker-2.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker-2.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+        assertFalse(testee.isAnException("https://site.com", "https://tracker.com/videos.js"))
+        assertTrue(testee.isAnException("https://site.com", "https://tracker-2.com/videos.js"))
+    }
+
+    @Test
+    fun whenRuleRegexIsInvalidThenRuleIsSkipped() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/[invalid", domains = listOf("<all>"), reason = ""),
+                    AllowlistRuleEntity(rule = "tracker.com/good.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+
+        assertTrue(testee.isAnException("https://site.com", "https://tracker.com/good.js"))
+        assertFalse(testee.isAnException("https://site.com", "https://tracker.com/bad.js"))
+    }
+
+    @Test
+    fun whenNoEntryForSubdomainThenParentEntryRulesApply() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+
+        assertTrue(testee.isAnException("https://site.com", "https://cdn.tracker.com/videos.js"))
+    }
+
+    @Test
+    fun whenSubdomainHasItsOwnEntryThenOnlyItsRulesApply() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+            TrackerAllowlistEntity(
+                domain = "cdn.tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "cdn.tracker.com/images.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+
+        assertTrue(testee.isAnException("https://site.com", "https://cdn.tracker.com/images.js"))
+        assertFalse(testee.isAnException("https://site.com", "https://cdn.tracker.com/videos.js"))
+        assertTrue(testee.isAnException("https://site.com", "https://tracker.com/videos.js"))
+    }
+
+    @Test
+    fun whenSubdomainEntryHasNoRulesThenParentEntryRulesDoNotApply() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+            TrackerAllowlistEntity(domain = "cdn.tracker.com", rules = emptyList()),
+        )
+
+        assertFalse(testee.isAnException("https://site.com", "https://cdn.tracker.com/videos.js"))
+    }
+
+    @Test
+    fun whenEntriesShareNormalizedDomainThenRulesFromBothApply() {
+        givenAllowlistContains(
+            TrackerAllowlistEntity(
+                domain = "tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/videos.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+            TrackerAllowlistEntity(
+                domain = "www.tracker.com",
+                rules = listOf(
+                    AllowlistRuleEntity(rule = "tracker.com/images.js", domains = listOf("<all>"), reason = ""),
+                ),
+            ),
+        )
+
+        assertTrue(testee.isAnException("https://site.com", "https://tracker.com/videos.js"))
+        assertTrue(testee.isAnException("https://site.com", "https://tracker.com/images.js"))
+    }
+
     private fun givenDomainIsAnException(domain: String) {
-        val exceptions = CopyOnWriteArrayList<TrackerAllowlistEntity>()
-        val entity = TrackerAllowlistEntity(domain, emptyList())
-        exceptions.add(entity)
-        whenever(mockTrackerAllowlistRepository.exceptions).thenReturn(exceptions)
+        givenAllowlistContains(TrackerAllowlistEntity(domain, emptyList()))
+    }
+
+    private fun givenAllowlistContains(vararg entities: TrackerAllowlistEntity) {
+        val list = entities.toList()
+        whenever(mockTrackerAllowlistRepository.rulesByDomain).thenReturn(buildRulesByDomain(list))
     }
 }

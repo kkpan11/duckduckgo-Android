@@ -30,10 +30,11 @@ import com.duckduckgo.app.lifecycle.MainProcessLifecycleObserver
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.scopes.AppScope
 import com.squareup.anvil.annotations.ContributesMultibinding
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.ERROR
+import logcat.logcat
+import javax.inject.Inject
 
 @ContributesMultibinding(
     scope = AppScope::class,
@@ -54,12 +55,12 @@ class AutofillServiceLifecycleObserver @Inject constructor(
 
                 autofillServiceFeature.self().isEnabled().let { remoteState ->
                     if (currentState != remoteState) {
-                        Timber.d("DDGAutofillService: Updating state to $remoteState")
+                        logcat { "DDGAutofillService: Updating state to $remoteState" }
                         newState(context, remoteState)
                     }
                 }
             }.onFailure {
-                Timber.e("DDGAutofillService: Failed to update Service state: $it")
+                logcat(ERROR) { "DDGAutofillService: Failed to update Service state: $it" }
             }
         }
     }

@@ -40,10 +40,12 @@ jobs:
           distribution: 'adopt'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: JVM tests
-        run: ./gradlew jvm_tests
+        run: ./gradlew jvm_tests -Dpts.enabled=false
 
       - name: Bundle the JVM checks report
         if: always()
@@ -59,6 +61,8 @@ jobs:
   android_tests:
     runs-on: ubuntu-latest
     name: External reference tests android tests
+    env:
+      DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
     steps:
       - name: Checkout repository
@@ -89,16 +93,18 @@ jobs:
       - name: Decode secret
         env:
           FLANK: ${{ secrets.FLANK }}
-        run: echo $FLANK > flank.json
+        run: echo "$FLANK" > flank.json
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: Build
         run: ./gradlew androidTestsBuild
 
       - name: Run Android Tests
-        run: ./gradlew runFlankAndroidTests
+        run: ./gradlew runFlankAndroidTests --no-configuration-cache
 
       - name: Bundle the Android CI tests report
         if: always()
@@ -106,7 +112,7 @@ jobs:
 
       - name: Generate json file with failures
         if: ${{ failure() }}
-        run: cat build/fladle/fladleResults/HtmlErrorReport.html | cut -d\`  -f2 >> results.json
+        run: cut -d\`  -f2 < build/fladle/fladleResults/HtmlErrorReport.html >> results.json
 
       - name: Print failure report
         if: ${{ failure() }}

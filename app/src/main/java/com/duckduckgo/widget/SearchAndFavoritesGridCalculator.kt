@@ -18,28 +18,33 @@ package com.duckduckgo.widget
 
 import android.content.Context
 import com.duckduckgo.common.ui.view.toDp
+import logcat.LogPriority.INFO
+import logcat.logcat
 import com.duckduckgo.mobile.android.R as CommonR
-import timber.log.Timber
 
 class SearchAndFavoritesGridCalculator {
     fun calculateColumns(
         context: Context,
         width: Int,
     ): Int {
-        val margins = context.resources.getDimension(CommonR.dimen.searchWidgetFavoritesSideMargin).toDp()
+        val limitColumns = context.resources.getInteger(CommonR.integer.searchAndFavoritesWidgetGridColumns)
+        val margins = context.resources.getDimension(CommonR.dimen.searchWidgetFavoriteMargin).toDp()
         val item = context.resources.getDimension(CommonR.dimen.searchWidgetFavoriteItemContainerWidth).toDp()
         val divider = context.resources.getDimension(CommonR.dimen.searchWidgetFavoritesHorizontalSpacing).toDp()
+
+        // Buffer to prevent column count from changing with small size variations.
+        val sizeBuffer = 8
         var n = 2
         var totalSize = (n * item) + ((n - 1) * divider) + (margins * 2)
 
-        Timber.i("SearchAndFavoritesWidget width n:$n $totalSize vs $width")
-        while (totalSize <= width) {
+        logcat(INFO) { "SearchAndFavoritesWidget width n:$n $totalSize vs $width" }
+        while (totalSize + sizeBuffer <= width) {
             ++n
             totalSize = (n * item) + ((n - 1) * divider) + (margins * 2)
-            Timber.i("SearchAndFavoritesWidget width n:$n $totalSize vs $width")
+            logcat(INFO) { "SearchAndFavoritesWidget width n:$n $totalSize vs $width" }
         }
 
-        return WIDGET_COLUMNS_MIN.coerceAtLeast(n - 1)
+        return (n - 1).coerceIn(WIDGET_COLUMNS_MIN, limitColumns)
     }
 
     fun calculateRows(
@@ -51,20 +56,20 @@ class SearchAndFavoritesGridCalculator {
             (context.resources.getDimension(CommonR.dimen.searchWidgetPadding).toDp() * 2)
         val item = context.resources.getDimension(CommonR.dimen.searchWidgetFavoriteItemContainerHeight).toDp()
         val divider = context.resources.getDimension(CommonR.dimen.searchWidgetFavoritesVerticalSpacing).toDp()
+
+        // Buffer to prevent row count from changing with small size variations.
+        val sizeBuffer = 8
         var n = 1
         var totalSize = searchBar + (n * item) + ((n - 1) * divider) + margins
 
-        Timber.i("SearchAndFavoritesWidget height n:$n $totalSize vs $height")
-        while (totalSize <= height) {
+        logcat(INFO) { "SearchAndFavoritesWidget height n:$n $totalSize vs $height" }
+        while (totalSize + sizeBuffer <= height) {
             ++n
             totalSize = searchBar + (n * item) + ((n - 1) * divider) + margins
-            Timber.i("SearchAndFavoritesWidget height n:$n $totalSize vs $height")
+            logcat(INFO) { "SearchAndFavoritesWidget height n:$n $totalSize vs $height" }
         }
 
-        var rows = n - 1
-        rows = WIDGET_ROWS_MIN.coerceAtLeast(rows)
-        rows = WIDGET_ROWS_MAX.coerceAtMost(rows)
-        return rows
+        return (n - 1).coerceIn(WIDGET_ROWS_MIN, WIDGET_ROWS_MAX)
     }
 
     companion object {

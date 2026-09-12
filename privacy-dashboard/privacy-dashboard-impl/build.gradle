@@ -28,20 +28,20 @@ android {
 }
 
 dependencies {
-    anvil project(':anvil-compiler')
+    ksp project(':anvil-ksp')
     implementation project(':anvil-annotations')
     implementation project(':di')
     implementation project(':privacy-dashboard-api')
     implementation project(':privacy-config-api')
     implementation project(':statistics-api')
     implementation project(':common-utils')
-    implementation project(':common-ui')
+    implementation project(':design-system')
     implementation project(':browser-api')
+    implementation project(':feedback-api')
     implementation project(':autoconsent-api')
     implementation project(':app-build-config-api')
     implementation project(':navigation-api')
     implementation project(':feature-toggles-api')
-    implementation project(':privacy-protections-popup-api')
     implementation project(':broken-site-api')
     api AndroidX.dataStore.preferences
 
@@ -51,7 +51,7 @@ dependencies {
     implementation AndroidX.lifecycle.viewModelKtx
     implementation Google.android.material
 
-    implementation JakeWharton.timber
+    implementation "com.squareup.logcat:logcat:_"
     implementation Square.moshi
     implementation "com.squareup.moshi:moshi-adapters:_"
     implementation "com.airbnb.android:lottie:_"

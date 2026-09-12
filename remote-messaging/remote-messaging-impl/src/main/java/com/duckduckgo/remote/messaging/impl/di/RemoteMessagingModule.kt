@@ -21,20 +21,23 @@ import androidx.room.Room
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.browser.api.AppProperties
 import com.duckduckgo.browser.api.UserBrowserProperties
+import com.duckduckgo.common.utils.CurrentTimeProvider
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.di.DaggerSet
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.remote.messaging.api.AttributeMatcherPlugin
 import com.duckduckgo.remote.messaging.api.JsonToMatchingAttributeMapper
 import com.duckduckgo.remote.messaging.api.MessageActionMapperPlugin
-import com.duckduckgo.remote.messaging.api.RemoteMessagingRepository
 import com.duckduckgo.remote.messaging.impl.*
+import com.duckduckgo.remote.messaging.impl.RemoteMessagingRepository
 import com.duckduckgo.remote.messaging.impl.mappers.MessageMapper
 import com.duckduckgo.remote.messaging.impl.mappers.RemoteMessagingConfigJsonMapper
 import com.duckduckgo.remote.messaging.impl.matchers.AndroidAppAttributeMatcher
 import com.duckduckgo.remote.messaging.impl.matchers.DeviceAttributeMatcher
 import com.duckduckgo.remote.messaging.impl.matchers.UserAttributeMatcher
 import com.duckduckgo.remote.messaging.impl.network.RemoteMessagingService
+import com.duckduckgo.remote.messaging.impl.store.GlideRemoteMessageImageStore
+import com.duckduckgo.remote.messaging.impl.store.RemoteMessageImageStore
 import com.duckduckgo.remote.messaging.store.LocalRemoteMessagingConfigRepository
 import com.duckduckgo.remote.messaging.store.RemoteMessagesDao
 import com.duckduckgo.remote.messaging.store.RemoteMessagingCohortStore
@@ -59,6 +62,15 @@ object DomainModule {
     ): RemoteMessagingConfigDownloader {
         return RealRemoteMessagingConfigDownloader(remoteConfig, remoteMessagingConfigProcessor)
     }
+
+    @Provides
+    @SingleInstanceIn(AppScope::class)
+    fun provideImagePrefetcher(
+        context: Context,
+        dispatcherProvider: DispatcherProvider,
+    ): RemoteMessageImageStore {
+        return GlideRemoteMessageImageStore(context, dispatcherProvider)
+    }
 }
 
 @Module
@@ -72,12 +84,16 @@ object DataSourceModule {
         remoteMessagingConfigRepository: RemoteMessagingConfigRepository,
         remoteMessagingRepository: RemoteMessagingRepository,
         remoteMessagingConfigMatcher: RemoteMessagingConfigMatcher,
+        remoteMessagingFeatureToggles: RemoteMessagingFeatureToggles,
+        remoteMessageImageStore: RemoteMessageImageStore,
     ): RemoteMessagingConfigProcessor {
         return RealRemoteMessagingConfigProcessor(
             remoteMessagingConfigJsonMapper,
             remoteMessagingConfigRepository,
             remoteMessagingRepository,
             remoteMessagingConfigMatcher,
+            remoteMessageImageStore,
+            remoteMessagingFeatureToggles,
         )
     }
 
@@ -85,14 +101,18 @@ object DataSourceModule {
     fun providesRemoteMessagingRepository(
         remoteMessagingConfigRepository: RemoteMessagingConfigRepository,
         remoteMessagesDao: RemoteMessagesDao,
-        dispatchers: DispatcherProvider,
         messageMapper: MessageMapper,
+        remoteMessageImageStore: RemoteMessageImageStore,
+        currentTimeProvider: CurrentTimeProvider,
+        autoDismissEvaluator: RemoteMessageAutoDismissEvaluator,
     ): RemoteMessagingRepository {
         return AppRemoteMessagingRepository(
             remoteMessagingConfigRepository,
             remoteMessagesDao,
-            dispatchers,
             messageMapper,
+            remoteMessageImageStore,
+            currentTimeProvider,
+            autoDismissEvaluator,
         )
     }
 
@@ -110,8 +130,9 @@ object DataSourceModule {
         matchingAttributeMappers: DaggerSet<JsonToMatchingAttributeMapper>,
         actionMappers: DaggerSet<MessageActionMapperPlugin>,
         appBuildConfig: AppBuildConfig,
+        remoteMessagingFeatureToggles: RemoteMessagingFeatureToggles,
     ): RemoteMessagingConfigJsonMapper {
-        return RemoteMessagingConfigJsonMapper(appBuildConfig, matchingAttributeMappers, actionMappers)
+        return RemoteMessagingConfigJsonMapper(appBuildConfig, matchingAttributeMappers, actionMappers, remoteMessagingFeatureToggles)
     }
 
     @Provides

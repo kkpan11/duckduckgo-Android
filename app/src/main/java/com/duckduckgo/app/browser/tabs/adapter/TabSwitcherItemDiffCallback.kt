@@ -20,46 +20,50 @@ import android.os.Bundle
 import androidx.recyclerview.widget.DiffUtil
 import com.duckduckgo.app.tabs.ui.TabSwitcherItem
 import com.duckduckgo.app.tabs.ui.TabSwitcherItem.Tab.SelectableTab
-import com.duckduckgo.app.tabs.ui.TabSwitcherItem.TrackerAnimationInfoPanel.Companion.ANIMATED_TILE_DEFAULT_ALPHA
-import com.duckduckgo.app.tabs.ui.TabSwitcherItem.TrackerAnimationInfoPanel.Companion.ANIMATED_TILE_NO_REPLACE_ALPHA
+import com.duckduckgo.app.tabs.ui.TabSwitcherItem.TrackersAnimationInfoPanel.Companion.ANIMATED_TILE_DEFAULT_ALPHA
+import com.duckduckgo.app.tabs.ui.TabSwitcherItem.TrackersAnimationInfoPanel.Companion.ANIMATED_TILE_NO_REPLACE_ALPHA
 
 class TabSwitcherItemDiffCallback(
-    old: List<TabSwitcherItem>,
-    new: List<TabSwitcherItem>,
-    private val isDragging: Boolean,
-) : DiffUtil.Callback() {
+    private val isDragging: () -> Boolean,
+) : DiffUtil.ItemCallback<TabSwitcherItem>() {
 
-    // keep a local copy of the lists to avoid any changes to the lists during the diffing process
-    private val oldList = old.toList()
-    private val newList = new.toList()
-
-    private fun areItemsTheSame(
+    override fun areItemsTheSame(
         oldItem: TabSwitcherItem,
         newItem: TabSwitcherItem,
     ): Boolean {
         return oldItem.id == newItem.id
     }
 
-    private fun areContentsTheSame(
+    override fun areContentsTheSame(
         oldItem: TabSwitcherItem,
         newItem: TabSwitcherItem,
     ): Boolean {
         return when {
             oldItem is TabSwitcherItem.Tab && newItem is TabSwitcherItem.Tab -> {
-                oldItem.tabEntity.tabPreviewFile == newItem.tabEntity.tabPreviewFile &&
+                oldItem::class == newItem::class &&
+                    oldItem.tabEntity.tabPreviewFile == newItem.tabEntity.tabPreviewFile &&
                     oldItem.tabEntity.viewed == newItem.tabEntity.viewed &&
                     oldItem.tabEntity.title == newItem.tabEntity.title &&
                     oldItem.tabEntity.url == newItem.tabEntity.url &&
-                    (oldItem as? SelectableTab)?.isSelected == (newItem as? SelectableTab)?.isSelected
+                    (oldItem as? SelectableTab)?.isSelected == (newItem as? SelectableTab)?.isSelected &&
+                    (oldItem as? SelectableTab)?.isDuckAi == (newItem as? SelectableTab)?.isDuckAi
             }
             else -> false
         }
     }
 
-    private fun getChangePayload(
+    override fun getChangePayload(
         oldItem: TabSwitcherItem,
         newItem: TabSwitcherItem,
-    ): Bundle {
+    ): Bundle? {
+        if (oldItem is TabSwitcherItem.Tab && newItem is TabSwitcherItem.Tab && oldItem::class != newItem::class) {
+            return null
+        }
+
+        if ((oldItem as? SelectableTab)?.isDuckAi != (newItem as? SelectableTab)?.isDuckAi) {
+            return null
+        }
+
         val diffBundle = Bundle()
 
         when {
@@ -84,47 +88,15 @@ class TabSwitcherItemDiffCallback(
                     diffBundle.putString(DIFF_KEY_SELECTION, null)
                 }
             }
-            oldItem is TabSwitcherItem.TrackerAnimationInfoPanel && newItem is TabSwitcherItem.TrackerAnimationInfoPanel -> {
+            oldItem is TabSwitcherItem.TrackersAnimationInfoPanel && newItem is TabSwitcherItem.TrackersAnimationInfoPanel -> {
                 diffBundle.putFloat(
                     DIFF_ALPHA,
-                    if (isDragging) ANIMATED_TILE_NO_REPLACE_ALPHA else ANIMATED_TILE_DEFAULT_ALPHA,
+                    if (isDragging()) ANIMATED_TILE_NO_REPLACE_ALPHA else ANIMATED_TILE_DEFAULT_ALPHA,
                 )
             }
         }
 
         return diffBundle
-    }
-
-    override fun getOldListSize(): Int {
-        return oldList.size
-    }
-
-    override fun getNewListSize(): Int {
-        return newList.size
-    }
-
-    override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        return if (oldItemPosition in oldList.indices && newItemPosition in newList.indices) {
-            areItemsTheSame(oldList[oldItemPosition], newList[newItemPosition])
-        } else {
-            false
-        }
-    }
-
-    override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        return if (oldItemPosition in oldList.indices && newItemPosition in newList.indices) {
-            areContentsTheSame(oldList[oldItemPosition], newList[newItemPosition])
-        } else {
-            false
-        }
-    }
-
-    override fun getChangePayload(oldItemPosition: Int, newItemPosition: Int): Any {
-        return if (oldItemPosition in oldList.indices && newItemPosition in newList.indices) {
-            getChangePayload(oldList[oldItemPosition], newList[newItemPosition])
-        } else {
-            Bundle()
-        }
     }
 
     companion object {

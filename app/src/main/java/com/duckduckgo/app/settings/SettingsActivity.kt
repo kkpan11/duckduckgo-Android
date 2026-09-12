@@ -19,7 +19,11 @@ package com.duckduckgo.app.settings
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
+import android.widget.LinearLayout
+import androidx.activity.result.ActivityResultLauncher
+import androidx.core.view.children
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
@@ -27,20 +31,19 @@ import androidx.lifecycle.lifecycleScope
 import com.duckduckgo.anvil.annotations.ContributeToActivityStarter
 import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.about.AboutScreenNoParams
-import com.duckduckgo.app.about.FeedbackContract
 import com.duckduckgo.app.accessibility.AccessibilityScreens
 import com.duckduckgo.app.appearance.AppearanceScreen
 import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivitySettingsNewBinding
+import com.duckduckgo.app.browser.mode.InAppNavigation
 import com.duckduckgo.app.email.ui.EmailProtectionUnsupportedScreenNoParams
-import com.duckduckgo.app.firebutton.FireButtonScreenNoParams
+import com.duckduckgo.app.firebutton.DataClearingSettingsScreenNoParams
 import com.duckduckgo.app.generalsettings.GeneralSettingsScreenNoParams
 import com.duckduckgo.app.global.view.launchDefaultAppActivity
 import com.duckduckgo.app.permissions.PermissionsScreenNoParams
 import com.duckduckgo.app.pixels.AppPixelName
-import com.duckduckgo.app.pixels.AppPixelName.PRIVACY_PRO_IS_ENABLED_AND_ELIGIBLE
-import com.duckduckgo.app.privatesearch.PrivateSearchScreenNoParams
+import com.duckduckgo.app.pixels.AppPixelName.SUBSCRIPTION_IS_ENABLED_AND_ELIGIBLE
 import com.duckduckgo.app.settings.SettingsViewModel.Command
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchAboutScreen
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchAccessibilitySettings
@@ -51,53 +54,67 @@ import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchAppearanceScr
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchAutofillPasswordsManagement
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchAutofillSettings
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchCookiePopupProtectionScreen
+import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchDataClearingSettingsScreen
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchDefaultBrowser
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchDuckChatScreen
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchEmailProtection
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchEmailProtectionNotSupported
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchFeedback
-import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchFireButtonScreen
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchGeneralSettingsScreen
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchOtherPlatforms
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchPermissionsScreen
-import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchPproUnifiedFeedback
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchPrivateSearchWebPage
+import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchSubscriptionUnifiedFeedback
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchSyncSettings
 import com.duckduckgo.app.settings.SettingsViewModel.Command.LaunchWebTrackingProtectionScreen
 import com.duckduckgo.app.statistics.pixels.Pixel
 import com.duckduckgo.app.statistics.pixels.Pixel.PixelType.Daily
 import com.duckduckgo.app.webtrackingprotection.WebTrackingProtectionScreenNoParams
 import com.duckduckgo.app.widget.AddWidgetLauncher
+import com.duckduckgo.app.widget.AddWidgetSource
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.autoconsent.impl.ui.AutoconsentSettingsActivity
 import com.duckduckgo.autofill.api.AutofillScreenLaunchSource
 import com.duckduckgo.autofill.api.AutofillScreens.AutofillPasswordsManagementScreen
 import com.duckduckgo.autofill.api.AutofillScreens.AutofillSettingsScreen
+import com.duckduckgo.browser.api.ui.BrowserScreens.PrivateSearchScreenNoParams
 import com.duckduckgo.browser.api.ui.BrowserScreens.SettingsScreenNoParams
 import com.duckduckgo.common.ui.DuckDuckGoActivity
+import com.duckduckgo.common.ui.menu.PopupMenu
 import com.duckduckgo.common.ui.view.gone
 import com.duckduckgo.common.ui.view.listitem.DaxListItem.IconSize.Small
+import com.duckduckgo.common.ui.view.listitem.OneLineListItem
 import com.duckduckgo.common.ui.view.listitem.TwoLineListItem
 import com.duckduckgo.common.ui.view.show
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.common.utils.plugins.PluginPoint
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.duckchat.api.DuckChatSettingsNoParams
+import com.duckduckgo.feedback.api.FeedbackLauncher
 import com.duckduckgo.internal.features.api.InternalFeaturePlugin
 import com.duckduckgo.mobile.android.app.tracking.ui.AppTrackingProtectionScreens.AppTrackerActivityWithEmptyParams
 import com.duckduckgo.mobile.android.app.tracking.ui.AppTrackingProtectionScreens.AppTrackerOnboardingActivityWithEmptyParamsParams
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.duckduckgo.navigation.api.GlobalActivityStarter.ActivityParams
-import com.duckduckgo.settings.api.DuckPlayerSettingsPlugin
+import com.duckduckgo.remote.messaging.impl.modal.ModalSurfaceActivityFromMessageId
+import com.duckduckgo.settings.api.CompleteSetupSettingsPlugin
+import com.duckduckgo.settings.api.OtherSettingsPlugin
 import com.duckduckgo.settings.api.ProSettingsPlugin
-import com.duckduckgo.subscriptions.api.PrivacyProFeedbackScreens.GeneralPrivacyProFeedbackScreenNoParams
+import com.duckduckgo.settings.api.ProtectionsSettingsPlugin
+import com.duckduckgo.settings.api.ThreatProtectionSettingsPlugin
+import com.duckduckgo.subscriptions.api.SubscriptionFeedbackScreens.GeneralSubscriptionFeedbackScreenNoParams
 import com.duckduckgo.sync.api.SyncActivityWithEmptyParams
 import com.google.android.material.snackbar.Snackbar
-import javax.inject.Inject
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import timber.log.Timber
+import logcat.LogPriority.VERBOSE
+import logcat.logcat
+import javax.inject.Inject
+import com.duckduckgo.mobile.android.R as CommonR
 
 private const val OTHER_PLATFORMS_URL = "https://duckduckgo.com/app"
 
@@ -112,6 +129,12 @@ class SettingsActivity : DuckDuckGoActivity() {
     lateinit var pixel: Pixel
 
     @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
+
+    @Inject
     lateinit var internalFeaturePlugins: PluginPoint<InternalFeaturePlugin>
 
     @Inject
@@ -124,25 +147,38 @@ class SettingsActivity : DuckDuckGoActivity() {
     lateinit var globalActivityStarter: GlobalActivityStarter
 
     @Inject
+    lateinit var feedbackLauncher: FeedbackLauncher
+
+    private lateinit var feedbackFlow: ActivityResultLauncher<Void?>
+
+    @Inject
     lateinit var _proSettingsPlugin: PluginPoint<ProSettingsPlugin>
     private val proSettingsPlugin by lazy {
         _proSettingsPlugin.getPlugins()
     }
 
     @Inject
-    lateinit var _duckPlayerSettingsPlugin: PluginPoint<DuckPlayerSettingsPlugin>
-    private val duckPlayerSettingsPlugin by lazy {
-        _duckPlayerSettingsPlugin.getPlugins()
+    lateinit var _otherSettingsPlugin: PluginPoint<OtherSettingsPlugin>
+    private val otherSettingsPlugin by lazy {
+        _otherSettingsPlugin.getPlugins()
     }
 
-    private val feedbackFlow = registerForActivityResult(FeedbackContract()) { resultOk ->
-        if (resultOk) {
-            Snackbar.make(
-                binding.root,
-                R.string.thanksForTheFeedback,
-                Snackbar.LENGTH_LONG,
-            ).show()
-        }
+    @Inject
+    lateinit var _threatProtectionSettingsPlugin: PluginPoint<ThreatProtectionSettingsPlugin>
+    private val threatProtectionSettingsPlugin by lazy {
+        _threatProtectionSettingsPlugin.getPlugins()
+    }
+
+    @Inject
+    lateinit var _protectionsSettingsPlugin: PluginPoint<ProtectionsSettingsPlugin>
+    private val protectionsSettingsPlugin by lazy {
+        _protectionsSettingsPlugin.getPlugins()
+    }
+
+    @Inject
+    lateinit var _completeSetupSettingsPlugin: PluginPoint<CompleteSetupSettingsPlugin>
+    private val completeSetupSettingsPlugin by lazy {
+        _completeSetupSettingsPlugin.getPlugins()
     }
 
     private val viewsPrivacy
@@ -161,23 +197,77 @@ class SettingsActivity : DuckDuckGoActivity() {
         get() = binding.includeSettings.contentSettingsInternal
 
     private val viewsPro
-        get() = binding.includeSettings.contentSettingsPrivacyPro
+        get() = binding.includeSettings.contentSettingsSubscription
+
+    private val viewsCompleteSetup
+        get() = binding.includeSettings.contentSettingsCompleteSetup
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        feedbackFlow = registerForActivityResult(feedbackLauncher.feedbackContract()) { resultOk ->
+            if (resultOk) {
+                Snackbar.make(
+                    binding.root,
+                    R.string.thanksForTheFeedback,
+                    Snackbar.LENGTH_LONG,
+                ).show()
+            }
+        }
+
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.SETTINGS)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
+
         setContentView(binding.root)
         setupToolbar(binding.includeToolbar.toolbar)
+
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
 
         configureUiEventHandlers()
         configureInternalFeatures()
         configureSettings()
+        configureCompleteSetupSettings()
         lifecycle.addObserver(viewModel)
         observeViewModel()
+    }
 
-        intent?.getStringExtra(BrowserActivity.LAUNCH_FROM_NOTIFICATION_PIXEL_NAME)?.let {
-            viewModel.onLaunchedFromNotification(it)
+    private fun sortSettingItemsAlphabetically() {
+        // sort the children by their primary text
+        val items = viewsMain.settingsSectionGeneral.children.drop(ITEMS_TO_SKIP_WHEN_SORTING_SETTING_ITEMS).toMutableList()
+
+        items.sortBy { child ->
+            if (child is OneLineListItem) {
+                child.primaryTextString.lowercase()
+            } else if (child is LinearLayout && child.childCount == 1 && child.children.elementAt(0) is OneLineListItem) {
+                // this is used for settings that are injected from plugins
+                (child.children.elementAt(0) as OneLineListItem).primaryTextString.lowercase()
+            } else {
+                ""
+            }
         }
+
+        items.forEach { viewsMain.settingsSectionGeneral.removeView(it) }
+        items.forEach { viewsMain.settingsSectionGeneral.addView(it) }
+    }
+
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyNavigationBarInsets(binding.includeSettings.root, drawBehindGestureNav = true)
+    }
+
+    private fun configureCompleteSetupSettings() {
+        watchForCompleteSetupSettingsChanges()
+        updateCompleteSetupSettings()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshWidgetsInstalledState()
     }
 
     private fun configureUiEventHandlers() {
@@ -188,6 +278,7 @@ class SettingsActivity : DuckDuckGoActivity() {
             cookiePopupProtectionSetting.setClickListener { viewModel.onCookiePopupProtectionSettingClicked() }
             emailSetting.setClickListener { viewModel.onEmailProtectionSettingClicked() }
             vpnSetting.setClickListener { viewModel.onAppTPSettingClicked() }
+            widgetPromptSetting.setOnClickListener { viewModel.userRequestedToAddHomeScreenWidget() }
         }
 
         with(viewsMain) {
@@ -208,14 +299,24 @@ class SettingsActivity : DuckDuckGoActivity() {
         }
 
         with(viewsOther) {
+            whatsNewSetting.setOnClickListener {
+                viewModel.onWhatsNewClicked()
+            }
             aboutSetting.setOnClickListener { viewModel.onAboutSettingClicked() }
             shareFeedbackSetting.setOnClickListener { viewModel.onShareFeedbackClicked() }
             ddgOnOtherPlatformsSetting.setTrailingIconSize(Small)
             ddgOnOtherPlatformsSetting.setOnClickListener { viewModel.onDdgOnOtherPlatformsClicked() }
+            getDesktopBrowserSetting.setOnClickListener {
+                viewModel.onGetDesktopBrowserClicked()
+            }
         }
     }
 
     private fun configureSettings() {
+        viewsPrivacy.vpnSetting.setLeadingIconResource(
+            resolveAppTpSettingsIcon(appBrandDesignUpdateToggles.pictograms().isEnabled()),
+        )
+
         if (proSettingsPlugin.isEmpty()) {
             viewsPro.gone()
         } else {
@@ -224,19 +325,27 @@ class SettingsActivity : DuckDuckGoActivity() {
             }
         }
 
-        if (duckPlayerSettingsPlugin.isEmpty()) {
-            viewsMain.settingsSectionDuckPlayer.gone()
+        otherSettingsPlugin.forEach { plugin ->
+            viewsMain.root.addView(plugin.getView(this))
+        }
+
+        if (threatProtectionSettingsPlugin.isEmpty()) {
+            viewsPrivacy.settingsSectionThreatProtection.gone()
         } else {
-            duckPlayerSettingsPlugin.forEach { plugin ->
-                viewsMain.settingsSectionDuckPlayer.addView(plugin.getView(this))
+            threatProtectionSettingsPlugin.forEach { plugin ->
+                viewsPrivacy.settingsSectionThreatProtection.addView(plugin.getView(this))
             }
+        }
+
+        protectionsSettingsPlugin.forEach { plugin ->
+            viewsPrivacy.protectionsPluginsPlaceholder.addView(plugin.getView(this))
         }
     }
 
     private fun configureInternalFeatures() {
         viewsInternal.settingsSectionInternal.visibility = if (internalFeaturePlugins.getPlugins().isEmpty()) View.GONE else View.VISIBLE
         internalFeaturePlugins.getPlugins().forEach { feature ->
-            Timber.v("Adding internal feature ${feature.internalFeatureTitle()}")
+            logcat(VERBOSE) { "Adding internal feature ${feature.internalFeatureTitle()}" }
             val view = TwoLineListItem(this).apply {
                 setPrimaryText(feature.internalFeatureTitle())
                 setSecondaryText(feature.internalFeatureSubtitle())
@@ -260,10 +369,15 @@ class SettingsActivity : DuckDuckGoActivity() {
                     updateAutofill(it.showAutofill)
                     updateSyncSetting(visible = it.showSyncSetting)
                     updateAutoconsent(it.isAutoconsentEnabled)
-                    updatePrivacyPro(it.isPrivacyProEnabled)
-                    updateDuckPlayer(it.isDuckPlayerEnabled)
+                    updateSubscription(it.isSubscriptionEnabled)
+                    updateThreatProtection(it.isNewThreatProtectionSettingsEnabled)
                     updateDuckChat(it.isDuckChatEnabled)
                     updateVoiceSearchVisibility(it.isVoiceSearchVisible)
+                    updateAddWidgetInProtections(it.isAddWidgetInProtectionsVisible, it.widgetsInstalled)
+                    updateWhatsNewVisibility(it.showWhatsNew)
+                    updateGetDesktopBrowserItemVisibility(it.showGetDesktopBrowser)
+                    updateNextStepsSection(it)
+                    sortSettingItemsAlphabetically()
                 }
             }.launchIn(lifecycleScope)
 
@@ -273,20 +387,20 @@ class SettingsActivity : DuckDuckGoActivity() {
             .launchIn(lifecycleScope)
     }
 
-    private fun updatePrivacyPro(isPrivacyProEnabled: Boolean) {
-        if (isPrivacyProEnabled) {
-            pixel.fire(PRIVACY_PRO_IS_ENABLED_AND_ELIGIBLE, type = Daily())
+    private fun updateSubscription(isSubscriptionEnabled: Boolean) {
+        if (isSubscriptionEnabled) {
+            pixel.fire(SUBSCRIPTION_IS_ENABLED_AND_ELIGIBLE, type = Daily())
             viewsPro.show()
         } else {
             viewsPro.gone()
         }
     }
 
-    private fun updateDuckPlayer(isDuckPlayerEnabled: Boolean) {
-        if (isDuckPlayerEnabled) {
-            viewsMain.settingsSectionDuckPlayer.show()
+    private fun updateThreatProtection(newThreatProtectionSettingsEnabled: Boolean) {
+        if (newThreatProtectionSettingsEnabled) {
+            viewsPrivacy.settingsSectionThreatProtection.show()
         } else {
-            viewsMain.settingsSectionDuckPlayer.gone()
+            viewsPrivacy.settingsSectionThreatProtection.gone()
         }
     }
 
@@ -300,6 +414,95 @@ class SettingsActivity : DuckDuckGoActivity() {
 
     private fun updateVoiceSearchVisibility(isVisible: Boolean) {
         viewsNextSteps.enableVoiceSearchSetting.isVisible = isVisible
+    }
+
+    private fun updateAddWidgetInProtections(isVisible: Boolean, widgetsInstalled: Boolean) {
+        if (isVisible) {
+            viewsPrivacy.widgetPromptSetting.setStatus(isOn = widgetsInstalled)
+        }
+        viewsPrivacy.widgetPromptSetting.isVisible = isVisible
+    }
+
+    private fun updateNextStepsSection(viewState: SettingsViewModel.ViewState) {
+        with(viewsNextSteps) {
+            if (viewState.nextStepsSectionHidden) {
+                settingsSectionOther.gone()
+                return
+            }
+
+            // Apply individual item dismissals
+            if (viewState.nextStepsAddressBarDismissed) {
+                addressBarPositionSetting.gone()
+            }
+            if (viewState.nextStepsVoiceSearchDismissed) {
+                enableVoiceSearchSetting.gone()
+            }
+            if (viewState.isAddWidgetInProtectionsVisible || viewState.widgetsInstalled) {
+                viewsNextSteps.addWidgetToHomeScreenSetting.gone()
+            } else {
+                viewsNextSteps.addWidgetToHomeScreenSetting.show()
+            }
+
+            // Check if all items are gone — hide the entire section
+            val addressBarVisible = addressBarPositionSetting.isVisible
+            val voiceSearchVisible = enableVoiceSearchSetting.isVisible
+            val widgetVisible = addWidgetToHomeScreenSetting.isVisible
+            if (!addressBarVisible && !voiceSearchVisible && !widgetVisible) {
+                settingsSectionOther.gone()
+                return
+            }
+
+            settingsSectionOther.show()
+
+            // Show/hide the overflow menu on the section header
+            settingsNextStepsTitle.showOverflowMenuIcon(viewState.showNextStepsHideButton)
+            if (viewState.showNextStepsHideButton) {
+                settingsNextStepsTitle.setOverflowMenuClickListener { anchorView ->
+                    showNextStepsHidePopupMenu(anchorView)
+                }
+            }
+        }
+    }
+
+    private fun showNextStepsHidePopupMenu(anchorView: View) {
+        val layoutInflater = LayoutInflater.from(this)
+        val popupMenu = PopupMenu(layoutInflater, R.layout.popup_window_next_steps_menu)
+        val hideButton = popupMenu.contentView.findViewById<View>(R.id.hideNextSteps)
+
+        popupMenu.onMenuItemClicked(hideButton) {
+            viewModel.onNextStepsHideClicked()
+        }
+        popupMenu.show(viewsNextSteps.settingsNextStepsTitle, anchorView)
+    }
+
+    private fun updateWhatsNewVisibility(isVisible: Boolean) {
+        viewsOther.whatsNewSetting.isVisible = isVisible
+    }
+
+    private fun updateGetDesktopBrowserItemVisibility(isVisible: Boolean) {
+        viewsOther.getDesktopBrowserSetting.isVisible = isVisible
+        viewsOther.ddgOnOtherPlatformsSetting.isVisible = !isVisible
+    }
+
+    private fun watchForCompleteSetupSettingsChanges() {
+        with(viewsCompleteSetup) {
+            settingsCompleteFeaturesContainer.viewTreeObserver.addOnGlobalLayoutListener {
+                if (settingsCompleteFeaturesContainer.children.any { it.isVisible }) {
+                    settingsSectionCompleteSetup.show()
+                } else {
+                    settingsSectionCompleteSetup.gone()
+                }
+            }
+        }
+    }
+
+    private fun updateCompleteSetupSettings() {
+        val viewsToInclude = completeSetupSettingsPlugin.map { it.getView(this) }
+
+        with(viewsCompleteSetup.settingsCompleteFeaturesContainer) {
+            removeAllViews()
+            viewsToInclude.forEach { addView(it) }
+        }
     }
 
     private fun updateAutofill(autofillEnabled: Boolean) = with(viewsMain.autofillLoginsSetting) {
@@ -331,25 +534,32 @@ class SettingsActivity : DuckDuckGoActivity() {
             is LaunchAutofillPasswordsManagement -> launchScreen(
                 AutofillPasswordsManagementScreen(source = AutofillScreenLaunchSource.SettingsActivity),
             )
+
             is LaunchAccessibilitySettings -> launchScreen(AccessibilityScreens.Default)
             is LaunchAppTPTrackersScreen -> launchScreen(AppTrackerActivityWithEmptyParams)
             is LaunchAppTPOnboarding -> launchScreen(AppTrackerOnboardingActivityWithEmptyParamsParams)
-            is LaunchEmailProtection -> launchActivityAndFinish(BrowserActivity.intent(this, it.url, interstitialScreen = true))
+            is LaunchEmailProtection -> launchActivityAndFinish(
+                BrowserActivity.intent(this, launchSource = InAppNavigation, queryExtra = it.url, interstitialScreen = true),
+            )
             is LaunchEmailProtectionNotSupported -> launchScreen(EmailProtectionUnsupportedScreenNoParams)
             is LaunchAddHomeScreenWidget -> launchAddHomeScreenWidget()
             is LaunchSyncSettings -> launchScreen(SyncActivityWithEmptyParams)
             is LaunchPrivateSearchWebPage -> launchScreen(PrivateSearchScreenNoParams)
             is LaunchWebTrackingProtectionScreen -> launchScreen(WebTrackingProtectionScreenNoParams)
             is LaunchCookiePopupProtectionScreen -> launchActivity(AutoconsentSettingsActivity.intent(this))
-            is LaunchFireButtonScreen -> launchScreen(FireButtonScreenNoParams)
+            is LaunchDataClearingSettingsScreen -> launchScreen(DataClearingSettingsScreenNoParams)
             is LaunchPermissionsScreen -> launchScreen(PermissionsScreenNoParams)
             is LaunchDuckChatScreen -> launchScreen(DuckChatSettingsNoParams)
             is LaunchAppearanceScreen -> launchScreen(AppearanceScreen.Default)
             is LaunchAboutScreen -> launchScreen(AboutScreenNoParams)
             is LaunchGeneralSettingsScreen -> launchScreen(GeneralSettingsScreenNoParams)
             is LaunchFeedback -> launchFeedback()
-            is LaunchPproUnifiedFeedback -> launchScreen(GeneralPrivacyProFeedbackScreenNoParams)
-            is LaunchOtherPlatforms -> launchActivityAndFinish(BrowserActivity.intent(context = this, queryExtra = OTHER_PLATFORMS_URL))
+            is LaunchSubscriptionUnifiedFeedback -> launchScreen(GeneralSubscriptionFeedbackScreenNoParams)
+            is LaunchOtherPlatforms -> launchActivityAndFinish(
+                BrowserActivity.intent(context = this, launchSource = InAppNavigation, queryExtra = OTHER_PLATFORMS_URL),
+            )
+            is Command.LaunchGetDesktopBrowser -> launchScreen(SettingsDesktopBrowserPromotionParams.forSettingsListItem())
+            is Command.LaunchWhatsNew -> launchScreen(ModalSurfaceActivityFromMessageId(it.messageId, it.messageType, launchedFromSettings = true))
         }
     }
 
@@ -387,7 +597,7 @@ class SettingsActivity : DuckDuckGoActivity() {
 
     private fun launchAddHomeScreenWidget() {
         pixel.fire(AppPixelName.SETTINGS_ADD_HOME_SCREEN_WIDGET_CLICKED)
-        addWidgetLauncher.launchAddWidget(this)
+        addWidgetLauncher.launchAddWidget(this, true, source = AddWidgetSource.SETTINGS)
     }
 
     private fun launchFeedback() {
@@ -395,10 +605,14 @@ class SettingsActivity : DuckDuckGoActivity() {
     }
 
     companion object {
-        const val LAUNCH_FROM_NOTIFICATION_PIXEL_NAME = "LAUNCH_FROM_NOTIFICATION_PIXEL_NAME"
+        // header, divider and "General" item
+        const val ITEMS_TO_SKIP_WHEN_SORTING_SETTING_ITEMS = 3
 
         fun intent(context: Context): Intent {
             return Intent(context, SettingsActivity::class.java)
         }
     }
 }
+
+internal fun resolveAppTpSettingsIcon(isPictogramsEnabled: Boolean): Int =
+    if (isPictogramsEnabled) CommonR.drawable.homescreen_lock_color_24 else CommonR.drawable.lock_color_24

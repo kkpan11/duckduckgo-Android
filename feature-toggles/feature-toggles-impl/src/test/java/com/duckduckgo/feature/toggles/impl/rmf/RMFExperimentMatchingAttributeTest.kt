@@ -28,8 +28,6 @@ import com.duckduckgo.feature.toggles.api.Toggle.DefaultValue
 import com.duckduckgo.feature.toggles.api.Toggle.State
 import com.duckduckgo.feature.toggles.impl.RealFeatureTogglesInventory
 import com.duckduckgo.remote.messaging.api.JsonMatchingAttribute
-import java.time.ZoneId
-import java.time.ZonedDateTime
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,6 +36,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 @SuppressLint("DenyListedApi")
 class RMFExperimentMatchingAttributeTest {
@@ -186,15 +186,16 @@ class RMFExperimentMatchingAttributeTest {
         assertTrue(result!!)
     }
 
-    private fun Toggle.setCohort(isActive: Boolean = true) {
+    private suspend fun Toggle.setCohort(isActive: Boolean = true) {
         val zdt = ZonedDateTime.now(ZoneId.of("America/New_York")).toString()
         setRawStoredState(
             State(
                 remoteEnableState = isActive,
                 enable = isActive,
-                assignedCohort = State.Cohort(name = "control", weight = 1, enrollmentDateET = zdt),
+                cohorts = listOf(State.Cohort(name = "control", weight = 1, enrollmentDateET = zdt)),
             ),
         )
+        enroll()
     }
 
     abstract class TriggerTestScope private constructor()

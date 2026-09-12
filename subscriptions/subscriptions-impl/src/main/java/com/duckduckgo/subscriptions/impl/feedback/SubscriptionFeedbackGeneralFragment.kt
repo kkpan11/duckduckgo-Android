@@ -26,6 +26,7 @@ import com.duckduckgo.subscriptions.impl.databinding.ContentFeedbackGeneralBindi
 
 @InjectWith(FragmentScope::class)
 class SubscriptionFeedbackGeneralFragment : SubscriptionFeedbackFragment(R.layout.content_feedback_general) {
+
     private val binding: ContentFeedbackGeneralBinding by viewBinding()
 
     override fun onViewCreated(
@@ -38,15 +39,15 @@ class SubscriptionFeedbackGeneralFragment : SubscriptionFeedbackFragment(R.layou
         binding.browserFeedback.setOnClickListener {
             listener.onBrowserFeedbackClicked()
         }
-
-        binding.pproFeedback.setOnClickListener {
-            listener.onPproFeedbackClicked()
+        binding.subscriptionFeedback.setPrimaryText(getString(R.string.feedbackGeneralSubscription))
+        binding.subscriptionFeedback.setOnClickListener {
+            listener.onSubscriptionFeedbackClicked()
         }
     }
 
     interface Listener {
         fun onBrowserFeedbackClicked()
-        fun onPproFeedbackClicked()
+        fun onSubscriptionFeedbackClicked()
     }
 
     companion object {

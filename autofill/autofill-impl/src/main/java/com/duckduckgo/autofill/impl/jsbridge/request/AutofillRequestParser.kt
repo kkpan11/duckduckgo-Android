@@ -25,9 +25,11 @@ import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.adapters.EnumJsonAdapter
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import javax.inject.Inject
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import logcat.LogPriority.WARN
+import logcat.asLog
+import logcat.logcat
+import javax.inject.Inject
 
 interface AutofillRequestParser {
     suspend fun parseAutofillDataRequest(request: String): Result<AutofillDataRequest>
@@ -53,7 +55,9 @@ class AutofillJsonRequestParser @Inject constructor(
         return withContext(dispatchers.io()) {
             val result = kotlin.runCatching {
                 autofillDataRequestParser.fromJson(request)
-            }.getOrNull()
+            }
+                .onFailure { logcat(WARN) { "Failed to parse autofill JSON for AutofillDataRequest ${it.asLog()}\n$request" } }
+                .getOrNull()
 
             return@withContext if (result == null) {
                 Result.failure(IllegalArgumentException("Failed to parse autofill JSON for AutofillDataRequest"))
@@ -68,7 +72,7 @@ class AutofillJsonRequestParser @Inject constructor(
             val result = kotlin.runCatching {
                 autofillStoreFormDataRequestParser.fromJson(request)
             }
-                .onFailure { Timber.w(it, "Failed to parse autofill JSON for AutofillStoreFormDataRequest") }
+                .onFailure { logcat(WARN) { "Failed to parse autofill JSON for AutofillStoreFormDataRequest: ${it.asLog()}" } }
                 .getOrNull()
 
             return@withContext if (result == null) {

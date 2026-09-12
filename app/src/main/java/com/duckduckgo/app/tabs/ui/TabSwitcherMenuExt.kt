@@ -20,31 +20,24 @@ import android.view.Menu
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.isVisible
-import androidx.recyclerview.widget.RecyclerView
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.PopupTabsMenuBinding
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.BackButtonType.ARROW
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.BackButtonType.CLOSE
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.DynamicInterface
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.FabType
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.LayoutButtonType.GRID
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.LayoutButtonType.HIDDEN
-import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.SelectionViewState.LayoutButtonType.LIST
+import com.duckduckgo.app.browser.navigation.bar.view.BrowserNavigationBarView
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.BackButtonType.ARROW
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.BackButtonType.CLOSE
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.DynamicInterface
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.LayoutMode.GRID
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.LayoutMode.HIDDEN
+import com.duckduckgo.app.tabs.ui.TabSwitcherViewModel.ViewState.LayoutMode.LIST
 import com.duckduckgo.mobile.android.R as commonR
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 fun Menu.createDynamicInterface(
     numSelectedTabs: Int,
     popupMenu: PopupTabsMenuBinding,
-    mainFab: ExtendedFloatingActionButton,
-    aiFab: FloatingActionButton,
-    tabsRecycler: RecyclerView,
     toolbar: Toolbar,
     dynamicMenu: DynamicInterface,
+    navigationBar: BrowserNavigationBarView,
 ) {
-    popupMenu.newTabMenuItem.isVisible = dynamicMenu.isNewTabVisible
-    popupMenu.duckChatMenuItem.isVisible = dynamicMenu.isDuckChatVisible
     popupMenu.selectAllMenuItem.isVisible = dynamicMenu.isSelectAllVisible
     popupMenu.deselectAllMenuItem.isVisible = dynamicMenu.isDeselectAllVisible
     popupMenu.selectionActionsDivider.isVisible = dynamicMenu.isSelectionActionsDividerVisible
@@ -67,30 +60,32 @@ fun Menu.createDynamicInterface(
         setPrimaryText(resources.getQuantityString(R.plurals.closeTabsMenuItem, numSelectedTabs, numSelectedTabs))
     }
 
-    mainFab.apply {
-        if (dynamicMenu.isMainFabVisible) {
-            when (dynamicMenu.mainFabType) {
-                FabType.NEW_TAB -> {
-                    text = resources.getString(R.string.newTabMenuItem)
-                    icon = AppCompatResources.getDrawable(context, commonR.drawable.ic_add_24_solid_color)
-                }
-                FabType.CLOSE_TABS -> {
-                    text = resources.getQuantityString(R.plurals.closeTabsMenuItem, numSelectedTabs, numSelectedTabs)
-                    icon = AppCompatResources.getDrawable(context, commonR.drawable.ic_close_24_solid_color)
-                }
+    popupMenu.gridLayoutMenuItem.apply {
+        when (dynamicMenu.layoutMenuMode) {
+            GRID -> {
+                setTrailingIconVisibility(false)
+                isVisible = true
             }
-
-            show()
-            extend()
-        } else {
-            hide()
+            LIST -> {
+                setTrailingIconVisibility(true)
+                isVisible = true
+            }
+            HIDDEN -> isVisible = false
         }
     }
 
-    if (dynamicMenu.isAIFabVisible) {
-        aiFab.show()
-    } else {
-        aiFab.hide()
+    popupMenu.listLayoutMenuItem.apply {
+        when (dynamicMenu.layoutMenuMode) {
+            GRID -> {
+                setTrailingIconVisibility(true)
+                isVisible = true
+            }
+            LIST -> {
+                setTrailingIconVisibility(false)
+                isVisible = true
+            }
+            HIDDEN -> isVisible = false
+        }
     }
 
     toolbar.navigationIcon = when (dynamicMenu.backButtonType) {
@@ -98,37 +93,10 @@ fun Menu.createDynamicInterface(
         CLOSE -> AppCompatResources.getDrawable(toolbar.context, commonR.drawable.ic_close_24)
     }
 
-    findItem(R.id.layoutTypeMenuItem).apply {
-        when (dynamicMenu.layoutButtonType) {
-            GRID -> {
-                setIcon(com.duckduckgo.mobile.android.R.drawable.ic_view_grid_24)
-                title = toolbar.resources.getString(R.string.tabSwitcherGridViewMenu)
-                isVisible = true
-            }
-            LIST -> {
-                setIcon(com.duckduckgo.mobile.android.R.drawable.ic_view_list_24)
-                title = toolbar.resources.getString(R.string.tabSwitcherListViewMenu)
-                isVisible = true
-            }
-            HIDDEN -> isVisible = false
-        }
-    }
+    findItem(R.id.fireToolbarButton).isVisible = dynamicMenu.isFireButtonVisible
+    findItem(R.id.duckAIToolbarButton).isVisible = dynamicMenu.isDuckAIButtonVisible
+    findItem(R.id.newTabToolbarButton).isVisible = dynamicMenu.isNewTabButtonVisible
+    findItem(R.id.popupMenuToolbarButton).isVisible = dynamicMenu.isMenuButtonVisible
 
-    findItem(R.id.popupMenuItem).isEnabled = dynamicMenu.isMoreMenuItemEnabled
-    findItem(R.id.fireMenuItem).isVisible = dynamicMenu.isFireButtonVisible
-
-    val bottomPadding = if (dynamicMenu.isAIFabVisible) {
-        tabsRecycler.context.resources.getDimension(R.dimen.recyclerViewTwoFabsBottomPadding)
-    } else if (dynamicMenu.isMainFabVisible) {
-        tabsRecycler.context.resources.getDimension(R.dimen.recyclerViewOneFabBottomPadding)
-    } else {
-        tabsRecycler.context.resources.getDimension(com.duckduckgo.mobile.android.R.dimen.keyline_2)
-    }
-
-    tabsRecycler.setPadding(
-        tabsRecycler.paddingLeft,
-        tabsRecycler.paddingTop,
-        tabsRecycler.paddingRight,
-        bottomPadding.toInt(),
-    )
+    navigationBar.isVisible = dynamicMenu.isBottomBarVisible
 }

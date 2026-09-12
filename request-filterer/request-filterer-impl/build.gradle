@@ -23,7 +23,6 @@ plugins {
 apply from: "$rootProject.projectDir/gradle/android-library.gradle"
 
 dependencies {
-    anvil project(':anvil-compiler')
     implementation project(':anvil-annotations')
 
     implementation project(':di')
@@ -36,7 +35,7 @@ dependencies {
     implementation project(':browser-api')
     implementation project(':statistics-api')
 
-    implementation JakeWharton.timber
+    implementation "com.squareup.logcat:logcat:_"
     implementation Square.retrofit2.converter.moshi
 
     implementation KotlinX.coroutines.core
@@ -50,7 +49,6 @@ dependencies {
     implementation Google.dagger
     implementation AndroidX.core.ktx
     implementation AndroidX.room.runtime
-    implementation AndroidX.room.ktx
 
     // Testing dependencies
     testImplementation project(path: ':common-test')

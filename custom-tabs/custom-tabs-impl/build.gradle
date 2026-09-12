@@ -26,7 +26,7 @@ apply from: "$rootProject.projectDir/gradle/android-library.gradle"
 dependencies {
 	implementation project(":custom-tabs-api")
 
-    anvil project(path: ':anvil-compiler')
+    ksp project(':anvil-ksp')
     implementation project(path: ':anvil-annotations')
     implementation project(path: ':di')
     implementation project(path: ':statistics-api')
@@ -35,12 +35,11 @@ dependencies {
     implementation KotlinX.coroutines.android
     implementation AndroidX.core.ktx
     implementation Google.dagger
-    implementation JakeWharton.timber
+    implementation "com.squareup.logcat:logcat:_"
 
     // Browser
     implementation "androidx.browser:browser:_"
 
-    implementation "com.squareup.logcat:logcat:_"
 
     testImplementation Testing.junit4
     testImplementation "org.mockito.kotlin:mockito-kotlin:_"

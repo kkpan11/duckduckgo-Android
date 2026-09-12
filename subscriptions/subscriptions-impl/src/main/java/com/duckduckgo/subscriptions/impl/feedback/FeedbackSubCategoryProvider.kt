@@ -18,6 +18,8 @@ package com.duckduckgo.subscriptions.impl.feedback
 
 import com.duckduckgo.di.scopes.FragmentScope
 import com.duckduckgo.subscriptions.impl.R
+import com.duckduckgo.subscriptions.impl.SubscriptionsFeature
+import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackCategory.DUCK_AI
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackCategory.ITR
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackCategory.PIR
 import com.duckduckgo.subscriptions.impl.feedback.SubscriptionFeedbackCategory.SUBS_AND_PAYMENTS
@@ -30,13 +32,16 @@ interface FeedbackSubCategoryProvider {
 }
 
 @ContributesBinding(FragmentScope::class)
-class RealFeedbackSubCategoryProvider @Inject constructor() : FeedbackSubCategoryProvider {
+class RealFeedbackSubCategoryProvider @Inject constructor(
+    private val subscriptionsFeature: SubscriptionsFeature,
+) : FeedbackSubCategoryProvider {
     override fun getSubCategories(category: SubscriptionFeedbackCategory): Map<Int, SubscriptionFeedbackSubCategory> {
         return when (category) {
             VPN -> getVPNSubCategories()
             SUBS_AND_PAYMENTS -> getSubsSubCategories()
             PIR -> getPirSubCategories()
             ITR -> getItrSubCategories()
+            DUCK_AI -> getDuckAiSubCategories()
         }
     }
 
@@ -52,10 +57,13 @@ class RealFeedbackSubCategoryProvider @Inject constructor() : FeedbackSubCategor
     }
 
     private fun getSubsSubCategories(): Map<Int, SubscriptionFeedbackSubCategory> {
-        return mapOf(
-            R.string.feedbackSubCategorySubsOtp to SubscriptionFeedbackSubsSubCategory.ONE_TIME_PASSWORD,
-            R.string.feedbackSubCategorySubsOther to SubscriptionFeedbackSubsSubCategory.OTHER,
-        )
+        return buildMap {
+            put(R.string.feedbackSubCategorySubsOtp, SubscriptionFeedbackSubsSubCategory.ONE_TIME_PASSWORD)
+            if (subscriptionsFeature.allowProTierPurchase().isEnabled()) {
+                put(R.string.feedbackSubCategorySubsUnableToAccessProFeatures, SubscriptionFeedbackSubsSubCategory.UNABLE_TO_ACCESS_FEATURES)
+            }
+            put(R.string.feedbackSubCategorySubsOther, SubscriptionFeedbackSubsSubCategory.OTHER)
+        }
     }
 
     private fun getPirSubCategories(): Map<Int, SubscriptionFeedbackSubCategory> {
@@ -74,6 +82,14 @@ class RealFeedbackSubCategoryProvider @Inject constructor() : FeedbackSubCategor
             R.string.feedbackSubCategoryItrCantContactAdvisor to SubscriptionFeedbackItrSubCategory.CANT_CONTACT_ADVISOR,
             R.string.feedbackSubCategoryItrAdvisorUnhelpful to SubscriptionFeedbackItrSubCategory.UNHELPFUL,
             R.string.feedbackSubCategoryItrOther to SubscriptionFeedbackItrSubCategory.OTHER,
+        )
+    }
+
+    private fun getDuckAiSubCategories(): Map<Int, SubscriptionFeedbackSubCategory> {
+        return mapOf(
+            R.string.feedbackSubCategoryDuckAiSubscriberModels to SubscriptionFeedbackDuckAiSubCategory.ACCESS_SUBSCRIPTION_MODELS,
+            R.string.feedbackSubCategoryDuckAiLoginThirdPartyBrowser to SubscriptionFeedbackDuckAiSubCategory.LOGIN_THIRD_PARTY_BROWSER,
+            R.string.feedbackSubCategoryDuckAiOther to SubscriptionFeedbackDuckAiSubCategory.OTHER,
         )
     }
 }

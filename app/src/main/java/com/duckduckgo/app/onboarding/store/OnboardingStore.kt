@@ -17,14 +17,29 @@
 package com.duckduckgo.app.onboarding.store
 
 import com.duckduckgo.app.cta.ui.DaxBubbleCta.DaxDialogIntroOption
+import com.duckduckgo.app.onboarding.ui.page.configdriven.DownloadReasonSelection
 
 interface OnboardingStore {
     var onboardingDialogJourney: String?
-    var visitSiteCtaDisplayCount: Int
+    var linearPlanWidgetPromptShown: Boolean
 
-    @Deprecated(message = "Parameter used for a temporary pixel")
     fun getSearchOptions(): List<DaxDialogIntroOption>
+    fun getChatSuggestions(): List<DaxDialogIntroOption>
     fun getSitesOptions(): List<DaxDialogIntroOption>
-    fun getExperimentSearchOptions(): List<DaxDialogIntroOption>
-    fun clearVisitSiteCtaDisplayCount()
+    fun storeInputScreenSelection(selected: Boolean)
+    fun getInputScreenSelection(): Boolean?
+    fun isInputScreenSelectionOverriddenByUser(): Boolean
+    fun setInputScreenSelectionOverriddenByUser()
+    fun setDuckAiOnboardingFlow()
+    fun isDuckAiOnboardingFlow(): Boolean
+    fun setDownloadReason(reason: DownloadReasonSelection?)
+    fun getDownloadReason(): DownloadReasonSelection?
+
+    /**
+     * The segmented path the user is on, but only once that path has opted into the input screen. The
+     * search path only does so if the user enabled the toggle; the AI path always does. Null everywhere
+     * else, including a search path left without the toggle and the paths that never touch the input
+     * screen.
+     */
+    fun getSegmentedPathWithAiInput(): DownloadReasonSelection?
 }

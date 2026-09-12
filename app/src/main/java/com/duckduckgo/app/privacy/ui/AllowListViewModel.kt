@@ -29,10 +29,10 @@ import com.duckduckgo.app.privacy.ui.AllowListViewModel.Command.*
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.SingleLiveEvent
 import com.duckduckgo.di.scopes.ActivityScope
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class AllowListViewModel @Inject constructor(
@@ -47,10 +47,10 @@ class AllowListViewModel @Inject constructor(
     )
 
     sealed class Command {
-        object ShowAdd : Command()
+        data object ShowAdd : Command()
         class ShowEdit(val entry: UserAllowListedDomain) : Command()
         class ConfirmDelete(val entry: UserAllowListedDomain) : Command()
-        object ShowAllowListFormatError : Command()
+        data object ShowAllowListFormatError : Command()
     }
 
     val viewState: MutableLiveData<ViewState> = MutableLiveData()

@@ -20,6 +20,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.duckduckgo.anvil.annotations.ContributesViewModel
+import com.duckduckgo.app.browser.defaultbrowsing.DefaultBrowserChangedSurveyManager
 import com.duckduckgo.app.global.install.AppInstallStore
 import com.duckduckgo.app.global.install.daysInstalled
 import com.duckduckgo.app.statistics.store.StatisticsDataStore
@@ -31,10 +32,10 @@ import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.common.utils.DispatcherProvider
 import com.duckduckgo.common.utils.SingleLiveEvent
 import com.duckduckgo.di.scopes.ActivityScope
-import javax.inject.Inject
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class SurveyViewModel @Inject constructor(
@@ -48,9 +49,9 @@ class SurveyViewModel @Inject constructor(
 
     sealed class Command {
         class LoadSurvey(val url: String) : Command()
-        object ShowError : Command()
-        object ShowSurvey : Command()
-        object Close : Command()
+        data object ShowError : Command()
+        data object ShowSurvey : Command()
+        data object Close : Command()
     }
 
     val command: SingleLiveEvent<Command> = SingleLiveEvent()
@@ -106,8 +107,10 @@ class SurveyViewModel @Inject constructor(
             withContext(dispatchers.io() + NonCancellable) {
                 surveyRepository.updateSurvey(survey)
             }
-            withContext(dispatchers.main()) {
-                command.value = Command.Close
+            if (survey.surveyId !in DefaultBrowserChangedSurveyManager.SURVEY_IDS) {
+                withContext(dispatchers.main()) {
+                    command.value = Command.Close
+                }
             }
         }
     }

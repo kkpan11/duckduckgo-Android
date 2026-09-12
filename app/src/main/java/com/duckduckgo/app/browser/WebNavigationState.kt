@@ -41,10 +41,11 @@ sealed class WebNavigationStateChange {
     ) : WebNavigationStateChange()
 
     data class UrlUpdated(val url: String) : WebNavigationStateChange()
-    object PageCleared : WebNavigationStateChange()
-    object Unchanged : WebNavigationStateChange()
-    object PageNavigationCleared : WebNavigationStateChange()
-    object Other : WebNavigationStateChange()
+    data class TitleUpdated(val title: String?) : WebNavigationStateChange()
+    data object PageCleared : WebNavigationStateChange()
+    data object Unchanged : WebNavigationStateChange()
+    data object PageNavigationCleared : WebNavigationStateChange()
+    data object Other : WebNavigationStateChange()
 }
 
 fun WebNavigationState.compare(previous: WebNavigationState?): WebNavigationStateChange {
@@ -75,6 +76,12 @@ fun WebNavigationState.compare(previous: WebNavigationState?): WebNavigationStat
         }
 
         return WebNavigationStateChange.UrlUpdated(latestUrl)
+    }
+
+    // The url hasn't changed, but the title has, this can happen without a page load (for example when navigating
+    // within a page or on some error pages)
+    if (title != previous?.title) {
+        return WebNavigationStateChange.TitleUpdated(title)
     }
 
     return WebNavigationStateChange.Other

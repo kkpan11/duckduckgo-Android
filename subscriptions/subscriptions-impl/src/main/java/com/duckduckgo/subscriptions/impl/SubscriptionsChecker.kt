@@ -36,11 +36,11 @@ import com.duckduckgo.subscriptions.api.SubscriptionStatus.UNKNOWN
 import com.duckduckgo.subscriptions.impl.RealSubscriptionsChecker.Companion.TAG_WORKER_SUBSCRIPTION_CHECK
 import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.anvil.annotations.ContributesMultibinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 interface SubscriptionsChecker {
     suspend fun runChecker()
@@ -95,23 +95,19 @@ class SubscriptionsCheckWorker(
     override suspend fun doWork(): Result {
         return try {
             if (subscriptionsManager.canRefreshSubscription()) {
-                if (subscriptionsManager.isSignedInV2()) {
-                    subscriptionsManager.refreshSubscriptionData()
-                    val subscription = subscriptionsManager.getSubscription()
-                    if (subscription?.isActive() == true) {
-                        // No need to refresh active subscription in the background. Delay next refresh to the expiry/renewal time.
-                        // It will still get refreshed when the app goes to the foreground.
-                        val expiresOrRenewsAt = Instant.ofEpochMilli(subscription.expiresOrRenewsAt)
-                        if (expiresOrRenewsAt > Instant.now()) {
-                            workManager.enqueueUniquePeriodicWork(
-                                TAG_WORKER_SUBSCRIPTION_CHECK,
-                                ExistingPeriodicWorkPolicy.UPDATE,
-                                buildSubscriptionCheckPeriodicWorkRequest(nextScheduleTimeOverride = expiresOrRenewsAt),
-                            )
-                        }
+                subscriptionsManager.refreshSubscriptionData()
+                val subscription = subscriptionsManager.getSubscription()
+                if (subscription?.isActive() == true) {
+                    // No need to refresh active subscription in the background. Delay next refresh to the expiry/renewal time.
+                    // It will still get refreshed when the app goes to the foreground.
+                    val expiresOrRenewsAt = Instant.ofEpochMilli(subscription.expiresOrRenewsAt)
+                    if (expiresOrRenewsAt > Instant.now()) {
+                        workManager.enqueueUniquePeriodicWork(
+                            TAG_WORKER_SUBSCRIPTION_CHECK,
+                            ExistingPeriodicWorkPolicy.UPDATE,
+                            buildSubscriptionCheckPeriodicWorkRequest(nextScheduleTimeOverride = expiresOrRenewsAt),
+                        )
                     }
-                } else {
-                    subscriptionsManager.fetchAndStoreAllData()
                 }
             } else {
                 workManager.cancelUniqueWork(TAG_WORKER_SUBSCRIPTION_CHECK)

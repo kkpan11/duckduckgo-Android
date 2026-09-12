@@ -14,38 +14,68 @@
   ~ limitations under the License.
   -->
 
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fadeScrollbars="false"
-    android:scrollbarAlwaysDrawVerticalTrack="true"
-    android:scrollbars="vertical">
+    android:orientation="vertical">
 
-    <LinearLayout
+    <include
+        android:id="@+id/includeToolbar"
+        layout="@layout/include_default_toolbar" />
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/contentScrollView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:layout_height="match_parent"
+        android:fadeScrollbars="false"
+        android:scrollbarAlwaysDrawVerticalTrack="true"
+        android:scrollbars="vertical">
 
-        <include
-            android:id="@+id/includeToolbar"
-            layout="@layout/include_default_toolbar" />
-
-        <ViewSwitcher
-            android:id="@+id/viewSwitcher"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:measureAllChildren="false">
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:id="@+id/notifyMeContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone">
+
+                <com.duckduckgo.common.ui.notifyme.NotifyMeView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    app:contentOrientation="start"
+                    app:dismissIcon="true"
+                    app:primaryText="@string/sync_simplified_settings_notify_me_title"
+                    app:secondaryText="@string/sync_simplified_settings_notify_me_body"
+                    app:sharedPrefsKeyForDismiss="key_component_dismissed_in_sync_settings" />
+            </FrameLayout>
+
+            <com.duckduckgo.sync.impl.ui.dashboard.SyncHeaderView
+                android:id="@+id/syncHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="@dimen/keyline_5"
+                android:layout_marginTop="@dimen/keyline_5"
+                android:layout_marginBottom="@dimen/keyline_6" />
 
             <include
-                android:id="@+id/view_sync_disabled"
-                layout="@layout/view_sync_disabled" />
+                android:id="@+id/include_disabled_view"
+                layout="@layout/view_sync_disabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone" />
 
             <include
-                android:id="@+id/view_sync_enabled"
-                layout="@layout/view_sync_enabled" />
+                android:id="@+id/include_enabled_view"
+                layout="@layout/view_sync_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone" />
 
-        </ViewSwitcher>
-    </LinearLayout>
-</ScrollView>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

@@ -33,24 +33,31 @@ import com.duckduckgo.common.ui.view.button.ButtonType.GHOST_ALT
 import com.duckduckgo.common.ui.view.dialog.TextAlertDialogBuilder
 import com.duckduckgo.common.ui.view.gone
 import com.duckduckgo.common.ui.view.show
+import com.duckduckgo.common.ui.view.text.DaxTextView
 import com.duckduckgo.common.ui.viewbinding.viewBinding
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeBucket
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeHandler
+import com.duckduckgo.common.utils.edgetoedge.EdgeToEdgeProvider
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.navigation.api.GlobalActivityStarter
 import com.duckduckgo.subscriptions.api.ActiveOfferType
-import com.duckduckgo.subscriptions.api.PrivacyProFeedbackScreens.PrivacyProFeedbackScreenWithParams
-import com.duckduckgo.subscriptions.api.PrivacyProUnifiedFeedback.PrivacyProFeedbackSource.SUBSCRIPTION_SETTINGS
+import com.duckduckgo.subscriptions.api.SubscriptionFeedbackScreens.SubscriptionFeedbackScreenWithParams
+import com.duckduckgo.subscriptions.api.SubscriptionScreens.SubscriptionsSettingsScreenWithEmptyParams
 import com.duckduckgo.subscriptions.api.SubscriptionStatus.AUTO_RENEWABLE
 import com.duckduckgo.subscriptions.api.SubscriptionStatus.EXPIRED
 import com.duckduckgo.subscriptions.api.SubscriptionStatus.INACTIVE
+import com.duckduckgo.subscriptions.api.SubscriptionUnifiedFeedback.SubscriptionFeedbackSource.SUBSCRIPTION_SETTINGS
 import com.duckduckgo.subscriptions.impl.R.*
-import com.duckduckgo.subscriptions.impl.SubscriptionsConstants
-import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.ACTIVATE_URL
+import com.duckduckgo.subscriptions.impl.SubscriptionTier.PLUS
+import com.duckduckgo.subscriptions.impl.SubscriptionTier.PRO
+import com.duckduckgo.subscriptions.impl.SubscriptionTier.UNKNOWN
+import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.ADVANCED_SUBSCRIPTION
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.BASIC_SUBSCRIPTION
 import com.duckduckgo.subscriptions.impl.SubscriptionsConstants.FAQS_URL
 import com.duckduckgo.subscriptions.impl.databinding.ActivitySubscriptionSettingsBinding
+import com.duckduckgo.subscriptions.impl.internal.SubscriptionsUrlProvider
 import com.duckduckgo.subscriptions.impl.pixels.SubscriptionPixelSender
 import com.duckduckgo.subscriptions.impl.ui.ChangePlanActivity.Companion.ChangePlanScreenWithEmptyParams
-import com.duckduckgo.subscriptions.impl.ui.SubscriptionSettingsActivity.Companion.SubscriptionsSettingsScreenWithEmptyParams
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionSettingsViewModel.Command
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionSettingsViewModel.Command.FinishSignOut
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionSettingsViewModel.Command.GoToActivationScreen
@@ -60,10 +67,10 @@ import com.duckduckgo.subscriptions.impl.ui.SubscriptionSettingsViewModel.Subscr
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionSettingsViewModel.SubscriptionDuration.Yearly
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionSettingsViewModel.ViewState
 import com.duckduckgo.subscriptions.impl.ui.SubscriptionsWebViewActivityWithParams.ToolbarConfig.CustomTitle
-import javax.inject.Inject
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 @ContributeToActivityStarter(SubscriptionsSettingsScreenWithEmptyParams::class, screenName = "ppro.settings")
@@ -75,6 +82,15 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
     @Inject
     lateinit var pixelSender: SubscriptionPixelSender
 
+    @Inject
+    lateinit var subscriptionsUrlProvider: SubscriptionsUrlProvider
+
+    @Inject
+    lateinit var edgeToEdgeProvider: EdgeToEdgeProvider
+
+    @Inject
+    lateinit var edgeToEdgeHandler: EdgeToEdgeHandler
+
     private val viewModel: SubscriptionSettingsViewModel by bindViewModel()
     private val binding: ActivitySubscriptionSettingsBinding by viewBinding()
 
@@ -83,8 +99,17 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val edgeToEdgeEnabled = edgeToEdgeProvider.isEnabled(EdgeToEdgeBucket.SETTINGS)
+        if (edgeToEdgeEnabled) {
+            enableTransparentEdgeToEdge()
+        }
+
         setContentView(binding.root)
         setupToolbar(toolbar)
+        if (edgeToEdgeEnabled) {
+            configureEdgeToEdgeInsets()
+        }
 
         lifecycle.addObserver(viewModel)
 
@@ -97,26 +122,6 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
             .filterIsInstance(ViewState.Ready::class)
             .onEach { renderView(it) }
             .launchIn(lifecycleScope)
-
-        binding.removeDevice.setClickListener {
-            TextAlertDialogBuilder(this)
-                .setTitle(string.removeFromDevice)
-                .setMessage(string.removeFromDeviceDescription)
-                .setPositiveButton(string.removeSubscription, DESTRUCTIVE)
-                .setNegativeButton(string.cancel, GHOST_ALT)
-                .addEventListener(
-                    object : TextAlertDialogBuilder.EventListener() {
-                        override fun onPositiveButtonClicked() {
-                            viewModel.removeFromDevice()
-                        }
-
-                        override fun onNegativeButtonClicked() {
-                            // NOOP
-                        }
-                    },
-                )
-                .show()
-        }
 
         binding.manageEmail.setOnClickListener {
             viewModel.onEditEmailButtonClicked()
@@ -141,6 +146,14 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
             goToPurchasePage()
         }
 
+        binding.viewAllPlansTop.setClickListener {
+            goToPlansPage()
+        }
+
+        binding.upgradeToProContainer.setOnClickListener {
+            goToUpgradeToProPage()
+        }
+
         binding.privacyPolicy.setOnClickListener {
             goToPrivacyPolicy()
         }
@@ -150,10 +163,16 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
         }
     }
 
+    private fun configureEdgeToEdgeInsets() {
+        edgeToEdgeHandler.applyHorizontalSystemBarInsets(binding.root)
+        edgeToEdgeHandler.applyStatusBarInsets(binding.includeToolbar.appBarLayout)
+        edgeToEdgeHandler.applyNavigationBarInsets(binding.contentScrollView, drawBehindGestureNav = true)
+    }
+
     private fun goToFeedback() {
         globalActivityStarter.start(
             this,
-            PrivacyProFeedbackScreenWithParams(
+            SubscriptionFeedbackScreenWithParams(
                 feedbackSource = SUBSCRIPTION_SETTINGS,
             ),
         )
@@ -165,6 +184,19 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
     }
 
     private fun renderView(viewState: ViewState.Ready) {
+        binding.subscriptionSettingsProductName.setText(string.ddg_subscription)
+        binding.activateOnOtherDevices.setText(string.activateOnOtherDevices)
+        binding.faq.setPrimaryText(getString(string.privacyProFaq))
+        binding.faq.setSecondaryText(getString(string.privacyProFaqSecondary))
+
+        // Reset all tier-related views to default hidden state
+        // This ensures proper state when transitioning between tiers or subscription states
+        binding.tierName.isVisible = false
+        binding.viewAllPlansTop.isVisible = false
+        binding.upgradeToProContainer.isVisible = false
+        binding.verticalTierDivider.isVisible = false
+        binding.pendingDowngradeInfoPanel.gone()
+
         if (viewState.status in listOf(INACTIVE, EXPIRED)) {
             binding.viewPlans.isVisible = true
             binding.changePlan.isVisible = false
@@ -177,21 +209,47 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
             binding.subscriptionActiveStatusContainer.isVisible = true
             binding.subscriptionExpiredStatusContainer.isVisible = false
 
+            if (viewState.isProTierEnabled) {
+                val tier = viewState.subscriptionTier
+
+                binding.tierName.isVisible = true
+                binding.verticalTierDivider.isVisible = true
+                binding.viewAllPlansTop.isVisible = true
+                when (tier) {
+                    PRO -> {
+                        binding.tierName.text = getString(string.tierProName)
+                        binding.tierName.setTypography(DaxTextView.Typography.Body2Bold)
+                    }
+
+                    PLUS -> {
+                        binding.tierName.text = getString(string.tierPlusName)
+                        binding.tierName.setTypography(DaxTextView.Typography.Body2)
+                        binding.upgradeToProContainer.isVisible = true
+                    }
+
+                    UNKNOWN -> {
+                        // In case of unknown tier, we hide the pill
+                        binding.tierName.gone()
+                    }
+                }
+            }
+
             // Free Trial active
             if (viewState.activeOffers.contains(ActiveOfferType.TRIAL)) {
                 binding.subscriptionActiveStatusTextView.text = getString(string.subscriptionStatusFreeTrial)
 
                 val subscriptionRenewalDetailsRes = when {
                     viewState.status == AUTO_RENEWABLE && viewState.duration == Monthly ->
-                        getString(string.freeTrialActiveSubscriptionsData, viewState.date, getString(string.monthly))
+                        getString(string.freeTrialMonthlyActiveSubscriptionsData, viewState.date)
                     viewState.status == AUTO_RENEWABLE && viewState.duration == Yearly ->
-                        getString(string.freeTrialActiveSubscriptionsData, viewState.date, getString(string.yearly))
+                        getString(string.freeTrialYearlyActiveSubscriptionsData, viewState.date)
                     else -> getString(string.freeTrialCancelledSubscriptionsData, viewState.date)
                 }
                 binding.changePlan.setSecondaryText(subscriptionRenewalDetailsRes)
 
-                // Active status without a Free Trial
-            } else {
+                // Override with pending plan message if there's a deferred change
+                showPendingPlanMessageIfPresent(viewState)
+            } else { // Active status without a Free Trial
                 binding.subscriptionActiveStatusTextView.text = getString(string.subscriptionStatusSubscribed)
 
                 val status = when (viewState.status) {
@@ -205,6 +263,9 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
                 }
 
                 binding.changePlan.setSecondaryText(getString(subscriptionsDataStringResId, status, viewState.date))
+
+                // Override with pending plan message if there's a deferred change
+                showPendingPlanMessageIfPresent(viewState)
             }
 
             when (viewState.platform.lowercase()) {
@@ -224,7 +285,12 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
                 else -> {
                     binding.changePlan.setClickListener {
                         pixelSender.reportSubscriptionSettingsChangePlanOrBillingClick()
-                        val url = String.format(URL, BASIC_SUBSCRIPTION, applicationContext.packageName)
+                        val productSKU = if (viewState.subscriptionTier == PRO) {
+                            ADVANCED_SUBSCRIPTION
+                        } else {
+                            BASIC_SUBSCRIPTION
+                        }
+                        val url = String.format(URL, productSKU, applicationContext.packageName)
                         val intent = Intent(Intent.ACTION_VIEW)
                         intent.setData(Uri.parse(url))
                         startActivity(intent)
@@ -246,6 +312,26 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
             binding.sendFeedback.show()
         } else {
             binding.sendFeedback.gone()
+        }
+
+        binding.removeDevice.setClickListener {
+            TextAlertDialogBuilder(this)
+                .setTitle(string.removeFromDevice)
+                .setMessage(string.removeFromDeviceDescription)
+                .setPositiveButton(string.removeSubscription, DESTRUCTIVE)
+                .setNegativeButton(string.cancel, GHOST_ALT)
+                .addEventListener(
+                    object : TextAlertDialogBuilder.EventListener() {
+                        override fun onPositiveButtonClicked() {
+                            viewModel.removeFromDevice()
+                        }
+
+                        override fun onNegativeButtonClicked() {
+                            // NOOP
+                        }
+                    },
+                )
+                .show()
         }
     }
 
@@ -295,7 +381,26 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
         globalActivityStarter.start(
             context = this,
             params = SubscriptionsWebViewActivityWithParams(
-                url = SubscriptionsConstants.BUY_URL,
+                url = subscriptionsUrlProvider.buyUrl,
+                origin = PURCHASE_VIEW_PLANS_ORIGIN,
+            ),
+        )
+    }
+
+    private fun goToPlansPage() {
+        globalActivityStarter.start(
+            context = this,
+            params = SubscriptionsWebViewActivityWithParams(
+                url = subscriptionsUrlProvider.plansUrl,
+            ),
+        )
+    }
+
+    private fun goToUpgradeToProPage() {
+        globalActivityStarter.start(
+            context = this,
+            params = SubscriptionsWebViewActivityWithParams(
+                url = subscriptionsUrlProvider.upgradeToProUrl,
             ),
         )
     }
@@ -304,7 +409,7 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
         globalActivityStarter.start(
             this,
             SubscriptionsWebViewActivityWithParams(
-                url = MANAGE_URL,
+                url = subscriptionsUrlProvider.manageUrl,
                 toolbarConfig = CustomTitle(getString(string.manageEmail)),
             ),
         )
@@ -314,7 +419,7 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
         globalActivityStarter.start(
             this,
             SubscriptionsWebViewActivityWithParams(
-                url = ACTIVATE_URL,
+                url = subscriptionsUrlProvider.activateUrl,
             ),
         )
     }
@@ -329,12 +434,44 @@ class SubscriptionSettingsActivity : DuckDuckGoActivity() {
         )
     }
 
+    private fun showPendingPlanMessageIfPresent(viewState: ViewState.Ready) {
+        if (viewState.pendingPlanDisplayNameResId != null && viewState.pendingEffectiveDate != null) {
+            val changeTypeString = if (viewState.isPendingDowngrade == true) {
+                string.subscriptionPendingPlanChangeDowngrade
+            } else {
+                string.subscriptionPendingPlanChangeUpgrade
+            }
+            val pendingPlanDisplayName = getString(viewState.pendingPlanDisplayNameResId)
+            binding.changePlan.setSecondaryText(
+                getString(changeTypeString, pendingPlanDisplayName, viewState.pendingEffectiveDate),
+            )
+            if (viewState.isPendingDowngrade == true &&
+                viewState.pendingTierNameResId != null &&
+                viewState.pendingEffectiveDateShort != null
+            ) {
+                binding.pendingDowngradeInfoPanel.show()
+                binding.pendingDowngradeInfoPanel.setText(
+                    getString(
+                        string.subscriptionPendingPlanChangeDowngradePanel,
+                        getString(viewState.pendingTierNameResId),
+                        viewState.pendingEffectiveDateShort,
+                    ),
+                )
+            } else {
+                binding.pendingDowngradeInfoPanel.gone()
+            }
+        } else {
+            binding.pendingDowngradeInfoPanel.gone()
+        }
+    }
+
     companion object {
         const val URL = "https://play.google.com/store/account/subscriptions?sku=%s&package=%s"
-        const val MANAGE_URL = "https://duckduckgo.com/subscriptions/manage"
+
+        // const val MANAGE_URL = "https://duckduckgo.com/subscriptions/manage"
         const val LEARN_MORE_URL = "https://duckduckgo.com/duckduckgo-help-pages/privacy-pro/adding-email"
         const val PRIVACY_POLICY_URL = "https://duckduckgo.com/pro/privacy-terms"
 
-        data object SubscriptionsSettingsScreenWithEmptyParams : GlobalActivityStarter.ActivityParams
+        private const val PURCHASE_VIEW_PLANS_ORIGIN = "funnel_subscriptionsettings_android__viewplans"
     }
 }

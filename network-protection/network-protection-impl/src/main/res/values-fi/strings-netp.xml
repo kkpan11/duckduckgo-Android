@@ -192,7 +192,7 @@
     <string name="netpNotificationCTAReconnectNow">Yhdistä nyt uudelleen</string>
     <string name="netpNotificationSnoozeTitle">VPN on lepotilassa</string>
     <string name="netpNotificationSnoozeBody" instruction="Placeholder is time in hh:mm format">VPN yhdistää uudelleen klo %1$s</string>
-    <string name="netpNotificationVpnAccessRevoked">VPN katkaistu vanhentuneen tilauksen takia. Tilaa Privacy Pro, jotta voit yhdistää DuckDuckGo VPN:n uudelleen.</string>
+    <string name="netpNotificationVpnAccessRevoked">VPN katkaistu vanhentuneen tilauksen takia. Tilaa DuckDuckGo, jotta voit yhdistää VPN:n uudelleen.</string>
 
     <!-- Geoswitching -->
     <string name="netpGeoswitchingTitle">VPN-sijainti</string>
@@ -204,7 +204,7 @@
 
     <!-- Access revoked-->
     <string name="netpDialogVpnAccessRevokedTitle">VPN-yhteys katkaistu vanhentuneen tilauksen takia.</string>
-    <string name="netpDialogVpnAccessRevokedBody">Tilaa Privacy Pro, jotta voit yhdistää DuckDuckGo VPN:n uudelleen.</string>
+    <string name="netpDialogVpnAccessRevokedBody">Tilaa DuckDuckGo, jotta voit yhdistää VPN:n uudelleen.</string>
     <string name="netpDialogVpnAccessRevokedPositiveAction">Tilaa</string>
     <string name="netpDialogVpnAccessRevokedNegativeAction">Hylkää</string>
 
@@ -222,7 +222,7 @@
     <string name="netpCustomDnsSettingText">DNS-palvelin</string>
     <string name="netpPrivateDns">Yksityinen DNS</string>
     <string name="netpCustomDnsDefault" translatable="false">DuckDuckGo</string>
-    <string name="netpCustomDnsDefaultBlockMalware">DuckDuckGo (Estä riskialttiit verkkotunnukset)</string>
+    <string name="netpCustomDnsDefaultBlockMalware">DuckDuckGo (Huijausten esto)</string>
     <string name="netpCustomDnsDefaultOption">DuckDuckGo (Suositeltu)</string>
     <string name="netpCustomDnsCustom">Kustomoitu</string>
     <string name="netpCustomDnsInputAddressHint">IPv4-osoite</string>
@@ -233,8 +233,8 @@
     <string name="netpDdgDnsByLine">DuckDuckGo reitittää DNS-kyselyt DNS-palvelimiemme kautta, jotta internetpalveluntarjoajasi ei näe, millä verkkosivustoilla vierailet.</string>
 
     <!-- Block malware DNS -->
-    <string name="netpDnsBlockMalwareHeader">Sisällön estäminen ja suodattaminen</string>
-    <string name="netpDnsBlockMalwarePrimary">Estä vaaralliset verkkotunnukset</string>
+    <string name="netpDnsBlockMalwareHeader">Haitallisen sisällön estäminen</string>
+    <string name="netpDnsBlockMalwarePrimary">Huijausten esto</string>
     <string name="netpDnsBlockMalwareByline">Estä yli 150 000 verkkotunnusta, jotka on lisätty DNS-tason estolistalle haittaohjelmien, tietojenkalasteluhyökkäysten ja verkkohuijausten vuoksi. <annotation type="learn_more_link">Lue lisää</annotation></string>
     <string name="netpDnsBlockMalwareFaqsTitle">DNS-estolistat</string>
 
@@ -257,4 +257,9 @@
     <string name="netpAutoExcludeToggleName">Sulje automaattisesti pois sovellukset, jotka eivät ole yhteensopivia VPN-verkkojen kanssa</string>
     <string name="netpExclusionListLabelAutoExclude">Ei yhteensopiva VPN-verkkojen kanssa</string>
     <string name="netpExclusionListAutoExcludeDescription">Jotkin sovellukset, kuten pankki- tai suoratoistosovellukset, eivät toimi hyvin VPN-verkkojen kanssa. Kun tämä asetus on käytössä, suljemme kyseiset sovellukset automaattisesti pois.</string>
+
+    <!-- Content Descriptions -->
+    <string name="netpCloseButtonContentDescription">Sulje</string>
+    <string name="netpVpnIndicatorContentDescription">VPN-tila-indikaattori</string>
+
 </resources>

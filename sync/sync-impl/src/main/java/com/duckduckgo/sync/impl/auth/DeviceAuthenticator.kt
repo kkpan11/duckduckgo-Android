@@ -31,8 +31,10 @@ import com.duckduckgo.sync.impl.R
 import com.duckduckgo.sync.impl.auth.DeviceAuthenticator.AuthConfiguration
 import com.duckduckgo.sync.impl.auth.DeviceAuthenticator.AuthResult
 import com.squareup.anvil.annotations.ContributesBinding
+import logcat.LogPriority.WARN
+import logcat.asLog
+import logcat.logcat
 import javax.inject.Inject
-import timber.log.Timber
 
 interface DeviceAuthenticator {
     /**
@@ -66,8 +68,8 @@ interface DeviceAuthenticator {
     fun launchDeviceAuthEnrollment(context: Context)
 
     sealed class AuthResult {
-        object Success : AuthResult()
-        object UserCancelled : AuthResult()
+        data object Success : AuthResult()
+        data object UserCancelled : AuthResult()
         data class Error(val reason: String) : AuthResult()
     }
 
@@ -126,12 +128,8 @@ class RealDeviceAuthenticator @Inject constructor(
                 Settings.ACTION_BIOMETRIC_ENROLL.safeLaunchSettingsActivity(context, tryFallback = true)
             }
 
-            appBuildConfig.sdkInt >= Build.VERSION_CODES.P -> {
-                Settings.ACTION_FINGERPRINT_ENROLL.safeLaunchSettingsActivity(context, tryFallback = true)
-            }
-
             else -> {
-                Settings.ACTION_SECURITY_SETTINGS.safeLaunchSettingsActivity(context, tryFallback = true)
+                Settings.ACTION_FINGERPRINT_ENROLL.safeLaunchSettingsActivity(context, tryFallback = true)
             }
         }
     }
@@ -144,7 +142,7 @@ class RealDeviceAuthenticator @Inject constructor(
         try {
             context.startActivity(Intent(this))
         } catch (e: ActivityNotFoundException) {
-            Timber.w("%s. Trying fallback? %s", e.message, tryFallback)
+            logcat(WARN) { "${e.asLog()}. Trying fallback? $tryFallback" }
             if (tryFallback) {
                 SYSTEM_SETTINGS_ACTION.safeLaunchSettingsActivity(context, tryFallback = false)
             }

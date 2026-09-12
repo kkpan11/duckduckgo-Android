@@ -18,30 +18,37 @@ package com.duckduckgo.app.launch
 
 import android.os.Bundle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.lifecycle.lifecycleScope
 import com.duckduckgo.anvil.annotations.InjectWith
 import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.R
+import com.duckduckgo.app.browser.mode.AppLauncher
 import com.duckduckgo.app.onboarding.ui.OnboardingActivity
+import com.duckduckgo.app.pixels.AppReturnPixelSender
+import com.duckduckgo.app.pixels.toPixelLaunchSourceValue
 import com.duckduckgo.common.ui.DuckDuckGoActivity
 import com.duckduckgo.di.scopes.ActivityScope
-import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @InjectWith(ActivityScope::class)
 class LaunchBridgeActivity : DuckDuckGoActivity() {
 
     private val viewModel: LaunchViewModel by bindViewModel()
 
+    @Inject
+    lateinit var appReturnPixelSender: AppReturnPixelSender
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition { true }
 
+        appReturnPixelSender.fireIfNeeded(AppLauncher.toPixelLaunchSourceValue())
+
         setContentView(R.layout.activity_launch)
 
         configureObservers()
 
-        lifecycleScope.launch { viewModel.determineViewToShow() }
+        viewModel.start(intent)
     }
 
     private fun configureObservers() {
@@ -52,13 +59,8 @@ class LaunchBridgeActivity : DuckDuckGoActivity() {
 
     private fun processCommand(it: LaunchViewModel.Command) {
         when (it) {
-            is LaunchViewModel.Command.Onboarding -> {
-                showOnboarding()
-            }
-
-            is LaunchViewModel.Command.Home -> {
-                showHome()
-            }
+            is LaunchViewModel.Command.Onboarding -> showOnboarding()
+            is LaunchViewModel.Command.Home -> showHome()
         }
     }
 
@@ -68,7 +70,7 @@ class LaunchBridgeActivity : DuckDuckGoActivity() {
     }
 
     private fun showHome() {
-        startActivity(BrowserActivity.intent(this))
+        startActivity(BrowserActivity.intent(this, launchSource = AppLauncher))
         overridePendingTransition(0, 0)
         finish()
     }

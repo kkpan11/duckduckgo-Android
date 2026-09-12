@@ -34,13 +34,13 @@ import com.duckduckgo.sync.store.SyncUnavailableStore
 import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
+import kotlinx.coroutines.withContext
+import logcat.logcat
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 interface SyncUnavailableRepository {
     fun onServerAvailable()
@@ -73,7 +73,7 @@ class RealSyncUnavailableRepository @Inject constructor(
 
     override fun onServerAvailable() {
         if (syncUnavailableStore.isSyncUnavailable) {
-            Timber.d("Sync-Engine: Sync is back online - clearing data and canceling notif")
+            logcat { "Sync-Engine: Sync is back online - clearing data and canceling notif" }
             syncUnavailableStore.clearError()
             cancelNotification()
         }
@@ -86,12 +86,12 @@ class RealSyncUnavailableRepository @Inject constructor(
         syncUnavailableStore.isSyncUnavailable = true
         syncUnavailableStore.syncErrorCount = syncUnavailableStore.syncErrorCount + 1
 
-        Timber.d(
+        logcat {
             "Sync-Engine: server unavailable count: ${syncUnavailableStore.syncErrorCount} " +
-                "pausedAt: ${syncUnavailableStore.syncUnavailableSince} lastNotifiedAt: ${syncUnavailableStore.userNotifiedAt}",
-        )
+                "pausedAt: ${syncUnavailableStore.syncUnavailableSince} lastNotifiedAt: ${syncUnavailableStore.userNotifiedAt}"
+        }
         if (syncUnavailableStore.syncErrorCount >= ERROR_THRESHOLD_NOTIFICATION_COUNT) {
-            Timber.d("Sync-Engine: Sync error count reached threshold")
+            logcat { "Sync-Engine: Sync error count reached threshold" }
             triggerNotification()
         } else {
             scheduleNotification(
@@ -109,9 +109,9 @@ class RealSyncUnavailableRepository @Inject constructor(
             LocalDateTime.parse(it, DateTimeFormatter.ISO_LOCAL_DATE_TIME).toLocalDate()
         } ?: ""
         val userNotifiedToday = today == lastNotification
-        Timber.d("Sync-Engine: was user notified today? $userNotifiedToday")
+        logcat { "Sync-Engine: was user notified today? $userNotifiedToday" }
         if (!userNotifiedToday) {
-            Timber.d("Sync-Engine: notifying user about sync error")
+            logcat { "Sync-Engine: notifying user about sync error" }
             notificationManager.checkPermissionAndNotify(
                 context,
                 SYNC_ERROR_NOTIFICATION_ID,
@@ -148,7 +148,7 @@ class RealSyncUnavailableRepository @Inject constructor(
     }
 
     override fun onSyncDisabled() {
-        Timber.d("Sync-Engine: Sync disabled, clearing unavailable store data")
+        logcat { "Sync-Engine: Sync disabled, clearing unavailable store data" }
         syncUnavailableStore.clearAll()
         cancelNotification()
     }

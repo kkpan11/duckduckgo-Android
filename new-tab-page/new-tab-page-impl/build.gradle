@@ -24,12 +24,15 @@ plugins {
 apply from: "$rootProject.projectDir/gradle/android-library.gradle"
 
 dependencies {
+    ksp project(':anvil-ksp')
     implementation project(":new-tab-page-api")
     implementation project(':browser-api')
+    implementation project(':duckchat-api')
+    implementation project(':browser-mode-api')
     implementation project(':common-utils')
     implementation project(':saved-sites-api')
     implementation project(':navigation-api')
-    implementation project(':common-ui')
+    implementation project(':design-system')
     implementation project(':data-store-api')
     implementation project(':statistics-api')
 
@@ -47,9 +50,7 @@ dependencies {
 
     // Room
     implementation AndroidX.room.runtime
-    implementation AndroidX.room.ktx
 
-    anvil project(path: ':anvil-compiler')
     implementation project(path: ':anvil-annotations')
     implementation project(path: ':di')
     ksp AndroidX.room.compiler
@@ -59,9 +60,9 @@ dependencies {
     implementation AndroidX.core.ktx
     implementation Google.dagger
     implementation "com.squareup.logcat:logcat:_"
-    implementation JakeWharton.timber
 
     testImplementation Testing.junit4
+    testImplementation AndroidX.test.ext.junit
     testImplementation "org.mockito.kotlin:mockito-kotlin:_"
     testImplementation project(path: ':common-test')
     testImplementation CashApp.turbine

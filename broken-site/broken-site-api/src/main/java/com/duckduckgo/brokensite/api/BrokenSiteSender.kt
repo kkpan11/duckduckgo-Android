@@ -16,6 +16,8 @@
 
 package com.duckduckgo.brokensite.api
 
+import com.duckduckgo.feature.toggles.api.Toggle
+
 interface BrokenSiteSender {
     fun submitBrokenSiteFeedback(brokenSite: BrokenSite, toggle: Boolean)
 }
@@ -32,6 +34,8 @@ data class BrokenSite(
     val consentManaged: Boolean,
     val consentOptOutFailed: Boolean,
     val consentSelfTestFailed: Boolean,
+    val consentRule: String?,
+    val consentReloadLoop: Boolean,
     val errorCodes: String,
     val httpErrorCodes: String,
     val loginSite: String?,
@@ -39,6 +43,9 @@ data class BrokenSite(
     val userRefreshCount: Int,
     val openerContext: String?,
     val jsPerformance: List<Double>?,
+    val contentScopeExperiments: List<Toggle>?,
+    val debugFlags: List<String>?,
+    val breakageData: String?,
 ) {
     companion object {
         const val SITE_TYPE_DESKTOP = "desktop"

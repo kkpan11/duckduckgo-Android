@@ -32,15 +32,15 @@ import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnState
 import com.duckduckgo.mobile.android.vpn.stats.AppTrackerBlockingStatsRepository
 import com.duckduckgo.mobile.android.vpn.ui.onboarding.VpnStore
-import java.util.*
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.*
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 @ContributesViewModel(ActivityScope::class)
 class DeviceShieldTrackerActivityViewModel @Inject constructor(
@@ -212,40 +212,40 @@ class DeviceShieldTrackerActivityViewModel @Inject constructor(
     }
 
     sealed class ViewEvent {
-        object LaunchExcludedApps : ViewEvent()
-        object LaunchDeviceShieldFAQ : ViewEvent()
-        object LaunchAppTrackersFAQ : ViewEvent()
-        object LaunchMostRecentActivity : ViewEvent()
-        object LaunchTrackingProtectionExclusionListActivity : ViewEvent()
-        object RemoveFeature : ViewEvent()
-        object StartVpn : ViewEvent()
-        object AskToRemoveFeature : ViewEvent()
+        data object LaunchExcludedApps : ViewEvent()
+        data object LaunchDeviceShieldFAQ : ViewEvent()
+        data object LaunchAppTrackersFAQ : ViewEvent()
+        data object LaunchMostRecentActivity : ViewEvent()
+        data object LaunchTrackingProtectionExclusionListActivity : ViewEvent()
+        data object RemoveFeature : ViewEvent()
+        data object StartVpn : ViewEvent()
+        data object AskToRemoveFeature : ViewEvent()
 
-        object PromoteAlwaysOnOpenSettings : ViewEvent()
-        object PromoteAlwaysOnCancelled : ViewEvent()
+        data object PromoteAlwaysOnOpenSettings : ViewEvent()
+        data object PromoteAlwaysOnCancelled : ViewEvent()
         data class AlwaysOnInitialState(val alwaysOnState: VpnStateMonitor.AlwaysOnState) : ViewEvent()
     }
 
     sealed class Command {
-        object StopVPN : Command()
-        object LaunchVPN : Command()
-        object CheckVPNPermission : Command()
-        object VPNPermissionNotGranted : Command()
+        data object StopVPN : Command()
+        data object LaunchVPN : Command()
+        data object CheckVPNPermission : Command()
+        data object VPNPermissionNotGranted : Command()
         data class RequestVPNPermission(val vpnIntent: Intent) : Command()
-        object LaunchManageAppsProtection : Command()
-        object LaunchDeviceShieldFAQ : Command()
-        object LaunchAppTrackersFAQ : Command()
-        object LaunchMostRecentActivity : Command()
-        object LaunchTrackingProtectionExclusionListActivity : Command()
-        object ShowDisableVpnConfirmationDialog : Command()
-        object ShowVpnConflictDialog : Command()
-        object ShowVpnAlwaysOnConflictDialog : Command()
-        object ShowAlwaysOnPromotionDialog : Command()
-        object ShowAlwaysOnLockdownWarningDialog : Command()
-        object ShowRemoveFeatureConfirmationDialog : Command()
-        object CloseScreen : Command()
-        object OpenVpnSettings : Command()
-        object ShowAppTpEnabledCta : Command()
+        data object LaunchManageAppsProtection : Command()
+        data object LaunchDeviceShieldFAQ : Command()
+        data object LaunchAppTrackersFAQ : Command()
+        data object LaunchMostRecentActivity : Command()
+        data object LaunchTrackingProtectionExclusionListActivity : Command()
+        data object ShowDisableVpnConfirmationDialog : Command()
+        data object ShowVpnConflictDialog : Command()
+        data object ShowVpnAlwaysOnConflictDialog : Command()
+        data object ShowAlwaysOnPromotionDialog : Command()
+        data object ShowAlwaysOnLockdownWarningDialog : Command()
+        data object ShowRemoveFeatureConfirmationDialog : Command()
+        data object CloseScreen : Command()
+        data object OpenVpnSettings : Command()
+        data object ShowAppTpEnabledCta : Command()
     }
 }
 

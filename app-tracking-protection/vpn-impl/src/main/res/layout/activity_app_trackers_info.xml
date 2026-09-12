@@ -24,13 +24,14 @@
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
-              tools:context=".ui.report.DeviceShieldAppTrackersInfo">
+              tools:context=".ui.privacyreport.DeviceShieldAppTrackersInfo">
 
     <include
         android:id="@+id/include_toolbar"
         layout="@layout/include_default_toolbar"/>
 
     <ScrollView
+        android:id="@+id/contentScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scrollbars="none">
@@ -76,6 +77,7 @@
                 android:layout_gravity="center"
                 android:layout_marginTop="60dp"
                 android:layout_marginBottom="60dp"
+                android:importantForAccessibility="no"
                 android:src="@drawable/ic_dax_icon"/>
 
         </LinearLayout>

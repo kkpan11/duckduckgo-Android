@@ -24,6 +24,7 @@ import androidx.core.text.HtmlCompat
 import androidx.lifecycle.*
 import com.duckduckgo.anvil.annotations.ContributesActivePlugin
 import com.duckduckgo.anvil.annotations.InjectWith
+import com.duckduckgo.common.ui.view.addBottomShadow
 import com.duckduckgo.common.ui.view.gone
 import com.duckduckgo.common.ui.view.show
 import com.duckduckgo.common.ui.viewbinding.viewBinding
@@ -39,17 +40,17 @@ import com.duckduckgo.mobile.android.vpn.pixels.DeviceShieldPixels
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnRunningState.ENABLED
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason.REVOKED
 import com.duckduckgo.mobile.android.vpn.ui.onboarding.VpnStore
-import com.duckduckgo.mobile.android.vpn.ui.report.PrivacyReportViewModel
-import com.duckduckgo.mobile.android.vpn.ui.report.PrivacyReportViewModel.PrivacyReportView.TrackersBlocked
-import com.duckduckgo.mobile.android.vpn.ui.report.PrivacyReportViewModel.PrivacyReportView.ViewState
+import com.duckduckgo.mobile.android.vpn.ui.privacyreport.PrivacyReportViewModel
+import com.duckduckgo.mobile.android.vpn.ui.privacyreport.PrivacyReportViewModel.PrivacyReportView.TrackersBlocked
+import com.duckduckgo.mobile.android.vpn.ui.privacyreport.PrivacyReportViewModel.PrivacyReportView.ViewState
 import com.duckduckgo.mobile.android.vpn.ui.tracker_activity.DeviceShieldTrackerActivity
 import com.duckduckgo.newtabpage.api.NewTabPageSection
 import com.duckduckgo.newtabpage.api.NewTabPageSectionPlugin
 import dagger.android.support.AndroidSupportInjection
-import javax.inject.Inject
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import javax.inject.Inject
 
 @InjectWith(ViewScope::class)
 class AppTrackingProtectionStateView @JvmOverloads constructor(
@@ -57,10 +58,7 @@ class AppTrackingProtectionStateView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
     defStyle: Int = 0,
 ) : FrameLayout(context, attrs, defStyle) {
-
-    override fun getTag(): String {
-        return "AppTP"
-    }
+    override fun getTag(): String = "AppTP"
 
     @Inject
     lateinit var deviceShieldPixels: DeviceShieldPixels
@@ -83,13 +81,16 @@ class AppTrackingProtectionStateView @JvmOverloads constructor(
         AndroidSupportInjection.inject(this)
         super.onAttachedToWindow()
 
-        conflatedJob += viewModel.viewStateFlow
-            .onEach { viewState -> renderViewState(viewState) }
-            .launchIn(findViewTreeLifecycleOwner()?.lifecycleScope!!)
+        conflatedJob +=
+            viewModel.viewStateFlow
+                .onEach { viewState -> renderViewState(viewState) }
+                .launchIn(findViewTreeLifecycleOwner()?.lifecycleScope!!)
 
         deviceShieldPixels.didShowNewTabSummary()
 
         configureViewReferences()
+
+        binding.root.addBottomShadow()
     }
 
     override fun onDetachedFromWindow() {
@@ -122,18 +123,18 @@ class AppTrackingProtectionStateView @JvmOverloads constructor(
             renderTrackersBlockedWhenEnabled(viewState.trackersBlocked)
         } else {
             binding.deviceShieldCtaHeader.setText(R.string.atp_NewTabEnabled)
-            binding.deviceShieldCtaImage.setImageResource(R.drawable.ic_apptp_default)
+            binding.deviceShieldCtaImage.setImageResource(R.drawable.shield_check_recolorable_24)
         }
     }
 
     private fun renderStateDisabled() {
         binding.deviceShieldCtaHeader.setText(R.string.atp_NewTabDisabled)
-        binding.deviceShieldCtaImage.setImageResource(R.drawable.ic_apptp_warning)
+        binding.deviceShieldCtaImage.setImageResource(R.drawable.exclamation_recolorable_24)
     }
 
     private fun renderStateRevoked() {
         binding.deviceShieldCtaHeader.setText(R.string.atp_NewTabRevoked)
-        binding.deviceShieldCtaImage.setImageResource(R.drawable.ic_apptp_warning)
+        binding.deviceShieldCtaImage.setImageResource(R.drawable.exclamation_recolorable_24)
     }
 
     private fun renderTrackersBlockedWhenEnabled(trackerBlocked: TrackersBlocked) {
@@ -141,52 +142,59 @@ class AppTrackingProtectionStateView @JvmOverloads constructor(
         val lastTrackingApp = trackerBlocked.latestApp
         val otherApps = trackerBlocked.otherAppsSize
 
-        val textToStyle = if (trackersBlocked == 1) {
-            when (otherApps) {
-                0 -> resources.getString(
-                    R.string.atp_DailyLastCompanyBlockedHomeTabOneTimeZeroOtherApps,
-                    trackersBlocked,
-                    lastTrackingApp,
-                )
+        val textToStyle =
+            if (trackersBlocked == 1) {
+                when (otherApps) {
+                    0 ->
+                        resources.getString(
+                            R.string.atp_DailyLastCompanyBlockedHomeTabOneTimeZeroOtherApps,
+                            trackersBlocked,
+                            lastTrackingApp,
+                        )
 
-                1 -> resources.getString(
-                    R.string.atp_DailyLastCompanyBlockedHomeTabOneTimeOneOtherApp,
-                    trackersBlocked,
-                    lastTrackingApp,
-                )
+                    1 ->
+                        resources.getString(
+                            R.string.atp_DailyLastCompanyBlockedHomeTabOneTimeOneOtherApp,
+                            trackersBlocked,
+                            lastTrackingApp,
+                        )
 
-                else -> resources.getString(
-                    R.string.atp_DailyLastCompanyBlockedHomeTabOneTimeMoreOtherApps,
-                    trackersBlocked,
-                    lastTrackingApp,
-                    otherApps,
-                )
+                    else ->
+                        resources.getString(
+                            R.string.atp_DailyLastCompanyBlockedHomeTabOneTimeMoreOtherApps,
+                            trackersBlocked,
+                            lastTrackingApp,
+                            otherApps,
+                        )
+                }
+            } else {
+                when (otherApps) {
+                    0 ->
+                        resources.getString(
+                            R.string.atp_DailyLastCompanyBlockedHomeTabOtherTimesZeroOtherApps,
+                            trackersBlocked,
+                            lastTrackingApp,
+                        )
+
+                    1 ->
+                        resources.getString(
+                            R.string.atp_DailyLastCompanyBlockedHomeTabOtherTimesOneOtherApp,
+                            trackersBlocked,
+                            lastTrackingApp,
+                        )
+
+                    else ->
+                        resources.getString(
+                            R.string.atp_DailyLastCompanyBlockedHomeTabOtherTimesMoreOtherApps,
+                            trackersBlocked,
+                            lastTrackingApp,
+                            otherApps,
+                        )
+                }
             }
-        } else {
-            when (otherApps) {
-                0 -> resources.getString(
-                    R.string.atp_DailyLastCompanyBlockedHomeTabOtherTimesZeroOtherApps,
-                    trackersBlocked,
-                    lastTrackingApp,
-                )
-
-                1 -> resources.getString(
-                    R.string.atp_DailyLastCompanyBlockedHomeTabOtherTimesOneOtherApp,
-                    trackersBlocked,
-                    lastTrackingApp,
-                )
-
-                else -> resources.getString(
-                    R.string.atp_DailyLastCompanyBlockedHomeTabOtherTimesMoreOtherApps,
-                    trackersBlocked,
-                    lastTrackingApp,
-                    otherApps,
-                )
-            }
-        }
 
         binding.deviceShieldCtaHeader.text = HtmlCompat.fromHtml(textToStyle, HtmlCompat.FROM_HTML_MODE_LEGACY)
-        binding.deviceShieldCtaImage.setImageResource(R.drawable.ic_apptp_default)
+        binding.deviceShieldCtaImage.setImageResource(R.drawable.shield_check_recolorable_24)
     }
 }
 
@@ -194,6 +202,8 @@ class AppTrackingProtectionStateView @JvmOverloads constructor(
     AppScope::class,
     boundType = NewTabPageSectionPlugin::class,
     priority = NewTabPageSectionPlugin.PRIORITY_APP_TP,
+    featureName = "pluginAppTrackingProtectionNewTabPageSectionPlugin",
+    parentFeatureName = "pluginPointNewTabPageSectionPlugin",
 )
 class AppTrackingProtectionNewTabPageSectionPlugin @Inject constructor(
     private val vpnStore: VpnStore,
@@ -202,9 +212,7 @@ class AppTrackingProtectionNewTabPageSectionPlugin @Inject constructor(
 ) : NewTabPageSectionPlugin {
     override val name = NewTabPageSection.APP_TRACKING_PROTECTION.name
 
-    override fun getView(context: Context): View {
-        return AppTrackingProtectionStateView(context)
-    }
+    override fun getView(context: Context): View = AppTrackingProtectionStateView(context)
 
     override suspend fun isUserEnabled(): Boolean {
         if (vpnFeatureRemover.isFeatureRemoved()) {

@@ -11,8 +11,7 @@ tags:
 
         - runFlow: ../shared/skip_all_onboarding.yaml
 
-        - tapOn:
-            id: "com.duckduckgo.mobile.android:id/browserMenuImageView"
+        - runFlow: ../shared/browser_screen/click_on_menu_button.yaml
         - tapOn:
             text: "Settings"
             index: 0
@@ -25,12 +24,32 @@ tags:
         - assertVisible: "COLOR PALETTE"
         - tapOn: "TYPOGRAPHY"
         - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
             element:
               text: "Text Appearance Caption"
             direction: DOWN
         - tapOn: "BUTTONS"
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Primary Large"
+            direction: DOWN
         - tapOn: "Primary Large"
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Secondary Small"
+            direction: DOWN
         - tapOn: "Secondary Small"
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Destructive Small"
+            direction: DOWN
         - tapOn: "Destructive Small"
         - tapOn: "TEXT INPUT"
         - tapOn: "DIALOGS"
@@ -38,15 +57,19 @@ tags:
         - assertVisible: "Keep Using"
         - tapOn: "Keep Using"
         - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
             element:
-              text: "Stacked Text Alert Dialog With 4 buttons"
+              text: "Stacked Text Alert Destructive Dialog With 4 buttons"
             direction: DOWN
         - tapOn: "Stacked Text Alert Dialog With 4 buttons"
         - assertVisible: "Keep Using"
         - tapOn: "Keep Using"
         - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
             element:
-              text: "Promo Bottom Sheet with image"
+              text: "Promo Bottom Sheet"
             direction: DOWN
         - tapOn: "Action Bottom Sheet"
         - assertVisible: "Primary Item"
@@ -56,11 +79,19 @@ tags:
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/item_container"
             index: 0
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Promo Bottom Sheet with image"
+            direction: DOWN
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/promoBottomSheetButtonWithTitle"
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/bottomSheetPromoPrimaryButton"
         - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
             element:
               text: "Cookie Consent dialog with animation"
             direction: DOWN
@@ -73,12 +104,20 @@ tags:
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/primaryCta"
         - tapOn: "LAYOUTS"
-        - assertVisible: "Expandable Layout"
+        - assertVisible: "Dax Dialog Card"
+        - tapOn: "NAVIGATION"
+        - assertVisible: "Top bar"
         - tapOn: "INTERACTIVE"
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/dax_switch_one"
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/radio_button_two"
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Remember my choice"
+            direction: DOWN
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/checkbox_one"
         - tapOn:
@@ -87,12 +126,30 @@ tags:
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/close"
             index: 0
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Medium Message"
+            direction: DOWN
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/close"
             index: 0
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Big Single Message"
+            direction: DOWN
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/close"
             index: 0
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Big Two Actions Message"
+            direction: DOWN
         - tapOn:
             id: "com.duckduckgo.mobile.android:id/secondaryActionButton"
             index: 0
@@ -101,11 +158,37 @@ tags:
             index: 0
         - tapOn: "LIST ITEMS"
         - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
             element:
-              text: "With Beta Pill and Switch"
+              text: "Single Line Items"
             direction: DOWN
+        - assertVisible: "Single Line Items"
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: ".*Item with Extra Large Leading Image.*"
+            direction: DOWN
+        - assertVisible: ".*Item with Extra Large Leading Image.*"
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Two Line Items"
+            direction: DOWN
+        - assertVisible: "Two Line Items"
+        - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
+            element:
+              text: "Settings List Item Always On"
+            direction: DOWN
+        - assertVisible: "Settings List Item Always On"
         - tapOn: "Others"
         - scrollUntilVisible:
+            timeout: 50000
+            speed: 60
             element:
               text: "Enable Dark Theme"
             direction: UP
@@ -116,6 +199,7 @@ tags:
         - tapOn: "TEXT INPUT"
         - tapOn: "DIALOGS"
         - tapOn: "LAYOUTS"
+        - tapOn: "NAVIGATION"
         - tapOn: "INTERACTIVE"
         - tapOn: "MESSAGING"
         - tapOn: "LIST ITEMS"

@@ -32,29 +32,40 @@ interface StatisticsService {
     @GET("/exti/")
     fun exti(
         @Query(ParamKey.ATB) atb: String,
+        @Query(ParamKey.IS_TABLET) isTablet: Int,
         @Query(ParamKey.DEV_MODE) devMode: Int? = if (BuildConfig.DEBUG) 1 else null,
     ): Observable<ResponseBody>
 
     @GET("/atb.js")
     fun atb(
+        @Query(ParamKey.IS_TABLET) isTablet: Int,
         @Query(ParamKey.DEV_MODE) devMode: Int? = if (BuildConfig.DEBUG) 1 else null,
         @Query(ParamKey.EMAIL) email: Int?,
     ): Observable<Atb>
 
-    // ANA
     @GET("/atb.js")
     fun updateSearchAtb(
         @Query(ParamKey.ATB) atb: String,
         @Query(ParamKey.RETENTION_ATB) retentionAtb: String,
+        @Query(ParamKey.IS_TABLET) isTablet: Int,
         @Query(ParamKey.DEV_MODE) devMode: Int? = if (BuildConfig.DEBUG) 1 else null,
         @Query(ParamKey.EMAIL) email: Int?,
     ): Observable<Atb>
 
-    // ANA
     @GET("/atb.js?at=app_use")
     fun updateAppAtb(
         @Query(ParamKey.ATB) atb: String,
         @Query(ParamKey.RETENTION_ATB) retentionAtb: String,
+        @Query(ParamKey.IS_TABLET) isTablet: Int,
+        @Query(ParamKey.DEV_MODE) devMode: Int? = if (BuildConfig.DEBUG) 1 else null,
+        @Query(ParamKey.EMAIL) email: Int?,
+    ): Observable<Atb>
+
+    @GET("/atb.js?at=duckai")
+    fun updateDuckAiAtb(
+        @Query(ParamKey.ATB) atb: String,
+        @Query(ParamKey.RETENTION_ATB) retentionAtb: String,
+        @Query(ParamKey.IS_TABLET) isTablet: Int,
         @Query(ParamKey.DEV_MODE) devMode: Int? = if (BuildConfig.DEBUG) 1 else null,
         @Query(ParamKey.EMAIL) email: Int?,
     ): Observable<Atb>

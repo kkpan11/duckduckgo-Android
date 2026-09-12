@@ -1,4 +1,5 @@
 appId: com.duckduckgo.mobile.android
+androidWebViewHierarchy: devtools
 name: "ReleaseTest: Multiple tabs can be opened"
 tags:
     - releaseTest
@@ -13,22 +14,22 @@ tags:
             - runFlow: ../shared/skip_all_onboarding.yaml
 
             - tapOn:
-                id: "omnibarTextInput"
+                id: "omnibarTextInput|inputField"
             - inputText: "https://privacy-test-pages.site"
             - pressKey: Enter
-            - tapOn:
-                id: "com.duckduckgo.mobile.android:id/tabCount"
+            - runFlow: ../shared/browser_screen/click_on_tabs_button.yaml
+            - assertVisible:
+                text: "0 trackers blocked in the last 7 days"
             - assertVisible:
                 text: "Privacy Test Pages - Home"
             - tapOn: "New Tab"
             - assertVisible:
-                id: "omnibarTextInput"
+                id: "inputModeWidget|omnibarTextInput"
             - inputText: "https://www.search-company.site"
             - pressKey: Enter
             - assertVisible:
                 text: "Search engine"
-            - tapOn:
-                id: "com.duckduckgo.mobile.android:id/tabCount"
+            - runFlow: ../shared/browser_screen/click_on_tabs_button.yaml
             - assertVisible:
                 text: "Ad Click Flow"
             - assertVisible:
@@ -39,8 +40,7 @@ tags:
                 text: "Ad Click Flow"
             - assertVisible:
                 text: "Privacy Test Pages - Home"
-            - tapOn:
-                id: "com.duckduckgo.mobile.android:id/tabCount"
+            - runFlow: ../shared/browser_screen/click_on_tabs_button.yaml
             - assertVisible:
                 text: "Ad Click Flow"
             - tapOn:

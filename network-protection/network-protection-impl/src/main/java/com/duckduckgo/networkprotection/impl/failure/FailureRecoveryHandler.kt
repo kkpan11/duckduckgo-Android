@@ -28,15 +28,15 @@ import com.duckduckgo.networkprotection.impl.configuration.asServerDetails
 import com.duckduckgo.networkprotection.impl.pixels.NetworkProtectionPixels
 import com.duckduckgo.networkprotection.impl.pixels.WireguardHandshakeMonitor
 import com.squareup.anvil.annotations.ContributesMultibinding
-import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import logcat.LogPriority
+import logcat.LogPriority.ERROR
 import logcat.asLog
 import logcat.logcat
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.inject.Inject
+import kotlin.time.Duration.Companion.seconds
 
 @ContributesMultibinding(VpnScope::class)
 class FailureRecoveryHandler @Inject constructor(
@@ -119,7 +119,7 @@ class FailureRecoveryHandler @Inject constructor(
             val config = wgTunnel.createWgConfig()
                 .onFailure {
                     networkProtectionPixels.reportFailureRecoveryFailed()
-                    logcat(LogPriority.ERROR) { "Failure recovery: Failed registering the new key:  ${it.asLog()}" }
+                    logcat(ERROR) { "Failure recovery: Failed registering the new key:  ${it.asLog()}" }
                 }.getOrElse {
                     return Result.failure(it)
                 }

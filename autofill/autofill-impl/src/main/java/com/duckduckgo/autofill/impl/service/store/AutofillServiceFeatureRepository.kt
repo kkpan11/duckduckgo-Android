@@ -26,11 +26,12 @@ import com.duckduckgo.privacy.config.api.PrivacyConfigCallbackPlugin
 import com.squareup.anvil.annotations.ContributesBinding
 import com.squareup.anvil.annotations.ContributesMultibinding
 import dagger.SingleInstanceIn
-import java.util.concurrent.CopyOnWriteArrayList
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import timber.log.Timber
+import logcat.LogPriority.INFO
+import logcat.logcat
+import java.util.concurrent.CopyOnWriteArrayList
+import javax.inject.Inject
 
 interface AutofillServiceFeatureRepository {
     val exceptions: CopyOnWriteArrayList<String>
@@ -57,7 +58,7 @@ class RealAutofillServiceFeatureRepository @Inject constructor(
 
     init {
         appCoroutineScope.launch(dispatcherProvider.io()) {
-            Timber.i("DDGAutofillService: Init AutofillFeatureRepository from $processName")
+            logcat(INFO) { "DDGAutofillService: Init AutofillFeatureRepository from $processName" }
             loadToMemory()
         }
     }
